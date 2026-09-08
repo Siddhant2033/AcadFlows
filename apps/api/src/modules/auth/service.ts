@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../../config';
 import { User } from '../../models/User';
@@ -8,6 +9,11 @@ import { UserCreateInput, UserLoginInput, AuthTokens } from '@school-platform/sh
 
 export class AuthService {
   static async register(input: UserCreateInput): Promise<{ user: any; tokens: AuthTokens }> {
+    // Validate tenant ID format
+    if (!mongoose.Types.ObjectId.isValid(input.tenantId)) {
+      throw new AppError('Invalid tenant ID format. Please use a valid 24-character hex string.', 400);
+    }
+    
     // Check if tenant exists
     const tenant = await Tenant.findOne({ _id: input.tenantId, status: 'active' });
     if (!tenant) {
@@ -34,8 +40,7 @@ export class AuthService {
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
     // Return user without password
-    const userObj = user.toObject();
-    delete userObj.passwordHash;
+    const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
     return { user: userObj, tokens };
   }
@@ -61,8 +66,7 @@ export class AuthService {
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
     // Return user without password
-    const userObj = user.toObject();
-    delete userObj.passwordHash;
+    const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
     return { user: userObj, tokens };
   }
@@ -96,11 +100,11 @@ export class AuthService {
     const payload = { userId, tenantId, email, role };
 
     const accessToken = jwt.sign(payload, config.jwt.secret, {
-      expiresIn: config.jwt.expiry,
+      expiresIn: config.jwt.expiry as jwt.SignOptions['expiresIn'],
     });
 
     const refreshToken = jwt.sign(payload, config.jwt.refreshSecret, {
-      expiresIn: config.jwt.refreshExpiry,
+      expiresIn: config.jwt.refreshExpiry as jwt.SignOptions['expiresIn'],
     });
 
     return { accessToken, refreshToken };

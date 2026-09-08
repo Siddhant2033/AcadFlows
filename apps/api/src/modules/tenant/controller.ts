@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { TenantService } from './service';
+import { AppError } from '../../middleware/error-handler';
 import { z } from 'zod';
 
 const createTenantSchema = z.object({
@@ -42,7 +44,13 @@ export class TenantController {
 
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
-      const tenant = await TenantService.getById(req.params.id);
+      // Validate ObjectId
+      const id = req.params.id;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new AppError('Invalid tenant ID format', 400);
+      }
+      
+      const tenant = await TenantService.getById(id);
       res.json({
         success: true,
         data: tenant,
@@ -66,8 +74,14 @@ export class TenantController {
 
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
+      // Validate ObjectId
+      const id = req.params.id;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new AppError('Invalid tenant ID format', 400);
+      }
+      
       const validated = updateTenantSchema.parse(req.body);
-      const tenant = await TenantService.update(req.params.id, validated);
+      const tenant = await TenantService.update(id, validated);
       res.json({
         success: true,
         data: tenant,

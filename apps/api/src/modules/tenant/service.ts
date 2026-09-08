@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Tenant } from '../../models/Tenant';
 import { AppError } from '../../middleware/error-handler';
 import { Tenant as TenantType } from '@school-platform/shared';
@@ -15,6 +16,11 @@ export class TenantService {
   }
 
   static async getById(id: string): Promise<any> {
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid tenant ID format', 400);
+    }
+    
     const tenant = await Tenant.findById(id);
     if (!tenant) {
       throw new AppError('Tenant not found', 404);
@@ -31,6 +37,11 @@ export class TenantService {
   }
 
   static async update(id: string, data: Partial<TenantType>): Promise<any> {
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid tenant ID format', 400);
+    }
+    
     const tenant = await Tenant.findByIdAndUpdate(
       id,
       { $set: data },

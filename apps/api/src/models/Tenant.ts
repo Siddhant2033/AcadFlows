@@ -27,7 +27,7 @@ const tenantSchema = new Schema<ITenant>(
     slug: {
       type: String,
       required: true,
-      unique: true,
+      unique: true,  // This creates the index
       trim: true,
       lowercase: true,
     },
@@ -65,8 +65,10 @@ const tenantSchema = new Schema<ITenant>(
   }
 );
 
-// Indexes
-tenantSchema.index({ slug: 1 });
+// Remove this duplicate index - it's already covered by unique: true above
+// tenantSchema.index({ slug: 1 });
+
+// Keep only additional indexes that aren't covered by unique/schema options
 tenantSchema.index({ status: 1 });
 
 export const Tenant = mongoose.model<ITenant>('Tenant', tenantSchema);
