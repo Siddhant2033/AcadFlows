@@ -11,5 +11,11 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    hmr: {
+      overlay: true,
+    },
+  },
+  css: {
+    postcss: './postcss.config.js',
   },
 })

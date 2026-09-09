@@ -1,0 +1,72 @@
+/* Responsive Breakpoints */
+@screen sm {
+  /* Small devices (640px and up) */
+}
+
+@screen md {
+  /* Medium devices (768px and up) */
+}
+
+@screen lg {
+  /* Large devices (1024px and up) */
+}
+
+@screen xl {
+  /* Extra large devices (1280px and up) */
+}
+
+@screen 2xl {
+  /* 2XL devices (1536px and up) */
+}
+
+/* Responsive Text Utilities */
+.text-responsive {
+  font-size: clamp(0.875rem, 2vw, 1.25rem);
+}
+
+.heading-responsive {
+  font-size: clamp(1.5rem, 4vw, 3.5rem);
+}
+
+/* Responsive Spacing */
+.spacing-responsive {
+  padding: clamp(1rem, 3vw, 3rem);
+  margin: clamp(1rem, 3vw, 3rem);
+}
+
+/* Responsive Grid */
+.grid-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: clamp(1rem, 2vw, 2rem);
+}
+
+/* Container responsive */
+.container-responsive {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(1rem, 3vw, 2rem);
+  padding-right: clamp(1rem, 3vw, 2rem);
+}
+
+@media (min-width: 640px) {
+  .container-responsive {
+    max-width: 640px;
+  }
+}
+@media (min-width: 768px) {
+  .container-responsive {
+    max-width: 768px;
+  }
+}
+@media (min-width: 1024px) {
+  .container-responsive {
+    max-width: 1024px;
+  }
+}
+@media (min-width: 1280px) {
+  .container-responsive {
+    max-width: 1280px;
+  }
+}
