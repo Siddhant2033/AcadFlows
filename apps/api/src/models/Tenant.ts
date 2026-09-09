@@ -1,8 +1,10 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { generateSchoolCode } from '../utils/school-code';
 
 export interface ITenant extends Document {
   name: string;
   slug: string;
+  schoolCode: string; // 10-digit alphanumeric unique code
   status: 'active' | 'inactive' | 'archived';
   address?: string;
   phone?: string;
@@ -14,6 +16,7 @@ export interface ITenant extends Document {
     timezone?: string;
     currency?: string;
     language?: string;
+    emailDomain?: string;
   };
 }
 
@@ -27,9 +30,20 @@ const tenantSchema = new Schema<ITenant>(
     slug: {
       type: String,
       required: true,
-      unique: true,  // This creates the index
+      unique: true,
       trim: true,
       lowercase: true,
+    },
+    schoolCode: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      uppercase: true,
+      default: function() {
+        return generateSchoolCode();
+      },
+      index: true,
     },
     status: {
       type: String,
@@ -58,6 +72,7 @@ const tenantSchema = new Schema<ITenant>(
       timezone: { type: String, default: 'UTC' },
       currency: { type: String, default: 'USD' },
       language: { type: String, default: 'en' },
+      emailDomain: { type: String, trim: true, lowercase: true },
     },
   },
   {
@@ -65,10 +80,9 @@ const tenantSchema = new Schema<ITenant>(
   }
 );
 
-// Remove this duplicate index - it's already covered by unique: true above
-// tenantSchema.index({ slug: 1 });
-
-// Keep only additional indexes that aren't covered by unique/schema options
+// Indexes
+tenantSchema.index({ schoolCode: 1 });
+tenantSchema.index({ slug: 1 });
 tenantSchema.index({ status: 1 });
 
 export const Tenant = mongoose.model<ITenant>('Tenant', tenantSchema);

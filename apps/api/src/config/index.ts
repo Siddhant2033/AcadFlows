@@ -24,6 +24,7 @@ export const config = {
   
   tenant: {
     defaultId: process.env.DEFAULT_TENANT_ID || 'default',
+    defaultSlug: process.env.DEFAULT_TENANT_SLUG || 'default',
   },
   
   storage: {
@@ -31,5 +32,9 @@ export const config = {
     r2AccessKey: process.env.R2_ACCESS_KEY || '',
     r2SecretKey: process.env.R2_SECRET_KEY || '',
     r2Bucket: process.env.R2_BUCKET || '',
+  },
+  
+  domain: {
+    baseUrl: process.env.BASE_URL || 'http://localhost:5173',
   },
 } as const;

@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import api from '../lib/api';
+import { getTenantSlugFromURL } from '../lib/tenant';
 
 interface User {
   id: string;
@@ -24,7 +26,7 @@ interface RegisterData {
   firstName: string;
   lastName: string;
   role: 'admin' | 'teacher' | 'student' | 'guardian';
-  tenantId: string;
+  tenantId?: string; // Optional - will be auto-detected
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -59,7 +61,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: RegisterData) => {
-    const response = await api.post('/auth/register', data);
+    // Auto-detect tenant if not provided
+    let tenantId = data.tenantId;
+    if (!tenantId) {
+      const slug = getTenantSlugFromURL();
+      if (slug) {
+        try {
+          const tenantResponse = await api.get(`/tenants/public/${slug}`);
+          tenantId = tenantResponse.data.data.id;
+        } catch (error) {
+          console.error('Failed to auto-detect tenant:', error);
+          throw new Error('Could not detect your school. Please provide a School ID.');
+        }
+      }
+    }
+    
+    if (!tenantId) {
+      throw new Error('School ID is required. Please contact your school administrator.');
+    }
+    
+    const response = await api.post('/auth/register', {
+      ...data,
+      tenantId,
+    });
+    
     const { user, accessToken } = response.data.data;
     localStorage.setItem('accessToken', accessToken);
     setUser(user);
