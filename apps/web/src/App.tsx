@@ -22,6 +22,10 @@ import AddTeacherPage from './pages/admin/AddTeacher';
 import TeacherDetailPage from './pages/admin/TeacherDetail';
 import MarkAttendancePage from './pages/admin/MarkAttendance';
 import AttendanceReportsPage from './pages/admin/AttendanceReports';
+import FeeStructuresPage from './pages/admin/FeeStructures';
+import AddFeeStructurePage from './pages/admin/AddFeeStructure';
+import InvoicesPage from './pages/admin/Invoices';
+import GenerateInvoicePage from './pages/admin/GenerateInvoice';
 
 function App() {
   return (
@@ -155,6 +159,46 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <AttendanceReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/structures"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <FeeStructuresPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/structures/add"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AddFeeStructurePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/structures/:id/edit"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AddFeeStructurePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/invoices"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <InvoicesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/invoices/generate"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <GenerateInvoicePage />
                 </ProtectedRoute>
               }
             />
