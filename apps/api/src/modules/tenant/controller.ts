@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { TenantService } from './service';
 import { AppError } from '../../middleware/error-handler';
+import { formatSchoolCode } from '../../utils/school-code';
 import { z } from 'zod';
 
 const createTenantSchema = z.object({
@@ -53,6 +55,7 @@ const validateSchoolCodeSchema = z.object({
 
 const createSchoolSchema = z.object({
   name: z.string().min(1, 'School name is required'),
+  slug: z.string().optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email().optional(),
@@ -207,6 +210,89 @@ export class TenantController {
         data: tenantObj,
       });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get current tenant without requiring authentication
+   * Useful for public pages and initial load
+   */
+  static async getPublicCurrent(req: Request, res: Response, next: NextFunction) {
+    try {
+      console.log('🔍 Getting public current tenant');
+      
+      // Try to get tenant from cookie, header, or query param
+      let tenantId = req.cookies?.tenantId || req.headers['x-tenant-id'] as string;
+      
+      if (!tenantId) {
+        tenantId = req.query.tenantId as string;
+      }
+
+      // If still no tenant, try to get from subdomain in development
+      if (!tenantId && process.env.NODE_ENV === 'development') {
+        const host = req.get('host') || '';
+        const subdomain = host.split('.')[0];
+        if (subdomain && subdomain !== 'localhost' && subdomain !== 'www') {
+          // Try to find tenant by subdomain
+          const tenant = await TenantService.getBySlug(subdomain);
+          if (tenant) {
+            return res.json({
+              success: true,
+              data: tenant,
+            });
+          }
+        }
+      }
+
+      if (!tenantId) {
+        // In development, try to find any active tenant
+        if (process.env.NODE_ENV === 'development') {
+          const Tenant = mongoose.model('Tenant');
+          const anyTenant = await Tenant.findOne({ status: 'active' });
+          if (anyTenant) {
+            tenantId = anyTenant._id.toString();
+          }
+        }
+      }
+
+      if (!tenantId) {
+        return res.status(404).json({
+          success: false,
+          error: 'No tenant context found',
+        });
+      }
+
+      let tenant;
+      if (mongoose.Types.ObjectId.isValid(tenantId)) {
+        tenant = await TenantService.getById(tenantId);
+      } else {
+        tenant = await TenantService.getBySlug(tenantId);
+      }
+
+      if (!tenant) {
+        return res.status(404).json({
+          success: false,
+          error: 'Tenant not found',
+        });
+      }
+
+      // Ensure both id and _id are present
+      const tenantObj = {
+        ...tenant,
+        id: tenant._id || tenant.id,
+        _id: tenant._id || tenant.id,
+        formattedSchoolCode: tenant.formattedSchoolCode || formatSchoolCode(tenant.schoolCode),
+      };
+
+      console.log('✅ Public tenant found:', tenantObj.name);
+
+      res.json({
+        success: true,
+        data: tenantObj,
+      });
+    } catch (error) {
+      console.error('❌ Error getting public tenant:', error);
       next(error);
     }
   }
