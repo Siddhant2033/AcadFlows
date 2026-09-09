@@ -13,6 +13,7 @@ import authRoutes from './modules/auth/routes';
 import tenantRoutes from './modules/tenant/routes';
 import dashboardRoutes from './modules/dashboard/routes';
 import studentRoutes from './modules/students/routes';
+import userRoutes from './modules/user/routes';
 
 const app: Express = express();
 
@@ -42,6 +43,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tenants', tenantRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/students', studentRoutes);
+app.use('/api/v1/users', userRoutes);
 
 // Error handling
 app.use(notFoundHandler);

@@ -9,7 +9,14 @@ export interface IUser extends Document {
   lastName: string;
   role: 'admin' | 'teacher' | 'student' | 'guardian';
   status: 'active' | 'inactive' | 'archived';
+  profilePicture?: string;
+  phone?: string;
+  dateOfBirth?: Date;
+  gender?: 'male' | 'female' | 'other';
+  address?: string;
+  bio?: string;
   lastLoginAt?: Date;
+  emailVerified: boolean;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -51,8 +58,36 @@ const userSchema = new Schema<IUser>(
       enum: ['active', 'inactive', 'archived'],
       default: 'active',
     },
+    profilePicture: {
+      type: String,
+      default: '',
+    },
+    phone: {
+      type: String,
+      trim: true,
+    },
+    dateOfBirth: {
+      type: Date,
+    },
+    gender: {
+      type: String,
+      enum: ['male', 'female', 'other'],
+    },
+    address: {
+      type: String,
+      trim: true,
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+    },
     lastLoginAt: {
       type: Date,
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
     },
   },
   {
@@ -60,7 +95,7 @@ const userSchema = new Schema<IUser>(
   }
 );
 
-// Indexes for performance
+// Indexes
 userSchema.index({ tenantId: 1, email: 1 });
 userSchema.index({ tenantId: 1, role: 1 });
 userSchema.index({ tenantId: 1, status: 1 });
