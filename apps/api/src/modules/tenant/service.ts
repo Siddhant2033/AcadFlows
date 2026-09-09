@@ -30,9 +30,11 @@ export class TenantService {
       schoolCode,
     });
     
-    const tenantObj = tenant.toObject() as any;
+    const tenantObj: any = tenant.toObject();
     // Format school code for display
     tenantObj.formattedSchoolCode = formatSchoolCode(schoolCode);
+    // Ensure id is available
+    tenantObj.id = tenant._id;
     
     return tenantObj;
   }
@@ -54,8 +56,9 @@ export class TenantService {
       throw new AppError('School not found with this code', 404);
     }
     
-    const tenantObj = tenant.toObject() as any;
+    const tenantObj: any = tenant.toObject();
     tenantObj.formattedSchoolCode = formatSchoolCode(normalizedCode);
+    tenantObj.id = tenant._id;
     
     return tenantObj;
   }
@@ -70,8 +73,9 @@ export class TenantService {
       throw new AppError('Tenant not found', 404);
     }
     
-    const tenantObj = tenant.toObject() as any;
+    const tenantObj: any = tenant.toObject();
     tenantObj.formattedSchoolCode = formatSchoolCode(tenant.schoolCode);
+    tenantObj.id = tenant._id;
     
     return tenantObj;
   }
@@ -82,8 +86,9 @@ export class TenantService {
       throw new AppError('Tenant not found', 404);
     }
     
-    const tenantObj = tenant.toObject() as any;
+    const tenantObj: any = tenant.toObject();
     tenantObj.formattedSchoolCode = formatSchoolCode(tenant.schoolCode);
+    tenantObj.id = tenant._id;
     
     return tenantObj;
   }
@@ -113,8 +118,9 @@ export class TenantService {
       throw new AppError('Tenant not found', 404);
     }
     
-    const tenantObj = tenant.toObject() as any;
+    const tenantObj: any = tenant.toObject();
     tenantObj.formattedSchoolCode = formatSchoolCode(tenant.schoolCode);
+    tenantObj.id = tenant._id;
     
     return tenantObj;
   }
@@ -148,8 +154,9 @@ export class TenantService {
 
     return {
       items: tenants.map(t => {
-        const obj = t.toObject() as any;
+        const obj: any = t.toObject();
         obj.formattedSchoolCode = formatSchoolCode(t.schoolCode);
+        obj.id = t._id;
         return obj;
       }),
       total,
@@ -165,8 +172,9 @@ export class TenantService {
     }
     
     // Return only public information
-    return {
+    const tenantObj = {
       id: tenant._id,
+      _id: tenant._id,
       name: tenant.name,
       slug: tenant.slug,
       schoolCode: tenant.schoolCode,
@@ -178,6 +186,8 @@ export class TenantService {
         language: tenant.settings?.language,
       },
     };
+    
+    return tenantObj;
   }
 
   static async getPublicInfoBySchoolCode(schoolCode: string): Promise<any> {
@@ -198,6 +208,7 @@ export class TenantService {
     
     return {
       id: tenant._id,
+      _id: tenant._id,
       name: tenant.name,
       slug: tenant.slug,
       schoolCode: tenant.schoolCode,
@@ -246,6 +257,7 @@ export class TenantService {
         valid: true,
         tenant: {
           id: tenant._id,
+          _id: tenant._id,
           name: tenant.name,
           schoolCode: tenant.schoolCode,
           formattedSchoolCode: formatSchoolCode(tenant.schoolCode),
@@ -301,9 +313,34 @@ export class TenantService {
       status: 'active',
     });
     
-    const tenantObj = tenant.toObject() as any;
+    const tenantObj: any = tenant.toObject();
     tenantObj.formattedSchoolCode = formatSchoolCode(schoolCode);
+    tenantObj.id = tenant._id; // Explicitly add id field for frontend
+    
+    console.log('🏫 School created:', {
+      id: tenant._id,
+      name: tenant.name,
+      schoolCode: tenant.schoolCode,
+    });
     
     return tenantObj;
+  }
+
+  /**
+   * Check if school has an admin
+   */
+  static async hasAdmin(tenantId: string): Promise<boolean> {
+    if (!mongoose.Types.ObjectId.isValid(tenantId)) {
+      return false;
+    }
+    
+    const User = mongoose.model('User');
+    const admin = await User.findOne({ 
+      tenantId, 
+      role: 'admin',
+      status: 'active' 
+    });
+    
+    return !!admin;
   }
 }

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { SchoolCodeInput } from '../components/SchoolCodeInput';
-import { createSchool } from '../lib/tenant';
 import api from '../lib/api';
 
 export default function RegisterPage() {
@@ -10,33 +9,21 @@ export default function RegisterPage() {
   const { tenantSlug } = useParams();
   const { register } = useAuth();
   
-  const [formData, setFormData] = useState<{
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    role: 'admin' | 'teacher' | 'student' | 'guardian';
-    schoolCode: string;
-    tenantId: string;
-    schoolName: string;
-    schoolAddress: string;
-    schoolPhone: string;
-  }>({
-    email: '',
-    password: '',
+  const [step, setStep] = useState<'school' | 'user'>('school');
+  const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    role: 'student',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'student' as const,
     schoolCode: '',
     tenantId: '',
     schoolName: '',
-    schoolAddress: '',
-    schoolPhone: '',
   });
   const [isVerified, setIsVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isCreatingSchool, setIsCreatingSchool] = useState(false);
 
   // Check if we already have a tenant from URL
   useEffect(() => {
@@ -52,6 +39,7 @@ export default function RegisterPage() {
             schoolCode: tenant.schoolCode,
           }));
           setIsVerified(true);
+          setStep('user');
         } catch (err) {
           // Silent fail - user can enter code manually
         }
@@ -70,78 +58,33 @@ export default function RegisterPage() {
     setIsVerified(!!tenantId);
     if (tenantId) {
       setError('');
+      setStep('user'); // Move to user details step
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
   };
 
-  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const role = e.target.value as 'admin' | 'teacher' | 'student' | 'guardian';
-    setFormData(prev => ({
-      ...prev,
-      role,
-      // Reset school-related fields when switching to admin
-      ...(role === 'admin' ? {
-        schoolCode: '',
-        tenantId: '',
-        schoolName: '',
-      } : {}),
-    }));
-    setIsVerified(false);
-    setError('');
-  };
-
-  const handleCreateSchool = async () => {
-    if (!formData.schoolName.trim()) {
-      setError('School name is required');
-      return;
-    }
-
-    setIsCreatingSchool(true);
-    setError('');
-
-    try {
-      const school = await createSchool({
-        name: formData.schoolName,
-        address: formData.schoolAddress,
-        phone: formData.schoolPhone,
-        email: formData.email || undefined,
-      });
-
-      setFormData(prev => ({
-        ...prev,
-        tenantId: school.id,
-        schoolCode: school.schoolCode,
-      }));
-      setIsVerified(true);
-      setError('');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create school. Please try again.');
-    } finally {
-      setIsCreatingSchool(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // For admin, tenantId should be set after school creation
-    if (formData.role === 'admin') {
-      if (!isVerified || !formData.tenantId) {
-        setError('Please create your school first');
-        return;
-      }
-    } else {
-      // For non-admin, verify school code
-      if (!isVerified || !formData.tenantId) {
-        setError('Please verify your school code first');
-        return;
-      }
+    if (!isVerified || !formData.tenantId) {
+      setError('Please verify your school code first');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
     }
 
     setError('');
@@ -165,59 +108,60 @@ export default function RegisterPage() {
     }
   };
 
-  const isAdmin = formData.role === 'admin';
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create Account          </h2>
-          {formData.schoolName && isVerified && !isAdmin && (
-            <p className="mt-2 text-center text-sm text-green-600 font-medium">
-              Registering for: {formData.schoolName}
-            </p>
-          )}
-          {isAdmin && isVerified && (
-            <p className="mt-2 text-center text-sm text-green-600 font-medium">
-              Creating school: {formData.schoolName}
-            </p>
-          )}
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {isAdmin ? 'Create your school account' : 'Join your school community'}
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full mx-auto">
+        <div className="text-center mb-8">
+          <Link to="/" className="text-primary-600 hover:text-primary-700 text-sm">
+            ← Back to Home
+          </Link>
+          <h2 className="mt-4 text-3xl font-extrabold text-gray-900">
+            Join Your School
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            {step === 'school' ? 'Enter your school code to get started' : 'Create your account'}
           </p>
         </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+
+        <div className="bg-white rounded-lg shadow px-6 py-8">
+          {/* Progress Indicator */}
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                step === 'school' ? 'bg-primary-600 text-white' : 'bg-green-500 text-white'
+              }`}>
+                {step === 'school' ? '1' : '✓'}
+              </div>
+              <span className={`ml-2 text-sm ${step === 'school' ? 'text-primary-600 font-medium' : 'text-green-600'}`}>
+                School Code
+              </span>
+            </div>
+            <div className="flex-1 h-0.5 mx-4 bg-gray-200">
+              <div className={`h-0.5 bg-primary-600 transition-all duration-300 ${
+                step === 'user' ? 'w-full' : 'w-1/2'
+              }`}></div>
+            </div>
+            <div className="flex items-center">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                step === 'user' ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-500'
+              }`}>
+                {step === 'user' ? '2' : '2'}
+              </div>
+              <span className={`ml-2 text-sm ${step === 'user' ? 'text-primary-600 font-medium' : 'text-gray-400'}`}>
+                User Details
+              </span>
+            </div>
+          </div>
+
           {error && (
-            <div className="rounded-md bg-red-50 p-4">
+            <div className="rounded-md bg-red-50 p-4 mb-6">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
-          
-          <div className="rounded-md shadow-sm space-y-4">
-            {/* Role Selection */}
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                I am a
-              </label>
-              <select
-                id="role"
-                name="role"
-                required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                value={formData.role}
-                onChange={handleRoleChange}
-              >
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
-                <option value="guardian">Guardian</option>
-                <option value="admin">Admin (School Owner)</option>
-              </select>
-            </div>
 
-            {/* School Code Field - Only for non-admin roles */}
-            {!isAdmin && (
+          {/* School Code Step */}
+          {step === 'school' && (
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   School Code <span className="text-red-500">*</span>
@@ -228,199 +172,143 @@ export default function RegisterPage() {
                   disabled={!!tenantSlug}
                   required
                   placeholder="Enter 10-digit school code (e.g., AB12CD34EF)"
+                  autoVerify={true}
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500">
                   Don't have a code? Ask your school administrator.
                 </p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Or, if you're an admin, <Link to="/school/register" className="text-primary-600 hover:text-primary-700">register your school</Link>
+                </p>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* School Creation - For Admin only */}
-            {isAdmin && (
-              <div className="space-y-3 border-l-4 border-primary-500 pl-4 bg-gray-50 p-4 rounded-md">
-                <div className="text-sm font-medium text-gray-700">
-                  🏫 Create Your School
+          {/* User Details Step */}
+          {step === 'user' && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {formData.schoolName && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <p className="text-sm text-green-800">
+                    ✅ Joining: <strong>{formData.schoolName}</strong>
+                  </p>
                 </div>
-                
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="schoolName" className="block text-sm font-medium text-gray-700">
-                    School Name <span className="text-red-500">*</span>
+                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                    First Name <span className="text-red-500">*</span>
                   </label>
                   <input
-                    id="schoolName"
-                    name="schoolName"
+                    id="firstName"
+                    name="firstName"
                     type="text"
                     required
-                    className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                    value={formData.schoolName}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    value={formData.firstName}
                     onChange={handleChange}
-                    placeholder="e.g., Springfield Elementary School"
                   />
                 </div>
-
                 <div>
-                  <label htmlFor="schoolAddress" className="block text-sm font-medium text-gray-700">
-                    School Address
+                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                    Last Name <span className="text-red-500">*</span>
                   </label>
                   <input
-                    id="schoolAddress"
-                    name="schoolAddress"
+                    id="lastName"
+                    name="lastName"
                     type="text"
-                    className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                    value={formData.schoolAddress}
+                    required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    value={formData.lastName}
                     onChange={handleChange}
-                    placeholder="e.g., 123 Education St"
                   />
                 </div>
-
-                <div>
-                  <label htmlFor="schoolPhone" className="block text-sm font-medium text-gray-700">
-                    School Phone
-                  </label>
-                  <input
-                    id="schoolPhone"
-                    name="schoolPhone"
-                    type="text"
-                    className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                    value={formData.schoolPhone}
-                    onChange={handleChange}
-                    placeholder="e.g., +1234567890"
-                  />
-                </div>
-
-                {!isVerified && formData.schoolName && (
-                  <button
-                    type="button"
-                    onClick={handleCreateSchool}
-                    disabled={isCreatingSchool || !formData.schoolName.trim()}
-                    className="w-full py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isCreatingSchool ? (
-                      <span className="flex items-center justify-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Creating School...
-                      </span>
-                    ) : (
-                      'Create School'
-                    )}
-                  </button>
-                )}
-
-                {isVerified && formData.schoolName && (
-                  <div className="bg-green-50 p-3 rounded-md">
-                    <p className="text-sm text-green-800">
-                      ✅ School created successfully!
-                    </p>
-                    <p className="text-xs text-green-600 mt-1">
-                      School Code: <span className="font-mono font-bold">{formData.schoolCode}</span>
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Share this code with your students and teachers.
-                    </p>
-                  </div>
-                )}
               </div>
-            )}
 
-            {/* Personal Information */}
-            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
-                  First Name
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Email <span className="text-red-500">*</span>
                 </label>
                 <input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
+                  id="email"
+                  name="email"
+                  type="email"
                   required
-                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  value={formData.firstName}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  value={formData.email}
                   onChange={handleChange}
                 />
               </div>
+
               <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
-                  Last Name
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+                  I am a <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="role"
+                  name="role"
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  value={formData.role}
+                  onChange={handleChange}
+                >
+                  <option value="student">Student</option>
+                  <option value="teacher">Teacher</option>
+                  <option value="guardian">Guardian</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password <span className="text-red-500">*</span>
                 </label>
                 <input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
+                  id="password"
+                  name="password"
+                  type="password"
                   required
-                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  value={formData.lastName}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="At least 8 characters"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                  Confirm Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  value={formData.confirmPassword}
                   onChange={handleChange}
                 />
               </div>
-            </div>
-            
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                value={formData.email}
-                onChange={handleChange}
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                value={formData.password}
-                onChange={handleChange}
-              />
-              <p className="mt-1 text-xs text-gray-500">Must be at least 8 characters</p>
-            </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={
-                isLoading || 
-                (isAdmin ? !isVerified : !isVerified) ||
-                (isAdmin && !formData.schoolName)
-              }
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Creating account...' : 'Create Account'}
-            </button>
-          </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Creating Account...' : 'Create Account'}
+              </button>
+            </form>
+          )}
+        </div>
 
-          <div className="text-sm text-center">
-            <Link to={tenantSlug ? `/${tenantSlug}/login` : '/login'} className="font-medium text-primary-600 hover:text-primary-500">
-              Already have an account? Sign in
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium text-primary-600 hover:text-primary-700">
+              Sign in
             </Link>
-          </div>
-          
-          {!isAdmin && (
-            <div className="text-center text-xs text-gray-400">
-              Need a school code? Contact your school administrator.
-            </div>
-          )}
-          
-          {isAdmin && (
-            <div className="text-center text-xs text-gray-400">
-              You're creating a new school. You'll be the first admin.
-            </div>
-          )}
-        </form>
+          </p>
+        </div>
       </div>
     </div>
   );

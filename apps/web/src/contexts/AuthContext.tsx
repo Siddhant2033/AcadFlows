@@ -1,7 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api from '../lib/api';
-import { getTenantSlugFromURL } from '../lib/tenant';
 
 interface User {
   id: string;
@@ -18,6 +16,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
+  isAdminExists: (tenantId: string) => Promise<boolean>;
 }
 
 interface RegisterData {
@@ -26,7 +25,7 @@ interface RegisterData {
   firstName: string;
   lastName: string;
   role: 'admin' | 'teacher' | 'student' | 'guardian';
-  tenantId?: string; // Optional - will be auto-detected
+  tenantId: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,50 +53,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { user, accessToken } = response.data.data;
-    localStorage.setItem('accessToken', accessToken);
-    setUser(user);
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      const { user, accessToken } = response.data.data;
+      localStorage.setItem('accessToken', accessToken);
+      setUser(user);
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   };
 
   const register = async (data: RegisterData) => {
-    // Auto-detect tenant if not provided
-    let tenantId = data.tenantId;
-    if (!tenantId) {
-      const slug = getTenantSlugFromURL();
-      if (slug) {
-        try {
-          const tenantResponse = await api.get(`/tenants/public/${slug}`);
-          tenantId = tenantResponse.data.data.id;
-        } catch (error) {
-          console.error('Failed to auto-detect tenant:', error);
-          throw new Error('Could not detect your school. Please provide a School ID.');
-        }
+    console.log('🔍 Register called with data:', data);
+    
+    // Validate that tenantId exists
+    if (!data.tenantId) {
+      console.error('❌ tenantId is missing from registration data');
+      throw new Error('School ID is required. Please verify your school code.');
+    }
+
+    // Check if trying to register as admin
+    if (data.role === 'admin') {
+      // Check if admin already exists for this tenant
+      const adminExists = await isAdminExists(data.tenantId);
+      if (adminExists) {
+        throw new Error('An admin already exists for this school. Please contact your school administrator.');
       }
     }
-    
-    if (!tenantId) {
-      throw new Error('School ID is required. Please contact your school administrator.');
+
+    try {
+      const response = await api.post('/auth/register', {
+        email: data.email,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: data.role,
+        tenantId: data.tenantId,
+      });
+      
+      console.log('✅ Registration successful:', response.data);
+      
+      const { user, accessToken } = response.data.data;
+      localStorage.setItem('accessToken', accessToken);
+      setUser(user);
+    } catch (error: any) {
+      console.error('❌ Registration error:', error.response?.data || error.message);
+      throw error;
     }
-    
-    const response = await api.post('/auth/register', {
-      ...data,
-      tenantId,
-    });
-    
-    const { user, accessToken } = response.data.data;
-    localStorage.setItem('accessToken', accessToken);
-    setUser(user);
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
-    localStorage.removeItem('accessToken');
-    setUser(null);
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('accessToken');
+      setUser(null);
+    }
+  };
+
+  const isAdminExists = async (tenantId: string): Promise<boolean> => {
+    try {
+      const response = await api.get(`/users/admin-exists/${tenantId}`);
+      return response.data.data.exists;
+    } catch (error) {
+      console.error('Error checking admin existence:', error);
+      return false;
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, isAdminExists }}>
       {children}
     </AuthContext.Provider>
   );

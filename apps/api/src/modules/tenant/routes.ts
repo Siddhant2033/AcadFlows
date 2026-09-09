@@ -11,6 +11,7 @@ router.get('/public/:slug', TenantController.getPublicInfo);
 router.get('/public/code/:schoolCode', TenantController.getPublicInfoBySchoolCode);
 router.post('/validate-code', TenantController.validateSchoolCode);
 router.get('/validate/:tenantId', TenantController.validateTenant);
+router.get('/has-admin/:tenantId', TenantController.hasAdmin);
 
 // School creation (public - for admin registration)
 router.post('/create-school', TenantController.createSchool);

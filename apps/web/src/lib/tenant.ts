@@ -2,6 +2,7 @@ import api from './api';
 
 export interface TenantInfo {
   id: string;
+  _id?: string; // For backward compatibility
   name: string;
   slug: string;
   schoolCode: string;
@@ -167,5 +168,15 @@ export async function createSchool(data: {
   email?: string;
 }): Promise<TenantInfo> {
   const response = await api.post('/tenants/create-school', data);
-  return response.data.data;
+  
+  // Ensure the response data has both id and _id for consistency
+  const schoolData = response.data.data;
+  if (schoolData && schoolData._id && !schoolData.id) {
+    schoolData.id = schoolData._id;
+  }
+  if (schoolData && schoolData.id && !schoolData._id) {
+    schoolData._id = schoolData.id;
+  }
+  
+  return schoolData;
 }

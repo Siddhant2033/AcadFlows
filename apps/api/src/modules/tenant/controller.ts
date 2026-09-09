@@ -76,14 +76,24 @@ export class TenantController {
 
   static async createSchool(req: Request, res: Response, next: NextFunction) {
     try {
+      console.log('📝 Creating school with data:', req.body);
+      
       const validated = createSchoolSchema.parse(req.body);
       const tenant = await TenantService.createSchool(validated);
+      
+      console.log('✅ School created:', {
+        id: tenant.id,
+        name: tenant.name,
+        schoolCode: tenant.schoolCode,
+      });
+      
       res.status(201).json({
         success: true,
         data: tenant,
         message: 'School created successfully! Your school code is: ' + tenant.formattedSchoolCode,
       });
     } catch (error) {
+      console.error('❌ School creation error:', error);
       next(error);
     }
   }
@@ -151,8 +161,12 @@ export class TenantController {
 
   static async validateSchoolCode(req: Request, res: Response, next: NextFunction) {
     try {
+      console.log('🔍 Validating school code:', req.body);
+      
       const validated = validateSchoolCodeSchema.parse(req.body);
       const result = await TenantService.validateSchoolCode(validated.schoolCode);
+      
+      console.log('📊 Validation result:', result);
       
       if (!result.valid) {
         return res.status(404).json({
@@ -174,6 +188,7 @@ export class TenantController {
           error: 'Invalid request: ' + error.errors[0].message,
         });
       }
+      console.error('❌ School code validation error:', error);
       next(error);
     }
   }
@@ -232,6 +247,19 @@ export class TenantController {
       res.json({
         success: true,
         data: { isValid },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async hasAdmin(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { tenantId } = req.params;
+      const hasAdmin = await TenantService.hasAdmin(tenantId);
+      res.json({
+        success: true,
+        data: { hasAdmin },
       });
     } catch (error) {
       next(error);

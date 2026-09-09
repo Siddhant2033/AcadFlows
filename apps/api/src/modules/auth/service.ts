@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../../config';
@@ -9,20 +9,37 @@ import { UserCreateInput, UserLoginInput, AuthTokens } from '@school-platform/sh
 
 export class AuthService {
   static async register(input: UserCreateInput): Promise<{ user: any; tokens: AuthTokens }> {
+    console.log('🔍 Register service called with:', {
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      role: input.role,
+      tenantId: input.tenantId,
+    });
+    
     // Validate tenant ID format
     if (!mongoose.Types.ObjectId.isValid(input.tenantId)) {
+      console.error('❌ Invalid tenant ID format:', input.tenantId);
       throw new AppError('Invalid tenant ID format. Please use a valid 24-character hex string.', 400);
     }
     
     // Check if tenant exists
     const tenant = await Tenant.findOne({ _id: input.tenantId, status: 'active' });
     if (!tenant) {
+      console.error('❌ Tenant not found:', input.tenantId);
       throw new AppError('Tenant not found or inactive', 400);
     }
+    
+    console.log('✅ Tenant found:', {
+      id: tenant._id,
+      name: tenant.name,
+      schoolCode: tenant.schoolCode,
+    });
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: input.email });
     if (existingUser) {
+      console.error('❌ User already exists:', input.email);
       throw new AppError('User already exists with this email', 409);
     }
 
@@ -36,6 +53,13 @@ export class AuthService {
       role: input.role,
     });
 
+    console.log('✅ User created:', {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+    });
+
     // Generate tokens
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
@@ -46,21 +70,27 @@ export class AuthService {
   }
 
   static async login(input: UserLoginInput): Promise<{ user: any; tokens: AuthTokens }> {
+    console.log('🔍 Login service called for:', input.email);
+    
     // Find user with email
     const user = await User.findOne({ email: input.email, status: 'active' });
     if (!user) {
+      console.error('❌ User not found:', input.email);
       throw new AppError('Invalid email or password', 401);
     }
 
     // Check password
     const isPasswordValid = await user.comparePassword(input.password);
     if (!isPasswordValid) {
+      console.error('❌ Invalid password for:', input.email);
       throw new AppError('Invalid email or password', 401);
     }
 
     // Update last login
     user.lastLoginAt = new Date();
     await user.save();
+
+    console.log('✅ Login successful for:', input.email);
 
     // Generate tokens
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
@@ -72,8 +102,12 @@ export class AuthService {
   }
 
   static async refreshToken(refreshToken: string): Promise<AuthTokens> {
+    console.log('🔍 Refresh token service called');
+    
     try {
       const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret) as any;
+      
+      console.log('✅ Refresh token decoded for user:', decoded.email);
       
       // Verify user still exists and is active
       const user = await User.findOne({ 
@@ -82,11 +116,14 @@ export class AuthService {
       });
       
       if (!user) {
+        console.error('❌ User not found for refresh token');
         throw new AppError('Invalid refresh token', 401);
       }
 
+      console.log('✅ User found, generating new tokens');
       return this.generateTokens(user.id, user.tenantId, user.email, user.role);
     } catch (error) {
+      console.error('❌ Refresh token error:', error);
       throw new AppError('Invalid refresh token', 401);
     }
   }
@@ -100,12 +137,14 @@ export class AuthService {
     const payload = { userId, tenantId, email, role };
 
     const accessToken = jwt.sign(payload, config.jwt.secret, {
-      expiresIn: config.jwt.expiry as jwt.SignOptions['expiresIn'],
+      expiresIn: config.jwt.expiry as SignOptions['expiresIn'],
     });
 
     const refreshToken = jwt.sign(payload, config.jwt.refreshSecret, {
-      expiresIn: config.jwt.refreshExpiry as jwt.SignOptions['expiresIn'],
+      expiresIn: config.jwt.refreshExpiry as SignOptions['expiresIn'],
     });
+
+    console.log('🔑 Tokens generated for:', email);
 
     return { accessToken, refreshToken };
   }
