@@ -26,6 +26,11 @@ import FeeStructuresPage from './pages/admin/FeeStructures';
 import AddFeeStructurePage from './pages/admin/AddFeeStructure';
 import InvoicesPage from './pages/admin/Invoices';
 import GenerateInvoicePage from './pages/admin/GenerateInvoice';
+import AssignmentsPage from './pages/admin/Assignments';
+import CreateAssignmentPage from './pages/admin/CreateAssignment';
+import AssignmentSubmissionsPage from './pages/admin/AssignmentSubmissions';
+import GradebookPage from './pages/student/Gradebook';
+import ReportCardsPage from './pages/admin/ReportCards';
 
 function App() {
   return (
@@ -199,6 +204,62 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <GenerateInvoicePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assignments"
+              element={
+                <ProtectedRoute>
+                  <AssignmentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assignments/create"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <CreateAssignmentPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assignments/:id/edit"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <CreateAssignmentPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assignments/:id/submissions"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AssignmentSubmissionsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assignments/:id"
+              element={
+                <ProtectedRoute>
+                  <AssignmentSubmissionsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/gradebook"
+              element={
+                <ProtectedRoute requiredRole="student">
+                  <GradebookPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/report-cards"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <ReportCardsPage />
                 </ProtectedRoute>
               }
             />
