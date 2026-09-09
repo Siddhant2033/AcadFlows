@@ -1,11 +1,136 @@
 import mongoose from 'mongoose';
 import { User } from '../../models/User';
 import { Tenant } from '../../models/Tenant';
+import { Student } from '../../models/Student';
+import { Teacher } from '../../models/Teacher';
+import { Invoice } from '../../models/Fee';
+import { Attendance } from '../../models/Attendance';
 import { AppError } from '../../middleware/error-handler';
 
-// Mock data for MVP - Replace with actual database queries
+interface UserData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+}
+
+interface TenantData {
+  id: string;
+  name: string;
+  schoolCode: string;
+  formattedSchoolCode: string;
+}
+
+interface DashboardStats {
+  totalStudents: number;
+  totalTeachers: number;
+  attendance: string;
+  feeCollection: string;
+  revenue: number;
+  pendingInvoices: number;
+}
+
+interface ActivityItem {
+  id: string;
+  icon: string;
+  message: string;
+  timestamp: string;
+  type: string;
+}
+
+interface QuickAction {
+  label: string;
+  icon: string;
+  path: string;
+  color: string;
+}
+
+interface QuickStats {
+  totalStudents: number;
+  totalTeachers: number;
+  totalInvoices: number;
+  pendingInvoices: number;
+  newMessages: number;
+  leaveRequests: number;
+}
+
+interface AdminData {
+  quickActions: QuickAction[];
+  quickStats: QuickStats;
+}
+
+interface MyClass {
+  name: string;
+  section: string;
+  time: string;
+}
+
+interface PendingTask {
+  title: string;
+  count: number;
+}
+
+interface TeacherData {
+  myClasses: MyClass[];
+  pendingTasks: PendingTask[];
+}
+
+interface TimetableClass {
+  subject: string;
+  time: string;
+  room: string;
+  teacher: string;
+}
+
+interface Grade {
+  subject: string;
+  grade: string;
+  score: string;
+  date: string;
+}
+
+interface StudentData {
+  timetable: TimetableClass[];
+  recentGrades: Grade[];
+  upcomingTests: any[];
+}
+
+interface Child {
+  name: string;
+  grade: string;
+  attendance: string;
+  grades: string;
+}
+
+interface FeeStatus {
+  current: string;
+  nextDue: string;
+  amount: string;
+}
+
+interface GuardianData {
+  children: Child[];
+  feeStatus: FeeStatus;
+}
+
+interface DashboardResponse {
+  user: UserData;
+  tenant: TenantData;
+  stats: DashboardStats;
+  recentActivity: ActivityItem[];
+  quickActions?: QuickAction[];
+  quickStats?: QuickStats;
+  myClasses?: MyClass[];
+  pendingTasks?: PendingTask[];
+  timetable?: TimetableClass[];
+  recentGrades?: Grade[];
+  children?: Child[];
+  feeStatus?: FeeStatus;
+}
+
 export class DashboardService {
-  static async getDashboardData(userId: string, tenantId: string, role: string) {
+  static async getDashboardData(userId: string, tenantId: string, role: string): Promise<DashboardResponse> {
     console.log('🔍 Fetching dashboard data for:', { userId, tenantId, role });
 
     // Get tenant info
@@ -20,7 +145,7 @@ export class DashboardService {
       throw new AppError('User not found', 404);
     }
 
-    // Get stats based on role
+    // Get real stats based on role
     const stats = await this.getStats(tenantId, role);
     const recentActivity = await this.getRecentActivity(tenantId, userId, role);
 
@@ -45,14 +170,14 @@ export class DashboardService {
 
     return {
       user: {
-        id: user._id,
+        id: user._id.toString(),
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
         role: user.role,
       },
       tenant: {
-        id: tenant._id,
+        id: tenant._id.toString(),
         name: tenant.name,
         schoolCode: tenant.schoolCode,
         formattedSchoolCode: this.formatSchoolCode(tenant.schoolCode),
@@ -63,143 +188,361 @@ export class DashboardService {
     };
   }
 
-  static async getStats(tenantId: string, role: string) {
-    // For MVP, return mock stats
-    // In production, these would be actual database counts
+  static async getStats(tenantId: string, role: string): Promise<DashboardStats> {
+    // Get real counts from database
+    const [totalStudents, totalTeachers, totalInvoices] = await Promise.all([
+      Student.countDocuments({ tenantId, isDeleted: false }),
+      Teacher.countDocuments({ tenantId, isDeleted: false }),
+      Invoice.countDocuments({ tenantId }),
+    ]);
+
+    // Get today's attendance
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayAttendance = await Attendance.countDocuments({
+      tenantId,
+      date: today,
+      status: { $in: ['present', 'late', 'half_day'] },
+    });
+
+    const totalAttendance = await Attendance.countDocuments({
+      tenantId,
+      date: today,
+    });
+
+    const attendancePercentage = totalAttendance > 0 
+      ? Math.round((todayAttendance / totalAttendance) * 100) 
+      : 0;
+
+    // Get fee collection and revenue
+    const paidInvoices = await Invoice.aggregate([
+      { $match: { tenantId, status: 'paid' } },
+      { $group: { _id: null, total: { $sum: '$total' } } },
+    ]);
+
+    const totalInvoicesAmount = await Invoice.aggregate([
+      { $match: { tenantId } },
+      { $group: { _id: null, total: { $sum: '$total' } } },
+    ]);
+
+    const totalRevenue = totalInvoicesAmount.length > 0 ? totalInvoicesAmount[0].total : 0;
+    
+    const feeCollection = totalInvoicesAmount.length > 0 && totalInvoicesAmount[0].total > 0
+      ? Math.round((paidInvoices[0]?.total || 0) / totalInvoicesAmount[0].total * 100)
+      : 0;
+
+    // Get pending invoices count
+    const pendingInvoices = await Invoice.countDocuments({
+      tenantId,
+      status: { $in: ['sent', 'partially_paid', 'overdue'] },
+    });
+
     return {
-      totalStudents: 156,
-      totalTeachers: 24,
-      totalClasses: 12,
-      totalSubjects: 8,
-      attendance: '94%',
-      assignmentsPending: 5,
-      upcomingEvents: 3,
-      feeCollection: '85%',
+      totalStudents: totalStudents || 0,
+      totalTeachers: totalTeachers || 0,
+      attendance: `${attendancePercentage}%`,
+      feeCollection: `${feeCollection}%`,
+      revenue: totalRevenue || 0,
+      pendingInvoices: pendingInvoices || 0,
     };
   }
 
-  static async getRecentActivity(tenantId: string, userId: string, role: string) {
-    // Mock recent activities
-    return [
-      {
-        id: '1',
+  static async getRecentActivity(tenantId: string, userId: string, role: string): Promise<ActivityItem[]> {
+    // Get real recent activities
+    const activities: ActivityItem[] = [];
+
+    // Recent students
+    const recentStudents = await Student.find({ tenantId, isDeleted: false })
+      .sort({ createdAt: -1 })
+      .limit(3)
+      .select('firstName lastName createdAt');
+
+    recentStudents.forEach((student: any) => {
+      activities.push({
+        id: `student_${student._id}`,
         icon: '👨‍🎓',
-        message: 'New student registered: Michael Johnson',
-        timestamp: '2 hours ago',
+        message: `${student.firstName} ${student.lastName} registered as a student`,
+        timestamp: this.getTimeAgo(student.createdAt),
         type: 'student_registration',
-      },
-      {
-        id: '2',
-        icon: '📝',
-        message: 'Assignment submitted: Mathematics Quiz',
-        timestamp: '4 hours ago',
-        type: 'assignment_submission',
-      },
-      {
-        id: '3',
-        icon: '💰',
-        message: 'Fee payment received: $500 from Sarah Wilson',
-        timestamp: '1 day ago',
-        type: 'fee_payment',
-      },
-      {
-        id: '4',
+      });
+    });
+
+    // Recent teachers
+    const recentTeachers = await Teacher.find({ tenantId, isDeleted: false })
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .select('firstName lastName createdAt');
+
+    recentTeachers.forEach((teacher: any) => {
+      activities.push({
+        id: `teacher_${teacher._id}`,
         icon: '👨‍🏫',
-        message: 'New teacher added: Robert Anderson',
-        timestamp: '2 days ago',
+        message: `${teacher.firstName} ${teacher.lastName} joined as a teacher`,
+        timestamp: this.getTimeAgo(teacher.createdAt),
         type: 'teacher_registration',
-      },
-    ];
+      });
+    });
+
+    // Recent invoices/payments
+    const recentInvoices = await Invoice.find({ tenantId })
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .select('invoiceNumber total status createdAt');
+
+    recentInvoices.forEach((invoice: any) => {
+      const statusIcon = invoice.status === 'paid' ? '💰' : '📄';
+      activities.push({
+        id: `invoice_${invoice._id}`,
+        icon: statusIcon,
+        message: `Invoice ${invoice.invoiceNumber} ${invoice.status === 'paid' ? 'paid' : 'generated'} - ₹${invoice.total}`,
+        timestamp: this.getTimeAgo(invoice.createdAt),
+        type: 'invoice',
+      });
+    });
+
+    // Sort by timestamp (newest first)
+    activities.sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeB - timeA;
+    });
+
+    return activities.slice(0, 10);
   }
 
-  static async getAdminData(tenantId: string) {
+  static async getAdminData(tenantId: string): Promise<AdminData> {
+    // Get real admin data
+    const [totalStudents, totalTeachers, totalInvoices, pendingInvoices] = await Promise.all([
+      Student.countDocuments({ tenantId, isDeleted: false }),
+      Teacher.countDocuments({ tenantId, isDeleted: false }),
+      Invoice.countDocuments({ tenantId }),
+      Invoice.countDocuments({
+        tenantId,
+        status: { $in: ['sent', 'partially_paid', 'overdue'] },
+      }),
+    ]);
+
+    // Get unread messages count (from communication module)
+    let newMessages = 0;
+    try {
+      const Message = mongoose.model('Message');
+      // Get all teachers and count unread messages (simplified)
+      const teachers = await Teacher.find({ tenantId, isDeleted: false }).select('userId');
+      const teacherIds = teachers.map(t => t.userId);
+      newMessages = await Message.countDocuments({
+        tenantId,
+        recipientId: { $in: teacherIds },
+        isRead: false,
+        isDeleted: false,
+      });
+    } catch (error) {
+      console.log('Message model not available yet');
+    }
+
+    // Get leave requests count
+    let leaveRequests = 0;
+    try {
+      const Leave = mongoose.model('Leave');
+      leaveRequests = await Leave.countDocuments({
+        tenantId,
+        status: 'pending',
+      });
+    } catch (error) {
+      console.log('Leave model not available yet');
+    }
+
     return {
       quickActions: [
-        { label: 'Add Student', icon: '➕', path: '/students/add' },
-        { label: 'Add Teacher', icon: '➕', path: '/teachers/add' },
-        { label: 'Create Class', icon: '📚', path: '/classes/add' },
-        { label: 'Manage Fees', icon: '💰', path: '/fees' },
+        { label: 'Add Student', icon: '➕', path: '/students/add', color: 'blue' },
+        { label: 'Add Teacher', icon: '👨‍🏫', path: '/teachers/add', color: 'green' },
+        { label: 'Create Class', icon: '📚', path: '/academic/sections/add', color: 'purple' },
+        { label: 'Manage Fees', icon: '💰', path: '/fees/invoices', color: 'orange' },
+        { label: 'Generate Reports', icon: '📊', path: '/reports', color: 'red' },
+        { label: 'Send Announcement', icon: '📢', path: '/announcements', color: 'teal' },
       ],
-    };
-  }
-
-  static async getTeacherData(userId: string, tenantId: string) {
-    return {
-      myClasses: [
-        { name: 'Mathematics - Grade 5', students: 28, time: '9:00 AM' },
-        { name: 'Science - Grade 6', students: 25, time: '10:00 AM' },
-        { name: 'English - Grade 7', students: 30, time: '11:00 AM' },
-      ],
-      pendingTasks: [
-        { title: 'Grade assignments', count: 8 },
-        { title: 'Prepare lesson plans', count: 3 },
-        { title: 'Parent meetings', count: 2 },
-      ],
-    };
-  }
-
-  static async getStudentData(userId: string, tenantId: string) {
-    return {
-      timetable: [
-        { subject: 'Mathematics', time: '9:00 - 9:45', room: '101' },
-        { subject: 'Science', time: '10:00 - 10:45', room: '102' },
-        { subject: 'English', time: '11:00 - 11:45', room: '103' },
-      ],
-      recentGrades: [
-        { subject: 'Mathematics', grade: 'A', date: '2 days ago' },
-        { subject: 'Science', grade: 'B+', date: '5 days ago' },
-        { subject: 'English', grade: 'A-', date: '1 week ago' },
-      ],
-      upcomingTests: [
-        { subject: 'Mathematics', date: '2024-06-15', weight: '20%' },
-        { subject: 'Science', date: '2024-06-18', weight: '25%' },
-      ],
-    };
-  }
-
-  static async getGuardianData(userId: string, tenantId: string) {
-    return {
-      children: [
-        { name: 'Michael Johnson', grade: '5th Grade', attendance: '95%', grades: 'A' },
-        { name: 'Emma Johnson', grade: '3rd Grade', attendance: '92%', grades: 'B+' },
-      ],
-      feeStatus: {
-        current: 'Paid',
-        nextDue: '2024-06-15',
-        amount: '$500',
+      quickStats: {
+        totalStudents,
+        totalTeachers,
+        totalInvoices,
+        pendingInvoices,
+        newMessages,
+        leaveRequests,
       },
     };
   }
 
-  static async getStudents(tenantId: string) {
-    // Mock students
-    return [
-      { _id: '1', firstName: 'Michael', lastName: 'Johnson', grade: '5th', section: 'A' },
-      { _id: '2', firstName: 'Emma', lastName: 'Williams', grade: '4th', section: 'B' },
-      { _id: '3', firstName: 'James', lastName: 'Brown', grade: '3rd', section: 'A' },
-    ];
+  static async getTeacherData(userId: string, tenantId: string): Promise<TeacherData> {
+    // Get real teacher data
+    const teacher = await Teacher.findOne({ userId, tenantId, isDeleted: false });
+    
+    if (!teacher) {
+      return {
+        myClasses: [],
+        pendingTasks: [],
+      };
+    }
+
+    // Get teacher's classes from timetable
+    try {
+      const TimetableEntry = mongoose.model('TimetableEntry');
+      const classes = await TimetableEntry.find({
+        tenantId,
+        teacherId: teacher._id,
+      })
+        .populate('subjectId', 'name')
+        .populate('sectionId', 'name')
+        .populate('gradeId', 'name')
+        .limit(5);
+
+      const myClasses = classes.map((cls: any) => ({
+        name: `${cls.subjectId?.name || 'Unknown'} - ${cls.gradeId?.name || 'Unknown'}`,
+        section: cls.sectionId?.name || 'N/A',
+        time: `${cls.startTime} - ${cls.endTime}`,
+      }));
+
+      // Get pending assignments to grade
+      const Assignment = mongoose.model('Assignment');
+      const pendingAssignments = await Assignment.countDocuments({
+        tenantId,
+        teacherId: teacher._id,
+        status: 'published',
+      });
+
+      return {
+        myClasses: myClasses.slice(0, 5),
+        pendingTasks: [
+          { title: 'Grade assignments', count: pendingAssignments || 0 },
+          { title: 'Prepare lesson plans', count: 0 },
+          { title: 'Parent meetings', count: 0 },
+        ],
+      };
+    } catch (error) {
+      return {
+        myClasses: [],
+        pendingTasks: [],
+      };
+    }
   }
 
-  static async getTeachers(tenantId: string) {
-    // Mock teachers
-    return [
-      { _id: '1', firstName: 'Sarah', lastName: 'Wilson', subject: 'Mathematics' },
-      { _id: '2', firstName: 'Robert', lastName: 'Anderson', subject: 'Science' },
-      { _id: '3', firstName: 'Lisa', lastName: 'Martinez', subject: 'English' },
-    ];
+  static async getStudentData(userId: string, tenantId: string): Promise<StudentData> {
+    // Get real student data
+    const student = await Student.findOne({ userId, tenantId, isDeleted: false });
+    
+    if (!student) {
+      return {
+        timetable: [],
+        recentGrades: [],
+        upcomingTests: [],
+      };
+    }
+
+    try {
+      // Get student's timetable
+      const TimetableEntry = mongoose.model('TimetableEntry');
+      const timetable = await TimetableEntry.find({
+        tenantId,
+        sectionId: student.section || '',
+      })
+        .populate('subjectId', 'name')
+        .populate('teacherId', 'firstName lastName')
+        .limit(5);
+
+      // Get student's grades
+      const Gradebook = mongoose.model('Gradebook');
+      const grades = await Gradebook.find({
+        tenantId,
+        studentId: student._id,
+      })
+        .populate('subjectId', 'name')
+        .limit(5);
+
+      return {
+        timetable: timetable.map((cls: any) => ({
+          subject: cls.subjectId?.name || 'Unknown',
+          time: `${cls.startTime} - ${cls.endTime}`,
+          room: cls.roomNumber || 'N/A',
+          teacher: cls.teacherId ? `${cls.teacherId.firstName} ${cls.teacherId.lastName}` : 'N/A',
+        })),
+        recentGrades: grades.map((g: any) => ({
+          subject: g.subjectId?.name || 'Unknown',
+          grade: g.grade || 'N/A',
+          score: `${Math.round(g.averageScore || 0)}%`,
+          date: this.getTimeAgo(g.updatedAt),
+        })),
+        upcomingTests: [],
+      };
+    } catch (error) {
+      return {
+        timetable: [],
+        recentGrades: [],
+        upcomingTests: [],
+      };
+    }
   }
 
-  static async getClasses(tenantId: string) {
-    // Mock classes
-    return [
-      { _id: '1', name: 'Grade 5 - Section A', teacher: 'Sarah Wilson', students: 28 },
-      { _id: '2', name: 'Grade 6 - Section B', teacher: 'Robert Anderson', students: 25 },
-      { _id: '3', name: 'Grade 7 - Section A', teacher: 'Lisa Martinez', students: 30 },
-    ];
+  static async getGuardianData(userId: string, tenantId: string): Promise<GuardianData> {
+    // Get real guardian data
+    const students = await Student.find({
+      tenantId,
+      'guardians.userId': userId,
+      isDeleted: false,
+    }).select('firstName lastName grade section');
+
+    return {
+      children: students.map((s: any) => ({
+        name: `${s.firstName} ${s.lastName}`,
+        grade: s.grade || 'N/A',
+        attendance: '0%',
+        grades: 'N/A',
+      })),
+      feeStatus: {
+        current: 'Pending',
+        nextDue: 'N/A',
+        amount: '₹0',
+      },
+    };
+  }
+
+  private static getTimeAgo(date: Date): string {
+    const diff = Date.now() - new Date(date).getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    return 'Just now';
   }
 
   private static formatSchoolCode(code: string): string {
     if (!code || code.length !== 10) return code || '';
     return `${code.substring(0, 4)}-${code.substring(4, 8)}-${code.substring(8, 10)}`;
+  }
+
+  static async getStudents(tenantId: string): Promise<any[]> {
+    return await Student.find({ tenantId, isDeleted: false })
+      .select('firstName lastName grade section')
+      .limit(10);
+  }
+
+  static async getTeachers(tenantId: string): Promise<any[]> {
+    return await Teacher.find({ tenantId, isDeleted: false })
+      .select('firstName lastName')
+      .limit(10);
+  }
+
+  static async getClasses(tenantId: string): Promise<any[]> {
+    try {
+      const TimetableEntry = mongoose.model('TimetableEntry');
+      const sections = await TimetableEntry.aggregate([
+        { $match: { tenantId } },
+        { $group: { _id: '$sectionId', count: { $sum: 1 } } },
+        { $limit: 10 },
+      ]);
+      return sections;
+    } catch (error) {
+      return [];
+    }
   }
 }

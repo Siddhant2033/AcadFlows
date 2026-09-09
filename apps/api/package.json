@@ -8,7 +8,9 @@
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
-    "seed:tenant": "tsx src/scripts/create-default-tenant.ts"
+    "seed:india": "tsx src/scripts/seed-india-data.ts",
+    "seed:tenant": "tsx src/scripts/create-default-tenant.ts",
+    "seed:schools": "tsx src/scripts/seed-school.ts"
   },
   "dependencies": {
     "@school-platform/shared": "workspace:*",

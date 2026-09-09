@@ -16,5 +16,9 @@ export interface TenantSettings {
   academicYearEnd?: string;
   timezone?: string;
   currency?: string;
+  currencySymbol?: string;
   language?: string;
+  country?: string;
+  phoneCode?: string;
+  dateFormat?: string;
 }

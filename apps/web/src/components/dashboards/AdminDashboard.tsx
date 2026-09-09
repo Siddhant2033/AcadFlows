@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import api from '../../lib/api';
 
 interface AdminDashboardProps {
   data: any;
@@ -28,144 +29,123 @@ interface Notification {
 export default function AdminDashboard({ data, tenant, user }: AdminDashboardProps) {
   const { theme, mode } = useTheme();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      title: 'New Student Registered',
-      message: 'Michael Johnson has been registered as a student',
-      type: 'success',
-      read: false,
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    },
-    {
-      id: '2',
-      title: 'Fee Payment Received',
-      message: 'Fee payment of $500 received from Sarah Wilson',
-      type: 'info',
-      read: false,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    },
-    {
-      id: '3',
-      title: 'Teacher Leave Request',
-      message: 'Robert Anderson has requested leave for tomorrow',
-      type: 'warning',
-      read: true,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    },
-    {
-      id: '4',
-      title: 'System Update',
-      message: 'New features available in the dashboard',
-      type: 'info',
-      read: true,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    },
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch real data from API
+  useEffect(() => {
+    fetchNotifications();
+    fetchRecentActivities();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await api.get('/communication/notifications?limit=5');
+      const items = response.data.data?.items || [];
+      setNotifications(items.map((item: any) => ({
+        id: item._id,
+        title: item.title,
+        message: item.message,
+        type: item.type || 'info',
+        read: item.read || false,
+        createdAt: item.createdAt,
+      })));
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+      setNotifications([]);
+    }
+  };
+
+  const fetchRecentActivities = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/dashboard/recent-activity');
+      setRecentActivities(response.data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch recent activities:', error);
+      setRecentActivities([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
+  const markAsRead = async (id: string) => {
+    try {
+      await api.put(`/communication/notifications/${id}/read`);
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, read: true } : n)
+      );
+    } catch (error) {
+      console.error('Failed to mark as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(n => ({ ...n, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      await api.put('/communication/notifications/read-all');
+      setNotifications(prev =>
+        prev.map(n => ({ ...n, read: true }))
+      );
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+    }
   };
 
-  // Stats from API or fallback
+  // Get real stats from API data
   const stats = [
     { 
       label: 'Total Students', 
       value: data?.stats?.totalStudents || 0, 
       icon: '👨‍🎓', 
       color: 'blue',
-      change: '+12%',
-      trend: 'up'
+      change: '0%',
+      trend: 'neutral'
     },
     { 
       label: 'Total Teachers', 
       value: data?.stats?.totalTeachers || 0, 
       icon: '👨‍🏫', 
       color: 'green',
-      change: '+5%',
-      trend: 'up'
+      change: '0%',
+      trend: 'neutral'
     },
     { 
       label: 'Attendance Today', 
       value: data?.stats?.attendance || '0%', 
       icon: '📊', 
       color: 'purple',
-      change: '-2%',
-      trend: 'down'
+      change: '0%',
+      trend: 'neutral'
     },
     { 
       label: 'Revenue This Month', 
-      value: '$12,450', 
+      value: `₹${data?.stats?.revenue || 0}`, 
       icon: '💰', 
       color: 'orange',
-      change: '+18%',
-      trend: 'up'
+      change: '0%',
+      trend: 'neutral'
     },
   ];
 
   const quickActions = data?.quickActions || [
     { label: 'Add Student', icon: '➕', path: '/students/add', color: 'blue' },
     { label: 'Add Teacher', icon: '👨‍🏫', path: '/teachers/add', color: 'green' },
-    { label: 'Create Class', icon: '📚', path: '/classes/add', color: 'purple' },
-    { label: 'Manage Fees', icon: '💰', path: '/fees', color: 'orange' },
+    { label: 'Create Class', icon: '📚', path: '/academic/sections/add', color: 'purple' },
+    { label: 'Manage Fees', icon: '💰', path: '/fees/invoices', color: 'orange' },
     { label: 'Generate Reports', icon: '📊', path: '/reports', color: 'red' },
     { label: 'Send Announcement', icon: '📢', path: '/announcements', color: 'teal' },
   ];
 
-  const recentActivities = data?.recentActivity || [
-    {
-      id: '1',
-      icon: '👨‍🎓',
-      message: 'Michael Johnson registered as a student',
-      timestamp: '2 hours ago',
-      type: 'student_registration'
-    },
-    {
-      id: '2',
-      icon: '💰',
-      message: 'Fee payment received from Sarah Wilson',
-      timestamp: '4 hours ago',
-      type: 'fee_payment'
-    },
-    {
-      id: '3',
-      icon: '📝',
-      message: 'New assignment created: Mathematics Quiz',
-      timestamp: '6 hours ago',
-      type: 'assignment'
-    },
-    {
-      id: '4',
-      icon: '👨‍🏫',
-      message: 'Robert Anderson joined as a teacher',
-      timestamp: '1 day ago',
-      type: 'teacher_registration'
-    },
-  ];
-
-  // Calendar events for the week
-  const calendarEvents = [
-    { date: '2024-06-10', title: 'Staff Meeting', time: '10:00 AM', type: 'meeting' },
-    { date: '2024-06-11', title: 'Parent-Teacher Conference', time: '2:00 PM', type: 'event' },
-    { date: '2024-06-12', title: 'Science Fair', time: '9:00 AM', type: 'event' },
-    { date: '2024-06-13', title: 'Board Meeting', time: '3:00 PM', type: 'meeting' },
-    { date: '2024-06-14', title: 'Sports Day', time: '8:00 AM', type: 'event' },
-  ];
-
-  // Get today's events
-  const today = new Date().toISOString().split('T')[0];
-  const todayEvents = calendarEvents.filter(e => e.date === today);
-  const upcomingEvents = calendarEvents.filter(e => e.date > today).slice(0, 3);
+  // Get real quick stats from data
+  const quickStats = data?.quickStats || {
+    totalRevenue: '₹0',
+    pendingInvoices: 0,
+    newMessages: 0,
+    leaveRequests: 0,
+  };
 
   const getColorClasses = (color: string) => {
     const colors: Record<string, { bg: string; text: string; light: string }> = {
@@ -377,9 +357,7 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                     </p>
                   </div>
                 </div>
-                <div className={`text-sm ${
-                  stat.trend === 'up' ? 'text-green-500' : 'text-red-500'
-                }`}>
+                <div className={`text-sm text-gray-400`}>
                   {stat.change}
                 </div>
               </div>
@@ -436,31 +414,44 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
               Recent Activity
             </h3>
             <div className="space-y-4">
-              {recentActivities.map((activity: Activity) => (
-                <div key={activity.id} className={`flex items-start space-x-3 pb-3 border-b last:border-0 ${
-                  theme ? 'border-gray-100' : 'dark:border-[#334155]'
-                }`}>
-                  <div className="text-2xl">{activity.icon}</div>
-                  <div className="flex-1">
-                    <p className={`text-sm transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      {activity.message}
-                    </p>
-                    <p className={`text-xs transition-colors duration-200 ${
-                      theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                    }`}>
-                      {activity.timestamp}
-                    </p>
-                  </div>
+              {loading ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                 </div>
-              ))}
+              ) : recentActivities.length === 0 ? (
+                <p className={`text-sm text-center py-4 transition-colors duration-200 ${
+                  theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
+                }`}>
+                  No recent activity
+                </p>
+              ) : (
+                recentActivities.map((activity: Activity) => (
+                  <div key={activity.id} className={`flex items-start space-x-3 pb-3 border-b last:border-0 ${
+                    theme ? 'border-gray-100' : 'dark:border-[#334155]'
+                  }`}>
+                    <div className="text-2xl">{activity.icon}</div>
+                    <div className="flex-1">
+                      <p className={`text-sm transition-colors duration-200 ${
+                        theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
+                      }`}>
+                        {activity.message}
+                      </p>
+                      <p className={`text-xs transition-colors duration-200 ${
+                        theme ? 'text-gray-400' : 'dark:text-[#64748B]'
+                      }`}>
+                        {activity.timestamp}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right Column - Calendar */}
+        {/* Right Column - Calendar & Quick Stats */}
         <div className="space-y-6">
+          {/* Calendar */}
           <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
             theme ? 'bg-white' : 'dark:bg-[#1E293B]'
           }`}>
@@ -470,73 +461,11 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
               📅 Calendar
             </h3>
             
-            {/* Today's Events */}
-            {todayEvents.length > 0 && (
-              <div className="mb-4">
-                <h4 className={`text-sm font-medium mb-2 transition-colors duration-200 ${
-                  theme ? 'text-gray-700' : 'dark:text-[#CBD5E1]'
-                }`}>
-                  Today
-                </h4>
-                {todayEvents.map((event, index) => (
-                  <div key={index} className={`p-3 rounded-lg mb-2 transition-colors duration-200 ${
-                    theme ? 'bg-blue-50' : 'dark:bg-blue-900/20'
-                  }`}>
-                    <p className={`text-sm font-medium transition-colors duration-200 ${
-                      theme ? 'text-blue-800' : 'dark:text-blue-300'
-                    }`}>
-                      {event.title}
-                    </p>
-                    <p className={`text-xs transition-colors duration-200 ${
-                      theme ? 'text-blue-600' : 'dark:text-blue-400'
-                    }`}>
-                      {event.time}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Upcoming Events */}
-            <div>
-              <h4 className={`text-sm font-medium mb-2 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#CBD5E1]'
-              }`}>
-                Upcoming
-              </h4>
-              {upcomingEvents.map((event, index) => (
-                <div key={index} className={`flex items-center justify-between py-2 border-b last:border-0 ${
-                  theme ? 'border-gray-100' : 'dark:border-[#334155]'
-                }`}>
-                  <div>
-                    <p className={`text-sm font-medium transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      {event.title}
-                    </p>
-                    <p className={`text-xs transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      {new Date(event.date).toLocaleDateString()} · {event.time}
-                    </p>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    event.type === 'meeting' 
-                      ? theme ? 'bg-purple-100 text-purple-600' : 'dark:bg-purple-900/30 dark:text-purple-400'
-                      : theme ? 'bg-green-100 text-green-600' : 'dark:bg-green-900/30 dark:text-green-400'
-                  }`}>
-                    {event.type}
-                  </span>
-                </div>
-              ))}
-              {upcomingEvents.length === 0 && todayEvents.length === 0 && (
-                <p className={`text-sm text-center py-4 transition-colors duration-200 ${
-                  theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                }`}>
-                  No events scheduled
-                </p>
-              )}
-            </div>
+            <p className={`text-sm text-center py-4 transition-colors duration-200 ${
+              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
+            }`}>
+              No events scheduled
+            </p>
 
             <Link
               to="/calendar"
@@ -567,7 +496,7 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                 <span className={`font-semibold transition-colors duration-200 ${
                   theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
                 }`}>
-                  $45,230
+                  {quickStats.totalRevenue || '₹0'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -576,8 +505,12 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                 }`}>
                   Pending Invoices
                 </span>
-                <span className={`font-semibold text-yellow-600 dark:text-yellow-400`}>
-                  12
+                <span className={`font-semibold ${
+                  quickStats.pendingInvoices > 0 
+                    ? 'text-yellow-600 dark:text-yellow-400' 
+                    : theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
+                }`}>
+                  {quickStats.pendingInvoices || 0}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -586,8 +519,12 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                 }`}>
                   New Messages
                 </span>
-                <span className={`font-semibold text-blue-600 dark:text-blue-400`}>
-                  5
+                <span className={`font-semibold ${
+                  quickStats.newMessages > 0 
+                    ? 'text-blue-600 dark:text-blue-400' 
+                    : theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
+                }`}>
+                  {quickStats.newMessages || 0}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -596,8 +533,12 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                 }`}>
                   Leave Requests
                 </span>
-                <span className={`font-semibold text-orange-600 dark:text-orange-400`}>
-                  3
+                <span className={`font-semibold ${
+                  quickStats.leaveRequests > 0 
+                    ? 'text-orange-600 dark:text-orange-400' 
+                    : theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
+                }`}>
+                  {quickStats.leaveRequests || 0}
                 </span>
               </div>
             </div>
