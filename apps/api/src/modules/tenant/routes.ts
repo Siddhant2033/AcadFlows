@@ -21,8 +21,12 @@ router.post('/', authenticate, requireRole('admin'), TenantController.create);
 router.put('/:id', authenticate, requireRole('admin'), validateId(), TenantController.update);
 router.get('/', authenticate, requireRole('admin'), TenantController.list);
 
-// Tenant-specific routes (require tenant context)
+// Tenant-specific routes
+// Require authentication for the current tenant
 router.get('/current', authenticate, requireTenant(), TenantController.getCurrentTenant);
+
+// Require authentication for full tenant details
+router.get('/current/full', authenticate, requireTenant(), TenantController.getCurrentTenant);
 
 // Public tenant lookup
 router.get('/slug/:slug', TenantController.getBySlug);

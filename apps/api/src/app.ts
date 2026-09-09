@@ -1,4 +1,4 @@
-import express, { Express } from 'express';
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -12,9 +12,9 @@ import { connectDB } from './config/database';
 // Import routes
 import authRoutes from './modules/auth/routes';
 import tenantRoutes from './modules/tenant/routes';
-import userRoutes from './modules/user/routes';
+import dashboardRoutes from './modules/dashboard/routes';
 
-const app: Express = express();
+const app: express.Application = express();
 
 // Connect to MongoDB
 connectDB();
@@ -43,7 +43,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tenants', tenantRoutes);
-app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes); // ✅ Add dashboard routes
 
 // Error handling
 app.use(notFoundHandler);

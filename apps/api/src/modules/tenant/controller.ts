@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { TenantService } from './service';
 import { AppError } from '../../middleware/error-handler';
-import { getTenant, getTenantId } from '../../middleware/tenant-context';
 import { z } from 'zod';
 
 const createTenantSchema = z.object({
@@ -195,14 +194,13 @@ export class TenantController {
 
   static async getCurrentTenant(req: Request, res: Response, next: NextFunction) {
     try {
-      const tenant = getTenant(req);
-      const tenantId = getTenantId(req);
+      const tenantId = (req as Request & { tenantId?: string }).tenantId;
       
-      if (!tenant) {
+      if (!tenantId) {
         throw new AppError('No tenant context found', 404);
       }
       
-      const tenantObj = tenant.toObject ? await TenantService.getById(tenantId) : tenant;
+      const tenantObj = await TenantService.getById(tenantId);
       
       res.json({
         success: true,

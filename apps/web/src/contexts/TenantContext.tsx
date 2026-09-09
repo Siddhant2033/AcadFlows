@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { getTenantSlugFromURL, getTenantInfo } from '../lib/tenant';
 import type { TenantInfo } from '../lib/tenant';
+import api from '../lib/api';
 
 interface TenantContextType {
   tenant: TenantInfo | null;
@@ -32,28 +33,31 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         if (info) {
           setTenant(info);
         } else {
-          setError('Tenant not found');
-          setTenant(null);
+          // Try to get tenant from current API
+          try {
+            const response = await api.get('/tenants/current');
+            if (response.data.success && response.data.data) {
+              setTenant(response.data.data);
+            }
+          } catch (err) {
+            console.log('No tenant found from current endpoint');
+          }
         }
       } else {
-        // No tenant in URL, try to get from API
+        // No slug in URL, try to get from API
         try {
-          const response = await fetch('/api/v1/tenants/current', {
-            credentials: 'include'
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              setTenant(data.data);
-            }
+          const response = await api.get('/tenants/current');
+          if (response.data.success && response.data.data) {
+            setTenant(response.data.data);
           }
         } catch (err) {
-          // Silent fail - user might not be logged in
+          // Silent fail - user might not be authenticated
+          console.log('No tenant context available');
         }
       }
     } catch (err) {
-      setError('Failed to load tenant information');
       console.error('Tenant provider error:', err);
+      setError('Failed to load tenant information');
     } finally {
       setIsLoading(false);
     }
