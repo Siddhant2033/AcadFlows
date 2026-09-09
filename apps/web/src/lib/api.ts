@@ -8,7 +8,16 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Request interceptor to add auth token
+// Skip refresh for these endpoints
+const skipRefreshEndpoints = [
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/register',
+  '/tenants/current',
+  '/tenants',
+];
+
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken');
@@ -20,31 +29,48 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle token refresh
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const url = originalRequest?.url || '';
     
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        await api.post('/auth/refresh');
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        }
-      } catch (refreshError) {
-        // Refresh failed, redirect to login
-        localStorage.removeItem('accessToken');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
-      }
+    // Skip refresh for specific endpoints
+    if (skipRefreshEndpoints.some(endpoint => url.includes(endpoint))) {
+      return Promise.reject(error);
     }
     
-    return Promise.reject(error);
+    // Only handle 401 errors
+    if (error.response?.status !== 401) {
+      return Promise.reject(error);
+    }
+    
+    // Skip if already retried
+    if (originalRequest._retry) {
+      return Promise.reject(error);
+    }
+    
+    originalRequest._retry = true;
+    
+    try {
+      const response = await api.post('/auth/refresh');
+      const newToken = response.data.data?.accessToken;
+      
+      if (newToken) {
+        localStorage.setItem('accessToken', newToken);
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      }
+      
+      throw new Error('No token received');
+    } catch (refreshError) {
+      localStorage.removeItem('accessToken');
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+      return Promise.reject(refreshError);
+    }
   }
 );
 

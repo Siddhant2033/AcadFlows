@@ -31,9 +31,7 @@ export class TenantService {
     });
     
     const tenantObj: any = tenant.toObject();
-    // Format school code for display
     tenantObj.formattedSchoolCode = formatSchoolCode(schoolCode);
-    // Ensure id is available
     tenantObj.id = tenant._id;
     
     return tenantObj;
@@ -171,8 +169,7 @@ export class TenantService {
       throw new AppError('Tenant not found', 404);
     }
     
-    // Return only public information
-    const tenantObj = {
+    return {
       id: tenant._id,
       _id: tenant._id,
       name: tenant.name,
@@ -186,8 +183,6 @@ export class TenantService {
         language: tenant.settings?.language,
       },
     };
-    
-    return tenantObj;
   }
 
   static async getPublicInfoBySchoolCode(schoolCode: string): Promise<any> {
@@ -315,7 +310,7 @@ export class TenantService {
     
     const tenantObj: any = tenant.toObject();
     tenantObj.formattedSchoolCode = formatSchoolCode(schoolCode);
-    tenantObj.id = tenant._id; // Explicitly add id field for frontend
+    tenantObj.id = tenant._id;
     
     console.log('🏫 School created:', {
       id: tenant._id,

@@ -4,7 +4,7 @@ import { generateSchoolCode } from '../utils/school-code';
 export interface ITenant extends Document {
   name: string;
   slug: string;
-  schoolCode: string; // 10-digit alphanumeric unique code
+  schoolCode: string;
   status: 'active' | 'inactive' | 'archived';
   address?: string;
   phone?: string;
@@ -30,20 +30,19 @@ const tenantSchema = new Schema<ITenant>(
     slug: {
       type: String,
       required: true,
-      unique: true,
+      unique: true, // This creates the index
       trim: true,
       lowercase: true,
     },
     schoolCode: {
       type: String,
       required: true,
-      unique: true,
+      unique: true, // This creates the index
       trim: true,
       uppercase: true,
       default: function() {
         return generateSchoolCode();
       },
-      index: true,
     },
     status: {
       type: String,
@@ -80,9 +79,11 @@ const tenantSchema = new Schema<ITenant>(
   }
 );
 
-// Indexes
-tenantSchema.index({ schoolCode: 1 });
-tenantSchema.index({ slug: 1 });
+// REMOVE duplicate index definitions - they're already covered by unique: true
+// tenantSchema.index({ slug: 1 });
+// tenantSchema.index({ schoolCode: 1 });
+
+// Keep only additional indexes not covered by unique
 tenantSchema.index({ status: 1 });
 
 export const Tenant = mongoose.model<ITenant>('Tenant', tenantSchema);

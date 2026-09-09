@@ -1,11 +1,10 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { config } from './config';
 import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
-import { rateLimiter } from './middleware/rate-limiter';
 import { tenantContext } from './middleware/tenant-context';
 import { connectDB } from './config/database';
 
@@ -13,8 +12,9 @@ import { connectDB } from './config/database';
 import authRoutes from './modules/auth/routes';
 import tenantRoutes from './modules/tenant/routes';
 import dashboardRoutes from './modules/dashboard/routes';
+import studentRoutes from './modules/students/routes';
 
-const app: express.Application = express();
+const app: Express = express();
 
 // Connect to MongoDB
 connectDB();
@@ -29,9 +29,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Rate limiting
-app.use(rateLimiter);
-
 // Tenant context middleware
 app.use(tenantContext);
 
@@ -43,7 +40,8 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tenants', tenantRoutes);
-app.use('/api/v1/dashboard', dashboardRoutes); // ✅ Add dashboard routes
+app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/students', studentRoutes);
 
 // Error handling
 app.use(notFoundHandler);

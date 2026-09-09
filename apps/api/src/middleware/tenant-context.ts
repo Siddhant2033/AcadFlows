@@ -2,36 +2,32 @@ import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Tenant } from '../models/Tenant';
 import { config } from '../config';
-import { AppError } from './error-handler';
 
 export interface TenantRequest extends Request {
-  tenantId: string;
+  tenantId?: string;
   tenant?: any;
   isSubdomainTenant?: boolean;
 }
 
 /**
  * Tenant Context Middleware
- * Resolves tenant from:
- * 1. Subdomain (e.g., school-a.localhost:5000)
- * 2. X-Tenant-ID header (for API clients)
- * 3. Slug in URL path (fallback for development)
- * 4. Default tenant (development only)
- * 
- * NOTE: This middleware does NOT require authentication.
- * It only resolves the tenant context if available.
+ * Resolves tenant from multiple sources with better error handling
  */
 export async function tenantContext(req: Request, res: Response, next: NextFunction) {
+  // Skip tenant resolution for auth routes (they handle tenant differently)
+  if (req.path.includes('/auth/') && !req.path.includes('/auth/me')) {
+    return next();
+  }
+
+  // Skip for health check
+  if (req.path === '/health') {
+    return next();
+  }
+
   let tenantId: string | null = null;
   let tenant: any = null;
-  let isSubdomainTenant = false;
 
   try {
-    // Skip tenant resolution for auth routes (they handle tenant differently)
-    if (req.path.includes('/auth/') && !req.path.includes('/auth/me')) {
-      return next();
-    }
-
     // 1. Try to get tenant from subdomain
     const host = req.get('host') || '';
     const hostParts = host.split('.');
@@ -53,11 +49,10 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
       
       if (tenant) {
         tenantId = tenant._id.toString();
-        isSubdomainTenant = true;
       }
     }
 
-    // 2. Try header (but only if not already resolved)
+    // 2. Try header
     if (!tenantId) {
       const headerTenantId = req.headers['x-tenant-id'] as string;
       if (headerTenantId) {
@@ -73,7 +68,7 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
       }
     }
 
-    // 3. Try query parameter (fallback for development)
+    // 3. Try query parameter
     if (!tenantId && req.query.tenantId) {
       const queryTenantId = req.query.tenantId as string;
       if (mongoose.Types.ObjectId.isValid(queryTenantId)) {
@@ -87,7 +82,7 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
       }
     }
 
-    // 4. Try cookie (for maintaining tenant session)
+    // 4. Try cookie
     if (!tenantId && req.cookies?.tenantId) {
       const cookieTenantId = req.cookies.tenantId;
       if (mongoose.Types.ObjectId.isValid(cookieTenantId)) {
@@ -101,8 +96,9 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
       }
     }
 
-    // 5. Fallback to default tenant (development only)
+    // 5. Fallback for development
     if (!tenantId && process.env.NODE_ENV === 'development') {
+      // Try to get default tenant
       const defaultTenant = await Tenant.findOne({ 
         slug: config.tenant.defaultSlug || 'default',
         status: 'active' 
@@ -121,13 +117,12 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
       }
     }
 
-    // Attach tenant info to request if found
+    // Attach tenant info if found
     if (tenantId && tenant) {
       (req as TenantRequest).tenantId = tenantId;
       (req as TenantRequest).tenant = tenant;
-      (req as TenantRequest).isSubdomainTenant = isSubdomainTenant;
 
-      // Set tenant cookie for subsequent requests
+      // Set tenant cookie if not already set
       if (!req.cookies?.tenantId || req.cookies.tenantId !== tenantId) {
         res.cookie('tenantId', tenantId, {
           httpOnly: false,
@@ -149,7 +144,6 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
 
 /**
  * Middleware to require a tenant context
- * Use on routes that must have a valid tenant
  */
 export function requireTenant() {
   return (req: Request, res: Response, next: NextFunction) => {

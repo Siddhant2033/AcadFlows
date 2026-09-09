@@ -79,16 +79,16 @@ export class TenantController {
   static async createSchool(req: Request, res: Response, next: NextFunction) {
     try {
       console.log('📝 Creating school with data:', req.body);
-      
+
       const validated = createSchoolSchema.parse(req.body);
       const tenant = await TenantService.createSchool(validated);
-      
+
       console.log('✅ School created:', {
         id: tenant.id,
         name: tenant.name,
         schoolCode: tenant.schoolCode,
       });
-      
+
       res.status(201).json({
         success: true,
         data: tenant,
@@ -164,12 +164,12 @@ export class TenantController {
   static async validateSchoolCode(req: Request, res: Response, next: NextFunction) {
     try {
       console.log('🔍 Validating school code:', req.body);
-      
+
       const validated = validateSchoolCodeSchema.parse(req.body);
       const result = await TenantService.validateSchoolCode(validated.schoolCode);
-      
+
       console.log('📊 Validation result:', result);
-      
+
       if (!result.valid) {
         return res.status(404).json({
           success: false,
@@ -177,7 +177,7 @@ export class TenantController {
           data: null,
         });
       }
-      
+
       res.json({
         success: true,
         data: result.tenant,
@@ -198,16 +198,16 @@ export class TenantController {
   static async getCurrentTenant(req: Request, res: Response, next: NextFunction) {
     try {
       const tenantId = (req as Request & { tenantId?: string }).tenantId;
-      
+
       if (!tenantId) {
         throw new AppError('No tenant context found', 404);
       }
-      
-      const tenantObj = await TenantService.getById(tenantId);
-      
+
+      const tenant = await TenantService.getById(tenantId);
+
       res.json({
         success: true,
-        data: tenantObj,
+        data: tenant,
       });
     } catch (error) {
       next(error);
@@ -215,16 +215,16 @@ export class TenantController {
   }
 
   /**
-   * Get current tenant without requiring authentication
-   * Useful for public pages and initial load
-   */
+ * Get current tenant without requiring authentication
+ * Useful for public pages and initial load
+ */
   static async getPublicCurrent(req: Request, res: Response, next: NextFunction) {
     try {
       console.log('🔍 Getting public current tenant');
-      
+
       // Try to get tenant from cookie, header, or query param
       let tenantId = req.cookies?.tenantId || req.headers['x-tenant-id'] as string;
-      
+
       if (!tenantId) {
         tenantId = req.query.tenantId as string;
       }
@@ -233,14 +233,17 @@ export class TenantController {
       if (!tenantId && process.env.NODE_ENV === 'development') {
         const host = req.get('host') || '';
         const subdomain = host.split('.')[0];
-        if (subdomain && subdomain !== 'localhost' && subdomain !== 'www') {
-          // Try to find tenant by subdomain
-          const tenant = await TenantService.getBySlug(subdomain);
-          if (tenant) {
-            return res.json({
-              success: true,
-              data: tenant,
-            });
+        if (subdomain && subdomain !== 'localhost' && subdomain !== 'www' && subdomain !== 'app') {
+          try {
+            const tenant = await TenantService.getBySlug(subdomain);
+            if (tenant) {
+              return res.json({
+                success: true,
+                data: tenant,
+              });
+            }
+          } catch (err) {
+            // Ignore
           }
         }
       }
@@ -248,32 +251,48 @@ export class TenantController {
       if (!tenantId) {
         // In development, try to find any active tenant
         if (process.env.NODE_ENV === 'development') {
-          const Tenant = mongoose.model('Tenant');
-          const anyTenant = await Tenant.findOne({ status: 'active' });
-          if (anyTenant) {
-            tenantId = anyTenant._id.toString();
+          try {
+            const Tenant = mongoose.model('Tenant');
+            const anyTenant = await Tenant.findOne({ status: 'active' });
+            if (anyTenant) {
+              tenantId = anyTenant._id.toString();
+            }
+          } catch (err) {
+            // Ignore
           }
         }
       }
 
       if (!tenantId) {
+        // Return 404 but with a message that's not an error
         return res.status(404).json({
           success: false,
           error: 'No tenant context found',
+          data: null,
         });
       }
 
       let tenant;
-      if (mongoose.Types.ObjectId.isValid(tenantId)) {
-        tenant = await TenantService.getById(tenantId);
-      } else {
-        tenant = await TenantService.getBySlug(tenantId);
+      try {
+        if (mongoose.Types.ObjectId.isValid(tenantId)) {
+          tenant = await TenantService.getById(tenantId);
+        } else {
+          tenant = await TenantService.getBySlug(tenantId);
+        }
+      } catch (err) {
+        // Tenant not found
+        return res.status(404).json({
+          success: false,
+          error: 'Tenant not found',
+          data: null,
+        });
       }
 
       if (!tenant) {
         return res.status(404).json({
           success: false,
           error: 'Tenant not found',
+          data: null,
         });
       }
 
@@ -293,7 +312,12 @@ export class TenantController {
       });
     } catch (error) {
       console.error('❌ Error getting public tenant:', error);
-      next(error);
+      // Don't throw, just return 404
+      res.status(404).json({
+        success: false,
+        error: 'Tenant not found',
+        data: null,
+      });
     }
   }
 

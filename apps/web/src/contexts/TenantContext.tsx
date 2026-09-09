@@ -25,39 +25,45 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
       
+      // First try to get from URL slug
       const slug = getTenantSlugFromURL();
       setTenantSlug(slug);
       
       if (slug) {
-        const info = await getTenantInfo(slug);
-        if (info) {
-          setTenant(info);
-        } else {
-          // Try to get tenant from current API
-          try {
-            const response = await api.get('/tenants/current');
-            if (response.data.success && response.data.data) {
-              setTenant(response.data.data);
-            }
-          } catch (err) {
-            console.log('No tenant found from current endpoint');
-          }
-        }
-      } else {
-        // No slug in URL, try to get from API
         try {
-          const response = await api.get('/tenants/current');
-          if (response.data.success && response.data.data) {
-            setTenant(response.data.data);
+          const info = await getTenantInfo(slug);
+          if (info) {
+            setTenant(info);
+            setIsLoading(false);
+            return;
           }
         } catch (err) {
-          // Silent fail - user might not be authenticated
-          console.log('No tenant context available');
+          console.log('Failed to get tenant from slug');
         }
       }
+      
+      // Try to get from API
+      try {
+        const response = await api.get('/tenants/current');
+        if (response.data.success && response.data.data) {
+          setTenant(response.data.data);
+          setIsLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        // 404 is fine - no tenant context yet
+        if (err.response?.status === 404) {
+          console.log('No tenant context available (this is normal)');
+        } else if (err.response?.status === 401) {
+          console.log('Not authenticated, skipping tenant fetch');
+        } else {
+          console.error('Error fetching tenant:', err);
+        }
+      }
+      
+      // No tenant found - this is okay for public pages
     } catch (err) {
       console.error('Tenant provider error:', err);
-      setError('Failed to load tenant information');
     } finally {
       setIsLoading(false);
     }

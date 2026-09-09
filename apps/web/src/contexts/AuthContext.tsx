@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import api from '../lib/api';
 
 interface User {
@@ -37,16 +38,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadUser = async () => {
       const token = localStorage.getItem('accessToken');
-      if (token) {
-        try {
-          const response = await api.get('/auth/me');
-          setUser(response.data.data.user);
-        } catch (error) {
-          localStorage.removeItem('accessToken');
-          setUser(null);
-        }
+      if (!token) {
+        setIsLoading(false);
+        return;
       }
-      setIsLoading(false);
+
+      try {
+        const response = await api.get('/auth/me');
+        setUser(response.data.data.user);
+      } catch (error) {
+        console.error('Failed to load user:', error);
+        localStorage.removeItem('accessToken');
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadUser();
@@ -65,24 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: RegisterData) => {
-    console.log('🔍 Register called with data:', data);
-    
-    // Validate that tenantId exists
-    if (!data.tenantId) {
-      console.error('❌ tenantId is missing from registration data');
-      throw new Error('School ID is required. Please verify your school code.');
-    }
-
-    // Check if trying to register as admin
-    if (data.role === 'admin') {
-      // Check if admin already exists for this tenant
-      const adminExists = await isAdminExists(data.tenantId);
-      if (adminExists) {
-        throw new Error('An admin already exists for this school. Please contact your school administrator.');
-      }
-    }
-
     try {
+      // Check if trying to register as admin
+      if (data.role === 'admin') {
+        const adminExists = await isAdminExists(data.tenantId);
+        if (adminExists) {
+          throw new Error('An admin already exists for this school. Please contact your school administrator.');
+        }
+      }
+
       const response = await api.post('/auth/register', {
         email: data.email,
         password: data.password,
@@ -92,13 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenantId: data.tenantId,
       });
       
-      console.log('✅ Registration successful:', response.data);
-      
       const { user, accessToken } = response.data.data;
       localStorage.setItem('accessToken', accessToken);
       setUser(user);
-    } catch (error: any) {
-      console.error('❌ Registration error:', error.response?.data || error.message);
+    } catch (error) {
+      console.error('Registration error:', error);
       throw error;
     }
   };
