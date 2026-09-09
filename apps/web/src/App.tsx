@@ -13,6 +13,10 @@ import DashboardPage from './pages/Dashboard';
 import ForgotPasswordPage from './pages/ForgotPassword';
 import ResetPasswordPage from './pages/ResetPassword';
 import ProfilePage from './pages/Profile';
+import StudentsPage from './pages/admin/Students';
+import AddStudentPage from './pages/admin/AddStudent';
+import StudentDetailPage from './pages/admin/StudentDetail';
+import BulkImportPage from './pages/admin/BulkImport';
 
 function App() {
   return (
@@ -58,6 +62,46 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <StudentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students/add"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AddStudentPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students/:id"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <StudentDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students/:id/edit"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AddStudentPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students/import"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <BulkImportPage />
                 </ProtectedRoute>
               }
             />

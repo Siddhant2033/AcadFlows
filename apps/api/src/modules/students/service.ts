@@ -1,136 +1,466 @@
 import mongoose from 'mongoose';
 import { Student } from '../../models/Student';
+import { User } from '../../models/User';
+import { Tenant } from '../../models/Tenant';
 import { AppError } from '../../middleware/error-handler';
 import { v4 as uuidv4 } from 'uuid';
 
 export class StudentService {
-  static async verifyRollNo(rollNo: string, tenantId: string) {
-    // Normalize roll number
-    const normalizedRollNo = rollNo.trim().toUpperCase();
-    
-    const student = await Student.findOne({
-      tenantId,
-      rollNo: normalizedRollNo,
-      status: 'active',
-    });
-    
-    if (!student) {
-      return { valid: false };
+  // Create student with user account
+  static async createStudent(data: any) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Generate admission number
+      const admissionNo = await this.generateAdmissionNumber(data.tenantId);
+      
+      // Generate roll number
+      const rollNo = await this.generateRollNumber(data.tenantId, data.grade);
+
+      // Check if user already exists
+      let userId = data.userId;
+      if (!userId) {
+        // Create user account for student
+        const user = await User.create([{
+          tenantId: data.tenantId,
+          email: data.email,
+          passwordHash: data.password,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          role: 'student',
+          status: 'active',
+          phone: data.phone,
+          dateOfBirth: data.dateOfBirth,
+          gender: data.gender,
+          address: data.address?.street,
+        }], { session });
+
+        userId = user[0]._id.toString();
+      }
+
+      // Create student
+      const student = await Student.create([{
+        tenantId: data.tenantId,
+        userId,
+        admissionNo,
+        rollNo,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        middleName: data.middleName,
+        grade: data.grade,
+        section: data.section,
+        dateOfBirth: data.dateOfBirth,
+        gender: data.gender,
+        bloodGroup: data.bloodGroup,
+        nationality: data.nationality,
+        religion: data.religion,
+        motherTongue: data.motherTongue,
+        guardians: data.guardians || [],
+        address: data.address || {
+          city: '',
+          state: '',
+          country: 'India',
+          postalCode: '',
+        },
+        emergencyContact: data.emergencyContact,
+        previousSchool: data.previousSchool,
+        medicalInfo: data.medicalInfo,
+        enrollments: data.enrollments || [],
+        status: 'active',
+      }], { session });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return student[0];
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
     }
-    
-    // Return limited student info for verification
+  }
+
+  // Get all students with filters
+  static async getStudents(
+    tenantId: string,
+    filters: {
+      grade?: string;
+      section?: string;
+      status?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    }
+  ) {
+    const query: any = { tenantId, isDeleted: false };
+
+    if (filters.grade) query.grade = filters.grade;
+    if (filters.section) query.section = filters.section;
+    if (filters.status) query.status = filters.status;
+
+    if (filters.search) {
+      query.$or = [
+        { firstName: { $regex: filters.search, $options: 'i' } },
+        { lastName: { $regex: filters.search, $options: 'i' } },
+        { admissionNo: { $regex: filters.search, $options: 'i' } },
+        { rollNo: { $regex: filters.search, $options: 'i' } },
+      ];
+    }
+
+    const page = filters.page || 1;
+    const limit = filters.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const [students, total] = await Promise.all([
+      Student.find(query)
+        .populate('userId', 'email phone profilePicture')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Student.countDocuments(query),
+    ]);
+
     return {
-      valid: true,
-      student: {
-        id: student._id,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        grade: student.grade,
-        section: student.section,
-        rollNo: student.rollNo,
-        hasGuardian: student.guardians.length > 0,
-      },
+      items: students,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 
-  static async getStudentsByTenant(tenantId: string) {
-    const students = await Student.find({ tenantId, status: 'active' })
-      .select('firstName lastName grade section rollNo guardians')
-      .sort({ grade: 1, lastName: 1 });
-    
-    return students.map(s => ({
-      id: s._id,
-      firstName: s.firstName,
-      lastName: s.lastName,
-      grade: s.grade,
-      section: s.section,
-      rollNo: s.rollNo,
-      hasGuardian: s.guardians.length > 0,
-    }));
-  }
-
+  // Get student by ID
   static async getStudentById(studentId: string) {
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
       throw new AppError('Invalid student ID', 400);
     }
-    
-    const student = await Student.findById(studentId);
+
+    const student = await Student.findById(studentId)
+      .populate('userId', 'email phone profilePicture');
+
     if (!student) {
       throw new AppError('Student not found', 404);
     }
-    
+
     return student;
   }
 
-  static async createStudent(data: any) {
-    // Check if roll number already exists for this tenant
-    const existingRollNo = await Student.findOne({
-      tenantId: data.tenantId,
-      rollNo: data.rollNo,
-    });
-    
-    if (existingRollNo) {
-      throw new AppError('Roll number already exists for this school', 409);
+  // Get student by admission number
+  static async getStudentByAdmissionNo(admissionNo: string, tenantId: string) {
+    const student = await Student.findOne({ tenantId, admissionNo, isDeleted: false });
+    if (!student) {
+      throw new AppError('Student not found with this admission number', 404);
     }
-    
-    const student = await Student.create(data);
     return student;
   }
 
+  // Update student
   static async updateStudent(studentId: string, data: any) {
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
       throw new AppError('Invalid student ID', 400);
     }
-    
+
+    // If grade changed, update roll number
+    if (data.grade) {
+      const student = await Student.findById(studentId);
+      if (student && student.grade !== data.grade) {
+        data.rollNo = await this.generateRollNumber(student.tenantId, data.grade);
+      }
+    }
+
     const student = await Student.findByIdAndUpdate(
       studentId,
       { $set: data },
       { new: true, runValidators: true }
     );
-    
+
     if (!student) {
       throw new AppError('Student not found', 404);
     }
-    
+
+    // Update user if needed
+    if (data.email || data.phone || data.firstName || data.lastName) {
+      await User.findByIdAndUpdate(student.userId, {
+        $set: {
+          email: data.email,
+          phone: data.phone,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          dateOfBirth: data.dateOfBirth,
+          gender: data.gender,
+        },
+      });
+    }
+
     return student;
   }
 
-  static async verifyGuardian(studentId: string, verificationCode: string, userId: string) {
+  // Soft delete student
+  static async deleteStudent(studentId: string) {
     if (!mongoose.Types.ObjectId.isValid(studentId)) {
       throw new AppError('Invalid student ID', 400);
     }
-    
+
+    const student = await Student.findByIdAndUpdate(
+      studentId,
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          status: 'inactive',
+        },
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      throw new AppError('Student not found', 404);
+    }
+
+    // Also deactivate user
+    await User.findByIdAndUpdate(student.userId, {
+      $set: { status: 'inactive' },
+    });
+
+    return student;
+  }
+
+  // Enroll student in class
+  static async enrollStudent(studentId: string, enrollmentData: any) {
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      throw new AppError('Invalid student ID', 400);
+    }
+
     const student = await Student.findById(studentId);
     if (!student) {
       throw new AppError('Student not found', 404);
     }
-    
-    // Find guardian with matching verification code
-    const guardianIndex = student.guardians.findIndex(
-      g => g.verificationCode === verificationCode && !g.isVerified
+
+    // Check if already enrolled in this academic year
+    const existingEnrollment = student.enrollments.find(
+      e => e.academicYearId === enrollmentData.academicYearId
     );
-    
-    if (guardianIndex === -1) {
-      throw new AppError('Invalid or already used verification code', 400);
+
+    if (existingEnrollment) {
+      throw new AppError('Student already enrolled in this academic year', 409);
     }
-    
-    // Update guardian
-    student.guardians[guardianIndex].isVerified = true;
-    student.guardians[guardianIndex].userId = userId;
-    student.guardians[guardianIndex].verificationCode = undefined;
-    
+
+    // Generate roll number for this enrollment
+    const rollNo = await this.generateRollNumber(
+      student.tenantId,
+      student.grade,
+      enrollmentData.sectionId
+    );
+
+    student.enrollments.push({
+      academicYearId: enrollmentData.academicYearId,
+      sectionId: enrollmentData.sectionId,
+      rollNo: rollNo,
+      enrollmentDate: new Date(),
+      status: 'active',
+    });
+
+    // Update student's current grade/section if not set
+    if (!student.grade) {
+      student.grade = enrollmentData.grade;
+    }
+    if (!student.section) {
+      student.section = enrollmentData.sectionName;
+    }
+
     await student.save();
-    
+    return student;
+  }
+
+  // Withdraw student
+  static async withdrawStudent(studentId: string, reason: string) {
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      throw new AppError('Invalid student ID', 400);
+    }
+
+    const student = await Student.findByIdAndUpdate(
+      studentId,
+      {
+        $set: {
+          status: 'withdrawn',
+          'enrollments.$[elem].status': 'withdrawn',
+          'enrollments.$[elem].withdrawalDate': new Date(),
+          'enrollments.$[elem].withdrawalReason': reason,
+        },
+      },
+      {
+        new: true,
+        arrayFilters: [{ 'elem.status': 'active' }],
+      }
+    );
+
+    if (!student) {
+      throw new AppError('Student not found', 404);
+    }
+
+    return student;
+  }
+
+  // Bulk import students from CSV data
+  static async bulkImportStudents(tenantId: string, studentsData: any[]) {
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as any[],
+    };
+
+    for (const data of studentsData) {
+      try {
+        // Validate required fields
+        if (!data.firstName || !data.lastName || !data.email || !data.grade) {
+          results.failed++;
+          results.errors.push({
+            row: data,
+            error: 'Missing required fields (firstName, lastName, email, grade)',
+          });
+          continue;
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: data.email });
+        if (existingUser) {
+          results.failed++;
+          results.errors.push({
+            row: data,
+            error: `User with email ${data.email} already exists`,
+          });
+          continue;
+        }
+
+        // Create student with auto-generated password
+        const tempPassword = 'Student@' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        await this.createStudent({
+          tenantId,
+          email: data.email,
+          password: tempPassword,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          middleName: data.middleName,
+          grade: data.grade,
+          section: data.section,
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : new Date('2000-01-01'),
+          gender: data.gender || 'other',
+          phone: data.phone,
+          address: {
+            street: data.address,
+            city: data.city || '',
+            state: data.state || '',
+            country: data.country || 'India',
+            postalCode: data.postalCode || '',
+          },
+          guardians: data.guardianName ? [{
+            name: data.guardianName,
+            phone: data.guardianPhone || '',
+            relationship: data.guardianRelationship || 'guardian',
+            isVerified: false,
+          }] : [],
+        });
+
+        results.success++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          row: data,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return results;
+  }
+
+  // Upload document for student
+  static async uploadDocument(studentId: string, documentData: any) {
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      throw new AppError('Invalid student ID', 400);
+    }
+
+    const student = await Student.findByIdAndUpdate(
+      studentId,
+      {
+        $push: {
+          documents: {
+            ...documentData,
+            uploadedAt: new Date(),
+          },
+        },
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      throw new AppError('Student not found', 404);
+    }
+
+    return student.documents[student.documents.length - 1];
+  }
+
+  // Get student statistics
+  static async getStudentStats(tenantId: string) {
+    const stats = await Student.aggregate([
+      { $match: { tenantId, isDeleted: false } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const gradeStats = await Student.aggregate([
+      { $match: { tenantId, isDeleted: false, status: 'active' } },
+      {
+        $group: {
+          _id: '$grade',
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
     return {
-      studentId: student._id,
-      studentName: `${student.firstName} ${student.lastName}`,
-      guardianName: student.guardians[guardianIndex].name,
+      byStatus: stats,
+      byGrade: gradeStats,
+      total: stats.reduce((acc, curr) => acc + curr.count, 0),
     };
   }
 
-  static async generateVerificationCode(): Promise<string> {
-    // Generate a 6-digit alphanumeric code
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    return code;
+  // Helper: Generate admission number
+  private static async generateAdmissionNumber(tenantId: string): Promise<string> {
+    const tenant = await Tenant.findById(tenantId);
+    if (!tenant) {
+      throw new AppError('Tenant not found', 404);
+    }
+
+    const year = new Date().getFullYear().toString().slice(-2);
+    const count = await Student.countDocuments({ tenantId, isDeleted: false });
+    const sequence = String(count + 1).padStart(4, '0');
+
+    return `${year}-${tenant.slug.toUpperCase().slice(0, 3)}-${sequence}`;
+  }
+
+  // Helper: Generate roll number
+  private static async generateRollNumber(
+    tenantId: string,
+    grade: string,
+    sectionId?: string
+  ): Promise<string> {
+    const studentsInGrade = await Student.countDocuments({
+      tenantId,
+      grade,
+      isDeleted: false,
+    });
+
+    const gradePrefix = grade.replace(/\s/g, '').toUpperCase();
+    const sectionPrefix = sectionId ? sectionId.slice(-1).toUpperCase() : '';
+    const number = String(studentsInGrade + 1).padStart(3, '0');
+
+    return `${gradePrefix}${sectionPrefix}${number}`;
   }
 }
