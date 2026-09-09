@@ -17,6 +17,9 @@ import StudentsPage from './pages/admin/Students';
 import AddStudentPage from './pages/admin/AddStudent';
 import StudentDetailPage from './pages/admin/StudentDetail';
 import BulkImportPage from './pages/admin/BulkImport';
+import TeachersPage from './pages/admin/Teachers';
+import AddTeacherPage from './pages/admin/AddTeacher';
+import TeacherDetailPage from './pages/admin/TeacherDetail';
 
 function App() {
   return (
@@ -102,6 +105,38 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <BulkImportPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teachers"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <TeachersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teachers/add"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AddTeacherPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teachers/:id"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <TeacherDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teachers/:id/edit"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AddTeacherPage />
                 </ProtectedRoute>
               }
             />
