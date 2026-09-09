@@ -14,6 +14,7 @@ import tenantRoutes from './modules/tenant/routes';
 import dashboardRoutes from './modules/dashboard/routes';
 import studentRoutes from './modules/students/routes';
 import userRoutes from './modules/user/routes';
+import academicRoutes from './modules/academic/routes';
 
 const app: Express = express();
 
@@ -44,6 +45,7 @@ app.use('/api/v1/tenants', tenantRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/academic', academicRoutes);
 
 // Error handling
 app.use(notFoundHandler);
