@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import api from '../lib/api';
@@ -23,6 +24,7 @@ interface UserProfile {
 }
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { theme, mode } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,7 +169,9 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className={`min-h-screen flex items-center justify-center transition-colors duration-200 ${
+        theme ? 'bg-gray-50' : 'dark:bg-[#0B0F17]'
+      }`}>
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
     );
@@ -184,21 +188,29 @@ export default function ProfilePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center space-x-4">
-              <h1 className={`text-xl font-bold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
+              <Link to="/dashboard" className="flex items-center space-x-2">
+                <span className="text-2xl">🏫</span>
+                <h1 className={`text-xl font-bold transition-colors duration-200 ${
+                  theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
+                }`}>
+                  SchoolPlatform
+                </h1>
+              </Link>
+              <span className={`text-sm px-3 py-1 rounded-full transition-colors duration-200 ${
+                theme ? 'bg-gray-100 text-gray-500' : 'dark:bg-[#1E293B] dark:text-[#94A3B8]'
               }`}>
-                Profile Settings
-              </h1>
+                Profile
+              </span>
             </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <button
-                onClick={() => window.history.back()}
+                onClick={() => navigate('/dashboard')}
                 className={`text-sm transition-colors duration-200 ${
                   theme ? 'text-gray-600 hover:text-gray-800' : 'dark:text-[#94A3B8] dark:hover:text-[#F1F5F9]'
                 }`}
               >
-                ← Back
+                ← Back to Dashboard
               </button>
             </div>
           </div>
@@ -208,7 +220,9 @@ export default function ProfilePage() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {message && (
           <div className={`mb-4 p-4 rounded-lg ${
-            message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+            message.type === 'success' 
+              ? 'bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' 
+              : 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
           }`}>
             {message.text}
             <button
@@ -224,12 +238,16 @@ export default function ProfilePage() {
           theme ? 'bg-white' : 'dark:bg-[#1E293B]'
         }`}>
           {/* Profile Header */}
-          <div className="p-6 border-b border-gray-200 dark:border-[#334155]">
-            <div className="flex items-start justify-between">
+          <div className={`p-6 border-b transition-colors duration-200 ${
+            theme ? 'border-gray-200' : 'dark:border-[#334155]'
+          }`}>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center space-x-4">
                 {/* Profile Picture */}
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-full overflow-hidden bg-primary-100 flex items-center justify-center">
+                  <div className={`w-24 h-24 rounded-full overflow-hidden flex items-center justify-center transition-colors duration-200 ${
+                    theme ? 'bg-primary-100' : 'dark:bg-primary-900/30'
+                  }`}>
                     {profile?.profilePicture ? (
                       <img
                         src={profile.profilePicture}
@@ -237,14 +255,18 @@ export default function ProfilePage() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-3xl text-primary-600">
+                      <span className={`text-3xl font-bold transition-colors duration-200 ${
+                        theme ? 'text-primary-600' : 'dark:text-primary-400'
+                      }`}>
                         {profile?.firstName?.[0]}{profile?.lastName?.[0]}
                       </span>
                     )}
                   </div>
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute bottom-0 right-0 bg-primary-600 text-white p-1 rounded-full hover:bg-primary-700 transition-colors"
+                    className={`absolute bottom-0 right-0 p-1 rounded-full transition-colors ${
+                      theme ? 'bg-primary-600 text-white hover:bg-primary-700' : 'dark:bg-primary-600 dark:text-white dark:hover:bg-primary-700'
+                    }`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -261,7 +283,7 @@ export default function ProfilePage() {
                   {profile?.profilePicture && (
                     <button
                       onClick={handleRemoveProfilePicture}
-                      className="absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-full hover:bg-red-600 transition-colors"
+                      className="absolute top-0 right-0 p-0.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors"
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -290,7 +312,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex space-x-2">
+              <div className="flex flex-wrap gap-2">
                 {!isEditing ? (
                   <button
                     onClick={() => setIsEditing(true)}
@@ -459,7 +481,9 @@ export default function ProfilePage() {
                   </p>
                 </div>
 
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-[#334155]">
+                <div className={`flex justify-end space-x-3 pt-4 border-t transition-colors duration-200 ${
+                  theme ? 'border-gray-200' : 'dark:border-[#334155]'
+                }`}>
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
@@ -585,7 +609,9 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-gray-200 dark:border-[#334155]">
+                <div className={`pt-4 border-t transition-colors duration-200 ${
+                  theme ? 'border-gray-200' : 'dark:border-[#334155]'
+                }`}>
                   <p className={`text-sm transition-colors duration-200 ${
                     theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
                   }`}>
@@ -594,7 +620,7 @@ export default function ProfilePage() {
                   <p className={`text-sm transition-colors duration-200 ${
                     theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
                   }`}>
-                    Status: <span className="text-green-600 font-medium">{profile?.status}</span>
+                    Status: <span className="text-green-600 dark:text-green-400 font-medium">{profile?.status}</span>
                   </p>
                 </div>
               </div>

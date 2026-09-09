@@ -18,7 +18,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>(() => {
     // Check localStorage for saved preference
     const saved = localStorage.getItem('theme-mode') as ThemeMode;
-    if (saved) return saved;
+    if (saved === 'light' || saved === 'dark') return saved;
     
     // Check system preference
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -28,19 +28,32 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    // Save to localStorage
     localStorage.setItem('theme-mode', mode);
     
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', mode);
+    // Apply theme to document root
+    const root = document.documentElement;
+    
+    // Remove both classes first
+    root.classList.remove('light', 'dark');
+    
+    // Add the current mode class
+    root.classList.add(mode);
+    
+    // Set data-theme attribute
+    root.setAttribute('data-theme', mode);
     
     // Apply body class
-    if (mode === 'dark') {
-      document.body.classList.add('dark');
-      document.body.classList.remove('light');
-    } else {
-      document.body.classList.add('light');
-      document.body.classList.remove('dark');
+    document.body.classList.remove('light', 'dark');
+    document.body.classList.add(mode);
+    
+    // Also add the class to a meta tag for CSS variables
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', mode === 'dark' ? '#0B0F17' : '#F8FAFC');
     }
+
+    console.log(`🎨 Theme changed to: ${mode}`);
   }, [mode]);
 
   const toggleTheme = () => {

@@ -15,9 +15,43 @@
     scroll-behavior: smooth;
   }
 
+  /* Default light theme */
+  :root {
+    --bg-base: #F8FAFC;
+    --bg-surface: #FFFFFF;
+    --bg-elevated: #F1F5F9;
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #94A3B8;
+    --border-light: #E2E8F0;
+    --border-medium: #CBD5E1;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  /* Dark theme */
+  .dark {
+    --bg-base: #0B0F17;
+    --bg-surface: #0F172A;
+    --bg-elevated: #1E293B;
+    --text-primary: #F1F5F9;
+    --text-secondary: #CBD5E1;
+    --text-muted: #94A3B8;
+    --border-light: #1E293B;
+    --border-medium: #334155;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+
+  /* Apply dark class to body when dark mode is active */
+  body.dark {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -242,6 +276,35 @@
   .container-responsive {
     @apply w-full mx-auto px-4 sm:px-6 lg:px-8;
   }
+
+  /* Utility classes for theme variables */
+  .bg-base {
+    background-color: var(--bg-base);
+  }
+  .bg-surface {
+    background-color: var(--bg-surface);
+  }
+  .bg-elevated {
+    background-color: var(--bg-elevated);
+  }
+  .text-primary {
+    color: var(--text-primary);
+  }
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+  .text-muted {
+    color: var(--text-muted);
+  }
+  .border-light {
+    border-color: var(--border-light);
+  }
+  .border-medium {
+    border-color: var(--border-medium);
+  }
+  .shadow-custom {
+    box-shadow: var(--shadow);
+  }
 }
 
 @layer utilities {
@@ -274,60 +337,4 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Additional animations for landing page */
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 40px rgba(249, 115, 22, 0.6);
-  }
-}
-
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(135deg, #F97316 0%, #FB923C 50%, #F97316 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Glass morphism */
-.glass {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-}
-
-.dark .glass {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Grid pattern background */
-.bg-grid-pattern {
-  background-image: 
-    linear-gradient(rgba(249, 115, 22, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(249, 115, 22, 0.05) 1px, transparent 1px);
-  background-size: 50px 50px;
 }
