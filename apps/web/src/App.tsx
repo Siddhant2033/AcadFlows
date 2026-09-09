@@ -31,6 +31,8 @@ import CreateAssignmentPage from './pages/admin/CreateAssignment';
 import AssignmentSubmissionsPage from './pages/admin/AssignmentSubmissions';
 import GradebookPage from './pages/student/Gradebook';
 import ReportCardsPage from './pages/admin/ReportCards';
+import AnnouncementsPage from './pages/Announcements';
+import MessagesPage from './pages/Messages';
 
 function App() {
   return (
@@ -260,6 +262,22 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <ReportCardsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/announcements"
+              element={
+                <ProtectedRoute>
+                  <AnnouncementsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                <ProtectedRoute>
+                  <MessagesPage />
                 </ProtectedRoute>
               }
             />

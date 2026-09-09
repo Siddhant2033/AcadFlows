@@ -18,6 +18,7 @@ import academicRoutes from './modules/academic/routes';
 import teacherRoutes from './modules/teachers/routes';
 import feeRoutes from './modules/fees/routes';
 import assignmentRoutes from './modules/assignments/routes';
+import communicationRoutes from './modules/communication/routes';
 
 const app: Express = express();
 
@@ -52,6 +53,7 @@ app.use('/api/v1/academic', academicRoutes);
 app.use('/api/v1/teachers', teacherRoutes);
 app.use('/api/v1/fees', feeRoutes);
 app.use('/api/v1/assignments', assignmentRoutes);
+app.use('/api/v1/communication', communicationRoutes);
 
 // Error handling
 app.use(notFoundHandler);
