@@ -33,6 +33,9 @@ import GradebookPage from './pages/student/Gradebook';
 import ReportCardsPage from './pages/admin/ReportCards';
 import AnnouncementsPage from './pages/Announcements';
 import MessagesPage from './pages/Messages';
+import TimetablesPage from './pages/admin/Timetables';
+import CreateTimetablePage from './pages/admin/CreateTimetable';
+import TimetableViewPage from './pages/TimetableView';
 
 function App() {
   return (
@@ -278,6 +281,38 @@ function App() {
               element={
                 <ProtectedRoute>
                   <MessagesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/timetable"
+              element={
+                <ProtectedRoute>
+                  <TimetablesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/timetable/create"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <CreateTimetablePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/timetable/:id"
+              element={
+                <ProtectedRoute>
+                  <TimetableViewPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/timetable/:id/edit"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <CreateTimetablePage />
                 </ProtectedRoute>
               }
             />
