@@ -1,6 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './service';
-import { registerSchema, loginSchema, refreshSchema } from './validation';
+import { 
+  registerSchema, 
+  loginSchema, 
+  refreshSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema
+} from './validation';
 import { AppError } from '../../middleware/error-handler';
 
 export class AuthController {
@@ -8,7 +15,6 @@ export class AuthController {
     try {
       console.log('📝 Registration request body:', req.body);
       
-      // Validate the request body
       const validated = registerSchema.parse(req.body);
       console.log('✅ Validated data:', {
         email: validated.email,
@@ -18,7 +24,6 @@ export class AuthController {
         tenantId: validated.tenantId,
       });
       
-      // Call service to register user
       const result = await AuthService.register(validated);
       
       console.log('✅ User registered successfully:', {
@@ -28,12 +33,11 @@ export class AuthController {
         tenantId: result.user.tenantId,
       });
       
-      // Set refresh token as HTTP-only cookie
       res.cookie('refreshToken', result.tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/',
       });
 
@@ -60,7 +64,6 @@ export class AuthController {
       
       console.log('✅ Login successful for:', result.user.email);
       
-      // Set refresh token as HTTP-only cookie
       res.cookie('refreshToken', result.tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -96,7 +99,6 @@ export class AuthController {
       
       console.log('✅ Token refreshed successfully');
 
-      // Set new refresh token as HTTP-only cookie
       res.cookie('refreshToken', tokens.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -141,7 +143,6 @@ export class AuthController {
 
   static async me(req: Request, res: Response, next: NextFunction) {
     try {
-      // User info is already attached by auth middleware
       const user = (req as any).user;
       
       if (!user) {
@@ -156,6 +157,63 @@ export class AuthController {
       });
     } catch (error) {
       console.error('❌ User info error:', error);
+      next(error);
+    }
+  }
+
+  static async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      console.log('📝 Forgot password request for:', req.body.email);
+      
+      const validated = forgotPasswordSchema.parse(req.body);
+      await AuthService.forgotPassword(validated.email);
+      
+      console.log('✅ Password reset email sent to:', validated.email);
+      
+      res.json({
+        success: true,
+        message: 'Password reset instructions sent to your email.',
+      });
+    } catch (error) {
+      console.error('❌ Forgot password error:', error);
+      next(error);
+    }
+  }
+
+  static async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      console.log('📝 Reset password request received');
+      
+      const validated = resetPasswordSchema.parse(req.body);
+      await AuthService.resetPassword(validated.token, validated.password);
+      
+      console.log('✅ Password reset successfully');
+      
+      res.json({
+        success: true,
+        message: 'Password reset successfully. You can now login with your new password.',
+      });
+    } catch (error) {
+      console.error('❌ Reset password error:', error);
+      next(error);
+    }
+  }
+
+  static async changePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.id;
+      const validated = changePasswordSchema.parse(req.body);
+      
+      await AuthService.changePassword(userId, validated.currentPassword, validated.newPassword);
+      
+      console.log('✅ Password changed for user:', userId);
+      
+      res.json({
+        success: true,
+        message: 'Password changed successfully.',
+      });
+    } catch (error) {
+      console.error('❌ Change password error:', error);
       next(error);
     }
   }

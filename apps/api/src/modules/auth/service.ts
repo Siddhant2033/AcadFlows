@@ -1,4 +1,5 @@
-import jwt, { SignOptions } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../../config';
@@ -6,16 +7,15 @@ import { User } from '../../models/User';
 import { Tenant } from '../../models/Tenant';
 import { AppError } from '../../middleware/error-handler';
 import { UserCreateInput, UserLoginInput, AuthTokens } from '@school-platform/shared';
+import crypto from 'crypto';
+
+// In production, store reset tokens in Redis or a separate collection
+// For MVP, we'll store in memory (will be lost on server restart)
+const resetTokens = new Map<string, { userId: string; expiresAt: Date }>();
 
 export class AuthService {
   static async register(input: UserCreateInput): Promise<{ user: any; tokens: AuthTokens }> {
-    console.log('🔍 Register service called with:', {
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      role: input.role,
-      tenantId: input.tenantId,
-    });
+    console.log('🔍 Register service called for:', input.email);
     
     // Validate tenant ID format
     if (!mongoose.Types.ObjectId.isValid(input.tenantId)) {
@@ -47,7 +47,7 @@ export class AuthService {
     const user = await User.create({
       tenantId: input.tenantId,
       email: input.email,
-      passwordHash: input.password, // Will be hashed by pre-save hook
+      passwordHash: input.password,
       firstName: input.firstName,
       lastName: input.lastName,
       role: input.role,
@@ -60,10 +60,8 @@ export class AuthService {
       tenantId: user.tenantId,
     });
 
-    // Generate tokens
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
-    // Return user without password
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
     return { user: userObj, tokens };
@@ -72,30 +70,25 @@ export class AuthService {
   static async login(input: UserLoginInput): Promise<{ user: any; tokens: AuthTokens }> {
     console.log('🔍 Login service called for:', input.email);
     
-    // Find user with email
     const user = await User.findOne({ email: input.email, status: 'active' });
     if (!user) {
       console.error('❌ User not found:', input.email);
       throw new AppError('Invalid email or password', 401);
     }
 
-    // Check password
     const isPasswordValid = await user.comparePassword(input.password);
     if (!isPasswordValid) {
       console.error('❌ Invalid password for:', input.email);
       throw new AppError('Invalid email or password', 401);
     }
 
-    // Update last login
     user.lastLoginAt = new Date();
     await user.save();
 
     console.log('✅ Login successful for:', input.email);
 
-    // Generate tokens
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
-    // Return user without password
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
     return { user: userObj, tokens };
@@ -109,7 +102,6 @@ export class AuthService {
       
       console.log('✅ Refresh token decoded for user:', decoded.email);
       
-      // Verify user still exists and is active
       const user = await User.findOne({ 
         _id: decoded.userId, 
         status: 'active' 
@@ -147,5 +139,89 @@ export class AuthService {
     console.log('🔑 Tokens generated for:', email);
 
     return { accessToken, refreshToken };
+  }
+
+  static async forgotPassword(email: string): Promise<void> {
+    console.log('🔍 Forgot password service called for:', email);
+    
+    const user = await User.findOne({ email, status: 'active' });
+    if (!user) {
+      console.log('⚠️ User not found for forgot password:', email);
+      // Still return success to prevent email enumeration
+      return;
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    
+    // Store token with expiry (1 hour)
+    resetTokens.set(resetToken, {
+      userId: user.id,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+    });
+
+    console.log('🔑 Reset token generated for:', email);
+    console.log('📧 Reset token (dev):', resetToken);
+
+    // In production, send email with reset link
+    // For MVP, we'll log the token and return success
+    console.log(`🔗 Reset link: http://localhost:5173/reset-password?token=${resetToken}`);
+  }
+
+  static async resetPassword(token: string, newPassword: string): Promise<void> {
+    console.log('🔍 Reset password service called');
+    
+    const tokenData = resetTokens.get(token);
+    if (!tokenData) {
+      console.error('❌ Invalid or expired token');
+      throw new AppError('Invalid or expired reset token', 400);
+    }
+
+    if (tokenData.expiresAt < new Date()) {
+      console.error('❌ Token expired');
+      resetTokens.delete(token);
+      throw new AppError('Reset token has expired', 400);
+    }
+
+    const user = await User.findById(tokenData.userId);
+    if (!user) {
+      console.error('❌ User not found for reset token');
+      resetTokens.delete(token);
+      throw new AppError('User not found', 404);
+    }
+
+    // Update password
+    user.passwordHash = newPassword;
+    await user.save();
+
+    console.log('✅ Password reset successfully for:', user.email);
+    
+    // Clean up token
+    resetTokens.delete(token);
+  }
+
+  static async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    console.log('🔍 Change password service called for user:', userId);
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error('❌ User not found:', userId);
+      throw new AppError('User not found', 404);
+    }
+
+    const isPasswordValid = await user.comparePassword(currentPassword);
+    if (!isPasswordValid) {
+      console.error('❌ Invalid current password for user:', userId);
+      throw new AppError('Current password is incorrect', 401);
+    }
+
+    user.passwordHash = newPassword;
+    await user.save();
+
+    console.log('✅ Password changed successfully for user:', userId);
   }
 }

@@ -9,6 +9,8 @@ import SchoolRegistrationPage from './pages/SchoolRegistration';
 import LoginPage from './pages/Login';
 import RegisterPage from './pages/Register';
 import DashboardPage from './pages/Dashboard';
+import ForgotPasswordPage from './pages/ForgotPassword';
+import ResetPasswordPage from './pages/ResetPassword';
 
 function App() {
   return (
@@ -22,7 +24,14 @@ function App() {
           <Route path="/school/register" element={<SchoolRegistrationPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          
+          {/* Tenant-specific public routes */}
+          <Route path="/:tenantSlug/login" element={<LoginPage />} />
           <Route path="/:tenantSlug/register" element={<RegisterPage />} />
+          <Route path="/:tenantSlug/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/:tenantSlug/reset-password" element={<ResetPasswordPage />} />
           
           {/* Protected routes */}
           <Route
