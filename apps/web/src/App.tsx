@@ -20,6 +20,8 @@ import BulkImportPage from './pages/admin/BulkImport';
 import TeachersPage from './pages/admin/Teachers';
 import AddTeacherPage from './pages/admin/AddTeacher';
 import TeacherDetailPage from './pages/admin/TeacherDetail';
+import MarkAttendancePage from './pages/admin/MarkAttendance';
+import AttendanceReportsPage from './pages/admin/AttendanceReports';
 
 function App() {
   return (
@@ -137,6 +139,22 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <AddTeacherPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/attendance/mark"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <MarkAttendancePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/attendance/reports"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AttendanceReportsPage />
                 </ProtectedRoute>
               }
             />
