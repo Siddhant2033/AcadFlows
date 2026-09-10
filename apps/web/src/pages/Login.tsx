@@ -97,7 +97,7 @@ export default function LoginPage() {
               <span className="text-lg">🏫</span>
             </div>
             <span className="font-semibold text-gray-900 tracking-tight">
-              School<span className="text-primary-600">Hub</span>
+              Acad<span className="text-primary-600">Flows</span>
             </span>
           </Link>
           {displayName && (

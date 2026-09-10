@@ -154,7 +154,7 @@ export default function DashboardPage() {
             <div className="flex items-center space-x-4">
               <Link to="/" className="flex items-center space-x-2">
                 <span className="text-2xl">🏫</span>
-                <h1 className="text-xl font-bold text-foreground">SchoolPlatform</h1>
+                <h1 className="text-xl font-bold text-foreground">AcadFlows</h1>
               </Link>
               {tenant && (
                 <span className="text-sm px-3 py-1 rounded-full bg-elevated text-muted">

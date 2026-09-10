@@ -169,7 +169,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-4">
               <Link to="/dashboard" className="flex items-center gap-2">
                 <span className="text-2xl">🏫</span>
-                <h1 className="text-xl font-bold text-foreground">SchoolPlatform</h1>
+                <h1 className="text-xl font-bold text-foreground">AcadFlows</h1>
               </Link>
               <span className="text-sm px-3 py-1 rounded-full bg-elevated text-muted">
                 Profile

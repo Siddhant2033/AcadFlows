@@ -135,7 +135,7 @@ export default function LandingPage() {
             <Link to="/" className="flex items-center space-x-2">
               <span className="text-2xl">🏫</span>
               <span className="text-xl font-bold font-headline text-foreground">
-                School<span className="text-primary-500">Platform</span>
+                Acad<span className="text-primary-500">Flows</span>
               </span>
             </Link>
             <div className="flex items-center space-x-4">
@@ -470,13 +470,13 @@ export default function LandingPage() {
               </ul>
               <div className="mt-4 p-3 rounded-lg bg-primary-50 dark:bg-primary-900/10 border border-primary-100 dark:border-primary-900/30">
                 <p className="text-xs text-muted">🇮🇳 Made in India for India</p>
-                <p className="text-xs font-mono text-primary-500">support@schoolplatform.in</p>
+                <p className="text-xs font-mono text-primary-500">support@acadflows.in</p>
               </div>
             </div>
           </div>
 
           <div className="mt-8 pt-8 border-t border-border text-sm text-center text-muted">
-            <p>© {new Date().getFullYear()} SchoolPlatform. All rights reserved. Made with ❤️ in India</p>
+            <p>© {new Date().getFullYear()} AcadFlows. All rights reserved. Made with ❤️ in India</p>
             <p className="mt-1 text-xs">📍 Noida, Uttar Pradesh, India</p>
           </div>
         </div>
