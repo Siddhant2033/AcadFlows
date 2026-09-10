@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { SchoolCodeInput } from '../SchoolCodeInput';
+import { SchoolCodeInput } from './SchoolCodeInput';
 
 interface StepSchoolCodeProps {
   schoolCode: string;
@@ -8,17 +8,17 @@ interface StepSchoolCodeProps {
   tenantSlug?: string;
 }
 
-export default function StepSchoolCode({ 
-  schoolCode, 
+export default function StepSchoolCode({
+  schoolCode,
   onSchoolCodeChange,
-  tenantSlug 
+  tenantSlug,
 }: StepSchoolCodeProps) {
   return (
     <div className="space-y-6">
       <div className="text-center">
         <div className="text-4xl mb-4">🔑</div>
-        <h3 className="text-lg font-medium text-gray-900">Verify Your School</h3>
-        <p className="mt-1 text-sm text-gray-500">
+        <h3 className="text-lg font-medium text-foreground">Verify Your School</h3>
+        <p className="mt-1 text-sm text-muted">
           Enter the school code provided by your school administrator
         </p>
       </div>
@@ -34,14 +34,12 @@ export default function StepSchoolCode({
         />
       </div>
 
-      <div className="text-center">
-        <p className="text-xs text-gray-400">
-          Don't have a code?{' '}
-          <Link to="/school/register" className="text-primary-600 hover:text-primary-700">
-            Register your school
-          </Link>
-        </p>
-      </div>
+      <p className="text-center text-xs text-muted">
+        Don't have a code?{' '}
+        <Link to="/school/register" className="text-primary-600 hover:text-primary-700">
+          Register your school
+        </Link>
+      </p>
     </div>
   );
 }

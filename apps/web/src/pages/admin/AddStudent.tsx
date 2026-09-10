@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
+import { Card, Button, Input, Label, Select, Textarea, PhoneInput } from '../../components/ui';
 
 interface StudentFormData {
   firstName: string;
@@ -83,7 +83,6 @@ const defaultFormData: StudentFormData = {
 export default function AddStudentPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { theme } = useTheme();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -95,17 +94,16 @@ export default function AddStudentPage() {
 
   useEffect(() => {
     fetchGrades();
-    if (isEditMode) {
-      fetchStudent();
-    }
+    if (isEditMode) fetchStudent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchGrades = async () => {
     try {
       const response = await api.get('/academic/grades');
       setGrades(response.data.data);
-    } catch (error) {
-      console.error('Failed to fetch grades:', error);
+    } catch (err) {
+      console.error('Failed to fetch grades:', err);
     }
   };
 
@@ -135,49 +133,42 @@ export default function AddStudentPage() {
         previousSchool: data.previousSchool || defaultFormData.previousSchool,
         medicalInfo: data.medicalInfo || defaultFormData.medicalInfo,
       });
-    } catch (error) {
-      console.error('Failed to fetch student:', error);
+    } catch (err) {
+      console.error('Failed to fetch student:', err);
       setError('Failed to load student data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  const handleChange = (field: string, value: any) =>
+    setFormData(prev => ({ ...prev, [field]: value }));
 
-  const handleAddressChange = (field: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      address: { ...prev.address, [field]: value },
-    }));
-  };
+  const handleAddressChange = (field: string, value: any) =>
+    setFormData(prev => ({ ...prev, address: { ...prev.address, [field]: value } }));
 
   const handleGuardianChange = (index: number, field: string, value: any) => {
-    setFormData((prev) => {
+    setFormData(prev => {
       const guardians = [...prev.guardians];
       guardians[index] = { ...guardians[index], [field]: value };
       return { ...prev, guardians };
     });
   };
 
-  const addGuardian = () => {
-    setFormData((prev) => ({
+  const addGuardian = () =>
+    setFormData(prev => ({
       ...prev,
-      guardians: [...prev.guardians, { name: '', phone: '', email: '', relationship: 'guardian', occupation: '' }],
+      guardians: [
+        ...prev.guardians,
+        { name: '', phone: '', email: '', relationship: 'guardian', occupation: '' },
+      ],
     }));
-  };
 
-  const removeGuardian = (index: number) => {
-    setFormData((prev) => ({
+  const removeGuardian = (index: number) =>
+    setFormData(prev => ({
       ...prev,
       guardians: prev.guardians.filter((_, i) => i !== index),
     }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,17 +176,9 @@ export default function AddStudentPage() {
     setError('');
 
     try {
-      const data = {
-        ...formData,
-        dateOfBirth: new Date(formData.dateOfBirth),
-      };
-
-      if (isEditMode) {
-        await api.put(`/students/${id}`, data);
-      } else {
-        await api.post('/students', data);
-      }
-
+      const payload = { ...formData, dateOfBirth: new Date(formData.dateOfBirth) };
+      if (isEditMode) await api.put(`/students/${id}`, payload);
+      else await api.post('/students', payload);
       navigate('/students');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to save student');
@@ -207,439 +190,245 @@ export default function AddStudentPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
       </div>
     );
   }
 
   return (
-    <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-      theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-    }`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-        }`}>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-foreground">
           {isEditMode ? 'Edit Student' : 'Add New Student'}
-        </h2>
-        <button
-          onClick={() => navigate('/students')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            theme ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'dark:bg-[#334155] dark:text-[#F1F5F9] dark:hover:bg-[#475569]'
-          }`}
-        >
+        </h1>
+        <Button variant="secondary" onClick={() => navigate('/students')}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Personal Information */}
-        <div>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            Personal Information
-          </h3>
+        <Card>
+          <h3 className="text-lg font-semibold text-foreground mb-4">Personal Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                First Name *
-              </label>
-              <input
-                type="text"
+              <Label required>First Name</Label>
+              <Input
                 value={formData.firstName}
-                onChange={(e) => handleChange('firstName', e.target.value)}
+                onChange={e => handleChange('firstName', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Middle Name
-              </label>
-              <input
-                type="text"
+              <Label>Middle Name</Label>
+              <Input
                 value={formData.middleName}
-                onChange={(e) => handleChange('middleName', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('middleName', e.target.value)}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Last Name *
-              </label>
-              <input
-                type="text"
+              <Label required>Last Name</Label>
+              <Input
                 value={formData.lastName}
-                onChange={(e) => handleChange('lastName', e.target.value)}
+                onChange={e => handleChange('lastName', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Date of Birth *
-              </label>
-              <input
+              <Label required>Date of Birth</Label>
+              <Input
                 type="date"
                 value={formData.dateOfBirth}
-                onChange={(e) => handleChange('dateOfBirth', e.target.value)}
+                onChange={e => handleChange('dateOfBirth', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Gender *
-              </label>
-              <select
+              <Label required>Gender</Label>
+              <Select
                 value={formData.gender}
-                onChange={(e) => handleChange('gender', e.target.value)}
+                onChange={e => handleChange('gender', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               >
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="other">Other</option>
-              </select>
+              </Select>
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Blood Group
-              </label>
-              <select
+              <Label>Blood Group</Label>
+              <Select
                 value={formData.bloodGroup}
-                onChange={(e) => handleChange('bloodGroup', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('bloodGroup', e.target.value)}
               >
                 <option value="">Select</option>
-                <option value="A+">A+</option>
-                <option value="A-">A-</option>
-                <option value="B+">B+</option>
-                <option value="B-">B-</option>
-                <option value="AB+">AB+</option>
-                <option value="AB-">AB-</option>
-                <option value="O+">O+</option>
-                <option value="O-">O-</option>
-              </select>
+                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                  <option key={bg} value={bg}>
+                    {bg}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Nationality
-              </label>
-              <input
-                type="text"
+              <Label>Nationality</Label>
+              <Input
                 value={formData.nationality}
-                onChange={(e) => handleChange('nationality', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('nationality', e.target.value)}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Religion
-              </label>
-              <input
-                type="text"
+              <Label>Religion</Label>
+              <Input
                 value={formData.religion}
-                onChange={(e) => handleChange('religion', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('religion', e.target.value)}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Mother Tongue
-              </label>
-              <input
-                type="text"
+              <Label>Mother Tongue</Label>
+              <Input
                 value={formData.motherTongue}
-                onChange={(e) => handleChange('motherTongue', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('motherTongue', e.target.value)}
               />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Academic Information */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            Academic Information
-          </h3>
+        <Card>
+          <h3 className="text-lg font-semibold text-foreground mb-4">Academic Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Grade *
-              </label>
-              <select
+              <Label required>Grade</Label>
+              <Select
                 value={formData.grade}
-                onChange={(e) => handleChange('grade', e.target.value)}
+                onChange={e => handleChange('grade', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               >
                 <option value="">Select Grade</option>
-                {grades.map((grade) => (
+                {grades.map(grade => (
                   <option key={grade._id} value={grade.name}>
                     {grade.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Section
-              </label>
-              <input
-                type="text"
+              <Label>Section</Label>
+              <Input
                 value={formData.section}
-                onChange={(e) => handleChange('section', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('section', e.target.value)}
                 placeholder="e.g., A"
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Phone
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => handleChange('phone', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
-              />
+              <Label>Phone</Label>
+              <PhoneInput value={formData.phone} onChange={v => handleChange('phone', v)} />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Account Information */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            Account Information
-          </h3>
+        <Card>
+          <h3 className="text-lg font-semibold text-foreground mb-4">Account Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Email *
-              </label>
-              <input
+              <Label required>Email</Label>
+              <Input
                 type="email"
                 value={formData.email}
-                onChange={(e) => handleChange('email', e.target.value)}
+                onChange={e => handleChange('email', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             {!isEditMode && (
               <div>
-                <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                  theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                }`}>
-                  Password
-                </label>
-                <input
+                <Label>Password</Label>
+                <Input
                   type="password"
                   value={formData.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
-                  className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                    theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                  }`}
+                  onChange={e => handleChange('password', e.target.value)}
                   placeholder="Leave blank to auto-generate"
                 />
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Address */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            Address
-          </h3>
+        <Card>
+          <h3 className="text-lg font-semibold text-foreground mb-4">Address</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Street
-              </label>
-              <input
-                type="text"
+              <Label>Street</Label>
+              <Input
                 value={formData.address.street}
-                onChange={(e) => handleAddressChange('street', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleAddressChange('street', e.target.value)}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                City *
-              </label>
-              <input
-                type="text"
+              <Label required>City</Label>
+              <Input
                 value={formData.address.city}
-                onChange={(e) => handleAddressChange('city', e.target.value)}
+                onChange={e => handleAddressChange('city', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                State *
-              </label>
-              <input
-                type="text"
+              <Label required>State</Label>
+              <Input
                 value={formData.address.state}
-                onChange={(e) => handleAddressChange('state', e.target.value)}
+                onChange={e => handleAddressChange('state', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Postal Code *
-              </label>
-              <input
-                type="text"
+              <Label required>Postal Code</Label>
+              <Input
                 value={formData.address.postalCode}
-                onChange={(e) => handleAddressChange('postalCode', e.target.value)}
+                onChange={e => handleAddressChange('postalCode', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Country
-              </label>
-              <input
-                type="text"
+              <Label>Country</Label>
+              <Input
                 value={formData.address.country}
-                onChange={(e) => handleAddressChange('country', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleAddressChange('country', e.target.value)}
               />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Guardians */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
+        <Card>
           <div className="flex items-center justify-between mb-4">
-            <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Guardians
-            </h3>
+            <h3 className="text-lg font-semibold text-foreground">Guardians</h3>
             <button
               type="button"
               onClick={addGuardian}
-              className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
             >
               + Add Guardian
             </button>
           </div>
 
           {formData.guardians.map((guardian, index) => (
-            <div key={index} className={`p-4 rounded-lg mb-4 transition-colors duration-200 ${
-              theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-            }`}>
+            <div key={index} className="p-4 rounded-lg bg-elevated mb-4">
               <div className="flex justify-between items-start mb-3">
-                <h4 className={`text-sm font-medium transition-colors duration-200 ${
-                  theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                }`}>
-                  Guardian {index + 1}
-                </h4>
+                <h4 className="text-sm font-medium text-muted">Guardian {index + 1}</h4>
                 {formData.guardians.length > 1 && (
                   <button
                     type="button"
@@ -652,65 +441,35 @@ export default function AddStudentPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Name *
-                  </label>
-                  <input
-                    type="text"
+                  <Label required>Name</Label>
+                  <Input
                     value={guardian.name}
-                    onChange={(e) => handleGuardianChange(index, 'name', e.target.value)}
+                    onChange={e => handleGuardianChange(index, 'name', e.target.value)}
                     required
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
                   />
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Phone *
-                  </label>
-                  <input
-                    type="tel"
+                  <Label required>Phone</Label>
+                  <PhoneInput
                     value={guardian.phone}
-                    onChange={(e) => handleGuardianChange(index, 'phone', e.target.value)}
+                    onChange={v => handleGuardianChange(index, 'phone', v)}
                     required
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
                   />
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Email
-                  </label>
-                  <input
+                  <Label>Email</Label>
+                  <Input
                     type="email"
                     value={guardian.email}
-                    onChange={(e) => handleGuardianChange(index, 'email', e.target.value)}
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
+                    onChange={e => handleGuardianChange(index, 'email', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Relationship *
-                  </label>
-                  <select
+                  <Label required>Relationship</Label>
+                  <Select
                     value={guardian.relationship}
-                    onChange={(e) => handleGuardianChange(index, 'relationship', e.target.value)}
+                    onChange={e => handleGuardianChange(index, 'relationship', e.target.value)}
                     required
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
                   >
                     <option value="father">Father</option>
                     <option value="mother">Mother</option>
@@ -720,254 +479,190 @@ export default function AddStudentPage() {
                     <option value="uncle">Uncle</option>
                     <option value="aunt">Aunt</option>
                     <option value="other">Other</option>
-                  </select>
+                  </Select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Occupation
-                  </label>
-                  <input
-                    type="text"
+                  <Label>Occupation</Label>
+                  <Input
                     value={guardian.occupation}
-                    onChange={(e) => handleGuardianChange(index, 'occupation', e.target.value)}
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
+                    onChange={e => handleGuardianChange(index, 'occupation', e.target.value)}
                   />
                 </div>
               </div>
             </div>
           ))}
-        </div>
+        </Card>
 
         {/* Emergency Contact */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            Emergency Contact
-          </h3>
+        <Card>
+          <h3 className="text-lg font-semibold text-foreground mb-4">Emergency Contact</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Name *
-              </label>
-              <input
-                type="text"
+              <Label required>Name</Label>
+              <Input
                 value={formData.emergencyContact.name}
-                onChange={(e) => handleChange('emergencyContact', { ...formData.emergencyContact, name: e.target.value })}
+                onChange={e =>
+                  handleChange('emergencyContact', {
+                    ...formData.emergencyContact,
+                    name: e.target.value,
+                  })
+                }
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Phone *
-              </label>
-              <input
-                type="tel"
+              <Label required>Phone</Label>
+              <PhoneInput
                 value={formData.emergencyContact.phone}
-                onChange={(e) => handleChange('emergencyContact', { ...formData.emergencyContact, phone: e.target.value })}
+                onChange={v =>
+                  handleChange('emergencyContact', {
+                    ...formData.emergencyContact,
+                    phone: v,
+                  })
+                }
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Relationship *
-              </label>
-              <input
-                type="text"
+              <Label required>Relationship</Label>
+              <Input
                 value={formData.emergencyContact.relationship}
-                onChange={(e) => handleChange('emergencyContact', { ...formData.emergencyContact, relationship: e.target.value })}
+                onChange={e =>
+                  handleChange('emergencyContact', {
+                    ...formData.emergencyContact,
+                    relationship: e.target.value,
+                  })
+                }
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               />
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Previous School */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
+        <Card>
+          <h3 className="text-lg font-semibold text-foreground mb-4">
             Previous School (Optional)
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                School Name
-              </label>
-              <input
-                type="text"
+              <Label>School Name</Label>
+              <Input
                 value={formData.previousSchool.name}
-                onChange={(e) => handleChange('previousSchool', { ...formData.previousSchool, name: e.target.value })}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e =>
+                  handleChange('previousSchool', {
+                    ...formData.previousSchool,
+                    name: e.target.value,
+                  })
+                }
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Year
-              </label>
-              <input
-                type="text"
+              <Label>Year</Label>
+              <Input
                 value={formData.previousSchool.year}
-                onChange={(e) => handleChange('previousSchool', { ...formData.previousSchool, year: e.target.value })}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e =>
+                  handleChange('previousSchool', {
+                    ...formData.previousSchool,
+                    year: e.target.value,
+                  })
+                }
                 placeholder="e.g., 2022-2023"
               />
             </div>
             <div className="md:col-span-2">
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Reason for Leaving
-              </label>
-              <input
-                type="text"
+              <Label>Reason for Leaving</Label>
+              <Input
                 value={formData.previousSchool.reason}
-                onChange={(e) => handleChange('previousSchool', { ...formData.previousSchool, reason: e.target.value })}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e =>
+                  handleChange('previousSchool', {
+                    ...formData.previousSchool,
+                    reason: e.target.value,
+                  })
+                }
               />
             </div>
           </div>
-        </div>
+        </Card>
 
-        {/* Medical Information */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
+        {/* Medical */}
+        <Card>
+          <h3 className="text-lg font-semibold text-foreground mb-4">
             Medical Information (Optional)
           </h3>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="space-y-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Allergies (comma separated)
-              </label>
-              <input
-                type="text"
+              <Label>Allergies (comma separated)</Label>
+              <Input
                 value={formData.medicalInfo.allergies.join(', ')}
-                onChange={(e) => handleChange('medicalInfo', { 
-                  ...formData.medicalInfo, 
-                  allergies: e.target.value.split(',').map(s => s.trim()).filter(Boolean) 
-                })}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e =>
+                  handleChange('medicalInfo', {
+                    ...formData.medicalInfo,
+                    allergies: e.target.value
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(Boolean),
+                  })
+                }
                 placeholder="e.g., Peanuts, Shellfish"
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Medical Conditions (comma separated)
-              </label>
-              <input
-                type="text"
+              <Label>Medical Conditions (comma separated)</Label>
+              <Input
                 value={formData.medicalInfo.medicalConditions.join(', ')}
-                onChange={(e) => handleChange('medicalInfo', { 
-                  ...formData.medicalInfo, 
-                  medicalConditions: e.target.value.split(',').map(s => s.trim()).filter(Boolean) 
-                })}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e =>
+                  handleChange('medicalInfo', {
+                    ...formData.medicalInfo,
+                    medicalConditions: e.target.value
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(Boolean),
+                  })
+                }
                 placeholder="e.g., Asthma, Diabetes"
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Medications (comma separated)
-              </label>
-              <input
-                type="text"
+              <Label>Medications (comma separated)</Label>
+              <Input
                 value={formData.medicalInfo.medications.join(', ')}
-                onChange={(e) => handleChange('medicalInfo', { 
-                  ...formData.medicalInfo, 
-                  medications: e.target.value.split(',').map(s => s.trim()).filter(Boolean) 
-                })}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e =>
+                  handleChange('medicalInfo', {
+                    ...formData.medicalInfo,
+                    medications: e.target.value
+                      .split(',')
+                      .map(s => s.trim())
+                      .filter(Boolean),
+                  })
+                }
                 placeholder="e.g., Inhaler, Insulin"
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Emergency Notes
-              </label>
-              <textarea
+              <Label>Emergency Notes</Label>
+              <Textarea
                 value={formData.medicalInfo.emergencyNotes}
-                onChange={(e) => handleChange('medicalInfo', { ...formData.medicalInfo, emergencyNotes: e.target.value })}
+                onChange={e =>
+                  handleChange('medicalInfo', {
+                    ...formData.medicalInfo,
+                    emergencyNotes: e.target.value,
+                  })
+                }
                 rows={3}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
-                placeholder="Any additional emergency information"
               />
             </div>
           </div>
-        </div>
+        </Card>
 
-        {/* Form Actions */}
-        <div className={`border-t pt-6 flex justify-end gap-3 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <button
-            type="button"
-            onClick={() => navigate('/students')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              theme ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'dark:bg-[#334155] dark:text-[#F1F5F9] dark:hover:bg-[#475569]'
-            }`}
-          >
+        {/* Actions */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-border">
+          <Button type="button" variant="secondary" onClick={() => navigate('/students')}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
-          >
+          </Button>
+          <Button type="submit" loading={saving}>
             {saving ? 'Saving...' : isEditMode ? 'Update Student' : 'Add Student'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
