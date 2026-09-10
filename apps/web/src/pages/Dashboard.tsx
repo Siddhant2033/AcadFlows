@@ -34,7 +34,7 @@ interface DashboardData {
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const { tenant, isLoading: tenantLoading } = useTenant();
-  const { theme, mode } = useTheme();
+  const { mode } = useTheme();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,10 +45,10 @@ export default function DashboardPage() {
         setIsLoading(false);
         return;
       }
-      
+
       setIsLoading(true);
       setError('');
-      
+
       try {
         console.log('📊 Fetching dashboard data...');
         const response = await api.get('/dashboard');
@@ -56,7 +56,7 @@ export default function DashboardPage() {
         setDashboardData(response.data.data);
       } catch (err: any) {
         console.error('❌ Failed to fetch dashboard data:', err);
-        
+
         if (err.response?.status === 401) {
           setError('Please login to view your dashboard');
           setTimeout(() => {
@@ -80,11 +80,7 @@ export default function DashboardPage() {
       return (
         <div className="flex flex-col items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          <p className={`mt-4 transition-colors duration-200 ${
-            theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-          }`}>
-            Loading your dashboard...
-          </p>
+          <p className="mt-4 text-muted">Loading your dashboard...</p>
         </div>
       );
     }
@@ -116,13 +112,10 @@ export default function DashboardPage() {
     if (!user) {
       return (
         <div className="text-center py-12">
-          <p className={`transition-colors duration-200 ${
-            theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-          }`}>
-            Please login to view your dashboard
-          </p>
+          <p className="text-muted">Please login to view your dashboard</p>
           <button
-            onClick={() => window.location.href = '/login'}
+            type="button"
+            onClick={() => (window.location.href = '/login')}
             className="mt-4 text-primary-600 hover:text-primary-700 font-medium"
           >
             Go to Login
@@ -152,62 +145,46 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${
-      theme ? 'bg-gray-50' : 'dark:bg-[#0B0F17]'
-    }`}>
-      {/* Navbar */}
-      <nav className={`sticky top-0 z-50 border-b transition-colors duration-200 ${
-        theme ? 'bg-white border-gray-200' : 'dark:bg-[#0F172A] dark:border-[#1E293B]'
+    <div className={`min-h-screen bg-background transition-colors duration-200 ${mode === 'light' ? 'bg-gray-50' : 'dark:bg-[#0B0F17]'
       }`}>
+      {/* Navbar */}
+      <nav className="sticky top-0 z-50 border-b border-border bg-surface/95 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center space-x-4">
               <Link to="/" className="flex items-center space-x-2">
                 <span className="text-2xl">🏫</span>
-                <h1 className={`text-xl font-bold transition-colors duration-200 ${
-                  theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                }`}>
-                  SchoolPlatform
-                </h1>
+                <h1 className="text-xl font-bold text-foreground">SchoolPlatform</h1>
               </Link>
               {tenant && (
-                <span className={`text-sm px-3 py-1 rounded-full transition-colors duration-200 ${
-                  theme ? 'bg-gray-100 text-gray-500' : 'dark:bg-[#1E293B] dark:text-[#94A3B8]'
-                }`}>
+                <span className="text-sm px-3 py-1 rounded-full bg-elevated text-muted">
                   {tenant.name}
                 </span>
               )}
             </div>
-            
+
             <div className="flex items-center space-x-4">
-              {/* Theme Toggle */}
               <ThemeToggle />
-              
-              {/* Profile Link */}
+
               <Link
                 to="/profile"
-                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors duration-200 ${
-                  theme 
-                    ? 'hover:bg-gray-100 text-gray-700' 
-                    : 'dark:hover:bg-[#1E293B] dark:text-[#CBD5E1]'
-                }`}
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors text-foreground hover:bg-elevated"
               >
                 <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
                   <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
-                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                    {user?.firstName?.[0]}
+                    {user?.lastName?.[0]}
                   </span>
                 </div>
                 <span className="text-sm hidden md:inline">
                   {user?.firstName} {user?.lastName}
                 </span>
               </Link>
-              
-              {/* Logout Button */}
+
               <button
+                type="button"
                 onClick={logout}
-                className={`text-sm transition-colors duration-200 ${
-                  theme ? 'text-red-600 hover:text-red-800' : 'dark:text-red-400 dark:hover:text-red-300'
-                }`}
+                className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
               >
                 Logout
               </button>
@@ -217,9 +194,7 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          {renderDashboard()}
-        </div>
+        <div className="px-4 py-6 sm:px-0">{renderDashboard()}</div>
       </main>
     </div>
   );

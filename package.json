@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "pnpm run --parallel dev",
-    "dev:web": "pnpm --filter web dev",
-    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm run --filter @school-platform/web dev",
+    "dev:api": "pnpm run --filter @school-platform/api dev",
+    "dev:shared": "pnpm run --filter @school-platform/shared dev",
     "build": "pnpm run --parallel build",
-    "build:web": "pnpm --filter web build",
-    "build:api": "pnpm --filter api build",
+    "build:web": "pnpm run --filter @school-platform/web build",
+    "build:api": "pnpm run --filter @school-platform/api build",
+    "build:shared": "pnpm run --filter @school-platform/shared build",
     "lint": "pnpm run --parallel lint",
-    "type-check": "pnpm run --parallel type-check",
-    "test": "pnpm run --parallel test"
+    "type-check": "pnpm run --parallel type-check"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

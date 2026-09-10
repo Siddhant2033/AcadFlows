@@ -94,6 +94,8 @@ interface StudentData {
   timetable: TimetableClass[];
   recentGrades: Grade[];
   upcomingTests: any[];
+  grade: string;
+  section: string;
 }
 
 interface Child {
@@ -210,8 +212,8 @@ export class DashboardService {
       date: today,
     });
 
-    const attendancePercentage = totalAttendance > 0 
-      ? Math.round((todayAttendance / totalAttendance) * 100) 
+    const attendancePercentage = totalAttendance > 0
+      ? Math.round((todayAttendance / totalAttendance) * 100)
       : 0;
 
     // Get fee collection and revenue
@@ -226,7 +228,7 @@ export class DashboardService {
     ]);
 
     const totalRevenue = totalInvoicesAmount.length > 0 ? totalInvoicesAmount[0].total : 0;
-    
+
     const feeCollection = totalInvoicesAmount.length > 0 && totalInvoicesAmount[0].total > 0
       ? Math.round((paidInvoices[0]?.total || 0) / totalInvoicesAmount[0].total * 100)
       : 0;
@@ -374,7 +376,7 @@ export class DashboardService {
   static async getTeacherData(userId: string, tenantId: string): Promise<TeacherData> {
     // Get real teacher data
     const teacher = await Teacher.findOne({ userId, tenantId, isDeleted: false });
-    
+
     if (!teacher) {
       return {
         myClasses: [],
@@ -427,24 +429,32 @@ export class DashboardService {
   static async getStudentData(userId: string, tenantId: string): Promise<StudentData> {
     // Get real student data
     const student = await Student.findOne({ userId, tenantId, isDeleted: false });
-    
+
     if (!student) {
       return {
         timetable: [],
         recentGrades: [],
         upcomingTests: [],
+        grade: 'N/A',
+        section: 'N/A',
       };
     }
 
     try {
       // Get student's timetable
       const TimetableEntry = mongoose.model('TimetableEntry');
+      const today = new Date();
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const dayName = days[today.getDay()];
+
       const timetable = await TimetableEntry.find({
         tenantId,
         sectionId: student.section || '',
+        dayOfWeek: dayName,
       })
         .populate('subjectId', 'name')
         .populate('teacherId', 'firstName lastName')
+        .sort({ startTime: 1 })
         .limit(5);
 
       // Get student's grades
@@ -454,6 +464,24 @@ export class DashboardService {
         studentId: student._id,
       })
         .populate('subjectId', 'name')
+        .sort({ updatedAt: -1 })
+        .limit(5);
+
+      // Get student's overall grade
+      const overallGrade = grades.length > 0
+        ? grades.reduce((acc, g) => acc + (g.averageScore || 0), 0) / grades.length
+        : 0;
+
+      // Get upcoming assignments
+      const Assignment = mongoose.model('Assignment');
+      const assignments = await Assignment.find({
+        tenantId,
+        sectionId: student.section,
+        isPublished: true,
+        dueDate: { $gte: new Date() },
+      })
+        .populate('subjectId', 'name')
+        .sort({ dueDate: 1 })
         .limit(5);
 
       return {
@@ -467,17 +495,38 @@ export class DashboardService {
           subject: g.subjectId?.name || 'Unknown',
           grade: g.grade || 'N/A',
           score: `${Math.round(g.averageScore || 0)}%`,
-          date: this.getTimeAgo(g.updatedAt),
+          date: g.updatedAt ? this.getTimeAgo(g.updatedAt) : 'N/A',
         })),
-        upcomingTests: [],
+        upcomingTests: assignments.map((a: any) => ({
+          title: a.title,
+          subject: a.subjectId?.name || 'Unknown',
+          dueDate: a.dueDate,
+          priority: 'medium',
+        })),
+        grade: this.calculateGrade(overallGrade),
+        section: student.section || 'N/A',
       };
     } catch (error) {
+      console.error('Error fetching student data:', error);
       return {
         timetable: [],
         recentGrades: [],
         upcomingTests: [],
+        grade: 'N/A',
+        section: student.section || 'N/A',
       };
     }
+  }
+
+  // Helper method to calculate grade
+  private static calculateGrade(score: number): string {
+    if (score >= 90) return 'A+';
+    if (score >= 80) return 'A';
+    if (score >= 70) return 'B+';
+    if (score >= 60) return 'B';
+    if (score >= 50) return 'C+';
+    if (score >= 40) return 'C';
+    return 'F';
   }
 
   static async getGuardianData(userId: string, tenantId: string): Promise<GuardianData> {
