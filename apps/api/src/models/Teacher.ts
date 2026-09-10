@@ -93,12 +93,10 @@ const teacherSchema = new Schema<ITeacher>(
     userId: {
       type: String,
       required: true,
-      unique: true,
     },
     employeeId: {
       type: String,
       required: true,
-      unique: true,
     },
     firstName: {
       type: String,
@@ -228,7 +226,7 @@ const teacherSchema = new Schema<ITeacher>(
       amount: Number,
       currency: {
         type: String,
-        default: 'USD',
+        default: 'INR',
       },
       frequency: {
         type: String,
@@ -312,8 +310,8 @@ const teacherSchema = new Schema<ITeacher>(
 );
 
 // Indexes
+teacherSchema.index({ tenantId: 1, userId: 1 }, { unique: true });
 teacherSchema.index({ tenantId: 1, employeeId: 1 }, { unique: true });
-teacherSchema.index({ tenantId: 1, userId: 1 });
 teacherSchema.index({ tenantId: 1, status: 1 });
 teacherSchema.index({ tenantId: 1, subjects: 1 });
 

@@ -26,7 +26,6 @@ const academicYearSchema = new Schema<IAcademicYear>(
     code: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       uppercase: true,
     },
@@ -58,7 +57,7 @@ const academicYearSchema = new Schema<IAcademicYear>(
 );
 
 // Indexes
-academicYearSchema.index({ tenantId: 1, code: 1 });
+academicYearSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 academicYearSchema.index({ tenantId: 1, isCurrent: 1 });
 
 export const AcademicYear = mongoose.model<IAcademicYear>('AcademicYear', academicYearSchema);

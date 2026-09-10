@@ -203,7 +203,6 @@ const roomSchema = new Schema<IRoom>(
     code: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       uppercase: true,
     },
@@ -276,7 +275,7 @@ timetableEntrySchema.index({ tenantId: 1, teacherId: 1, dayOfWeek: 1 });
 timetableEntrySchema.index({ tenantId: 1, sectionId: 1, dayOfWeek: 1 });
 timetableEntrySchema.index({ tenantId: 1, roomId: 1, dayOfWeek: 1 });
 
-roomSchema.index({ tenantId: 1, code: 1 });
+roomSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 roomSchema.index({ tenantId: 1, type: 1, isActive: 1 });
 
 timeSlotSchema.index({ tenantId: 1, dayOfWeek: 1 });

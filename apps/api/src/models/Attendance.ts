@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IAttendance extends Document {
   tenantId: string;
   date: Date;
+  dateOnly: string;
   type: 'student' | 'teacher';
   entityId: string; // studentId or teacherId
   sectionId?: string;
@@ -23,6 +24,7 @@ export interface IAttendanceSession extends Document {
   academicYearId: string;
   sectionId: string;
   date: Date;
+  dateOnly: string;
   type: 'student' | 'teacher';
   totalPresent: number;
   totalAbsent: number;
@@ -112,6 +114,11 @@ const attendanceSessionSchema = new Schema<IAttendanceSession>(
       required: true,
       index: true,
     },
+    dateOnly: {
+      type: String,
+      required: true,
+      index: true,
+    },
     type: {
       type: String,
       enum: ['student', 'teacher'],
@@ -163,9 +170,26 @@ attendanceSessionSchema.index(
 );
 
 // Additional indexes
-attendanceSchema.index({ tenantId: 1, date: 1, sectionId: 1 });
+attendanceSchema.index(
+  { tenantId: 1, entityId: 1, type: 1, dateOnly: 1 },
+  { unique: true }
+);
 attendanceSchema.index({ tenantId: 1, entityId: 1, status: 1 });
-attendanceSessionSchema.index({ tenantId: 1, academicYearId: 1, sectionId: 1 });
+attendanceSessionSchema.index(
+  { tenantId: 1, sectionId: 1, type: 1, dateOnly: 1 },
+  { unique: true }
+);
+
+attendanceSchema.pre('save', function (next) {
+  if (this.date && !this.dateOnly) {
+    const d = new Date(this.date);
+    // IST offset: +05:30
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(d.getTime() + istOffset);
+    this.dateOnly = istDate.toISOString().split('T')[0];
+  }
+  next();
+});
 
 export const Attendance = mongoose.model<IAttendance>('Attendance', attendanceSchema);
 export const AttendanceSession = mongoose.model<IAttendanceSession>('AttendanceSession', attendanceSessionSchema);

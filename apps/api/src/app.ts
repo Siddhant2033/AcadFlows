@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
 import { tenantContext } from './middleware/tenant-context';
 import { connectDB } from './config/database';
+import { authenticate, ensureTenantMatch } from './middleware/auth';
 
 // Import routes
 import authRoutes from './modules/auth/routes';
@@ -47,15 +48,20 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tenants', tenantRoutes);
-app.use('/api/v1/dashboard', dashboardRoutes);
-app.use('/api/v1/students', studentRoutes);
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/academic', academicRoutes);
-app.use('/api/v1/teachers', teacherRoutes);
-app.use('/api/v1/fees', feeRoutes);
-app.use('/api/v1/assignments', assignmentRoutes);
-app.use('/api/v1/communication', communicationRoutes);
-app.use('/api/v1/timetable', timetableRoutes);
+
+
+// Authenticated routes — apply tenant match guard
+
+
+app.use('/api/v1/dashboard', authenticate, ensureTenantMatch, dashboardRoutes);
+app.use('/api/v1/students', authenticate, ensureTenantMatch, studentRoutes);
+app.use('/api/v1/users', authenticate, ensureTenantMatch, userRoutes);
+app.use('/api/v1/academic', authenticate, ensureTenantMatch, academicRoutes);
+app.use('/api/v1/teachers', authenticate, ensureTenantMatch, teacherRoutes);
+app.use('/api/v1/fees', authenticate, ensureTenantMatch, feeRoutes);
+app.use('/api/v1/assignments', authenticate, ensureTenantMatch, assignmentRoutes);
+app.use('/api/v1/communication', authenticate, ensureTenantMatch, communicationRoutes);
+app.use('/api/v1/timetable', authenticate, ensureTenantMatch, timetableRoutes);
 
 // Error handling
 app.use(notFoundHandler);

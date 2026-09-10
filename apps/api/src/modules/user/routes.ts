@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { UserController } from './controller';
-import { authenticate } from '../../middleware/auth';
 import multer from 'multer';
+import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
+
+router.use(ensureTenantMatch);
 
 // Configure multer for memory storage (for MVP)
 const upload = multer({

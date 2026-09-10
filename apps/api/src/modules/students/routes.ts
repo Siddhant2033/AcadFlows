@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { StudentController } from './controller';
-import { authenticate, requireRole } from '../../middleware/auth';
 import multer from 'multer';
+import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
+
+router.use(ensureTenantMatch);
 
 // Configure multer BEFORE using it
 const upload = multer({

@@ -24,7 +24,6 @@ const gradeSchema = new Schema<IGrade>(
     code: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       uppercase: true,
     },
@@ -47,7 +46,7 @@ const gradeSchema = new Schema<IGrade>(
   }
 );
 
-gradeSchema.index({ tenantId: 1, code: 1 });
+gradeSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 gradeSchema.index({ tenantId: 1, sequence: 1 });
 
 export const Grade = mongoose.model<IGrade>('Grade', gradeSchema);

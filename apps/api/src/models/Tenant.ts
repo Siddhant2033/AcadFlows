@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { generateSchoolCode } from '../utils/school-code';
+import { generateSchoolCode } from '../utils/random';
 
 export interface ITenant extends Document {
   name: string;
@@ -10,14 +10,14 @@ export interface ITenant extends Document {
   phone?: string;
   email?: string;
   logoUrl?: string;
-  settings?: {
-    academicYearStart?: string;
-    academicYearEnd?: string;
-    timezone?: string;
-    currency?: string;
-    language?: string;
-    emailDomain?: string;
-  };
+  settings: {
+    academicYearStart: String,
+    academicYearEnd: String,
+    timezone: { type: String, default: 'Asia/Kolkata' },
+    currency: { type: String, default: 'INR' },
+    language: { type: String, default: 'en-IN' },
+    emailDomain: { type: String, trim: true, lowercase: true },
+  },
 }
 
 const tenantSchema = new Schema<ITenant>(
@@ -30,19 +30,17 @@ const tenantSchema = new Schema<ITenant>(
     slug: {
       type: String,
       required: true,
-      unique: true, // This creates the index
       trim: true,
       lowercase: true,
+      // unique handled by compound index
     },
     schoolCode: {
       type: String,
       required: true,
-      unique: true, // This creates the index
       trim: true,
       uppercase: true,
-      default: function() {
-        return generateSchoolCode();
-      },
+      // No unique here — see compound index below
+      // No default — assigned in TenantService
     },
     status: {
       type: String,
@@ -84,6 +82,8 @@ const tenantSchema = new Schema<ITenant>(
 // tenantSchema.index({ schoolCode: 1 });
 
 // Keep only additional indexes not covered by unique
+tenantSchema.index({ slug: 1 }, { unique: true });
+tenantSchema.index({ schoolCode: 1 }, { unique: true });
 tenantSchema.index({ status: 1 });
 
 export const Tenant = mongoose.model<ITenant>('Tenant', tenantSchema);

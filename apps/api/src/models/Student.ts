@@ -10,6 +10,7 @@ export interface IStudent extends Document {
   middleName?: string;
   grade: string;
   section?: string;
+  sectionId?: string;
   dateOfBirth: Date;
   gender: 'male' | 'female' | 'other';
   bloodGroup?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
@@ -82,12 +83,10 @@ const studentSchema = new Schema<IStudent>(
     userId: {
       type: String,
       required: true,
-      unique: true,
     },
     admissionNo: {
       type: String,
       required: true,
-      unique: true,
     },
     rollNo: {
       type: String,
@@ -114,6 +113,10 @@ const studentSchema = new Schema<IStudent>(
     section: {
       type: String,
       trim: true,
+    },
+    sectionId: {
+      type: String,
+      index: true,
     },
     dateOfBirth: {
       type: Date,
@@ -260,9 +263,9 @@ const studentSchema = new Schema<IStudent>(
 );
 
 // Indexes
-studentSchema.index({ tenantId: 1, rollNo: 1 }, { unique: true });
+studentSchema.index({ tenantId: 1, userId: 1 }, { unique: true });
 studentSchema.index({ tenantId: 1, admissionNo: 1 }, { unique: true });
-studentSchema.index({ tenantId: 1, userId: 1 });
+studentSchema.index({ tenantId: 1, rollNo: 1 }, { unique: true });
 studentSchema.index({ tenantId: 1, grade: 1 });
 studentSchema.index({ tenantId: 1, status: 1 });
 studentSchema.index({ 'guardians.userId': 1 });

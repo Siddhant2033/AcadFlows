@@ -185,7 +185,6 @@ const invoiceSchema = new Schema<IInvoice>(
     invoiceNumber: {
       type: String,
       required: true,
-      unique: true,
     },
     items: [{
       description: {
@@ -310,7 +309,6 @@ const paymentSchema = new Schema<IPayment>(
     receiptNumber: {
       type: String,
       required: true,
-      unique: true,
     },
     paymentDate: {
       type: Date,
@@ -342,7 +340,6 @@ const discountSchema = new Schema<IDiscount>(
     code: {
       type: String,
       required: true,
-      unique: true,
       uppercase: true,
       trim: true,
     },
@@ -435,15 +432,15 @@ const feeReminderSchema = new Schema<IFeeReminder>(
 feeStructureSchema.index({ tenantId: 1, academicYearId: 1 });
 feeStructureSchema.index({ tenantId: 1, isActive: 1 });
 
+invoiceSchema.index({ tenantId: 1, invoiceNumber: 1 }, { unique: true });
 invoiceSchema.index({ tenantId: 1, studentId: 1, status: 1 });
 invoiceSchema.index({ tenantId: 1, dueDate: 1, status: 1 });
-invoiceSchema.index({ tenantId: 1, invoiceNumber: 1 });
 
+paymentSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true });
 paymentSchema.index({ tenantId: 1, invoiceId: 1 });
 paymentSchema.index({ tenantId: 1, studentId: 1, paymentDate: 1 });
-paymentSchema.index({ tenantId: 1, receiptNumber: 1 });
 
-discountSchema.index({ tenantId: 1, code: 1 });
+discountSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 discountSchema.index({ tenantId: 1, isActive: 1, startDate: 1 });
 
 feeReminderSchema.index({ tenantId: 1, invoiceId: 1 });

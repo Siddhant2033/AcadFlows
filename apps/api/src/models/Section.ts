@@ -31,7 +31,6 @@ const sectionSchema = new Schema<ISection>(
     code: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       uppercase: true,
     },
@@ -59,7 +58,7 @@ const sectionSchema = new Schema<ISection>(
   }
 );
 
+sectionSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 sectionSchema.index({ tenantId: 1, gradeId: 1 });
-sectionSchema.index({ tenantId: 1, code: 1 });
 
 export const Section = mongoose.model<ISection>('Section', sectionSchema);

@@ -26,7 +26,6 @@ const subjectSchema = new Schema<ISubject>(
     code: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       uppercase: true,
     },
@@ -57,7 +56,7 @@ const subjectSchema = new Schema<ISubject>(
   }
 );
 
-subjectSchema.index({ tenantId: 1, code: 1 });
+subjectSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 subjectSchema.index({ tenantId: 1, gradeId: 1 });
 
 export const Subject = mongoose.model<ISubject>('Subject', subjectSchema);

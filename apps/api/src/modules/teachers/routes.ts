@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { TeacherController } from './controller';
-import { authenticate, requireRole } from '../../middleware/auth';
 import multer from 'multer';
+import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
 
+router.use(ensureTenantMatch);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },

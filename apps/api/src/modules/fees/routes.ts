@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import { FeeController } from './controller';
-import { authenticate, requireRole } from '../../middleware/auth';
+import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
 
-// All routes require authentication
-router.use(authenticate);
+router.use(ensureTenantMatch);
 
 // ============ Fee Structures ============
 router.get('/structures', FeeController.getFeeStructures);

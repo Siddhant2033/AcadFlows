@@ -30,7 +30,6 @@ const userSchema = new Schema<IUser>(
     email: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       lowercase: true,
     },
@@ -96,14 +95,14 @@ const userSchema = new Schema<IUser>(
 );
 
 // Indexes
-userSchema.index({ tenantId: 1, email: 1 });
+userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ tenantId: 1, role: 1 });
 userSchema.index({ tenantId: 1, status: 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {
   if (!this.isModified('passwordHash')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.passwordHash = await bcrypt.hash(this.passwordHash, salt);

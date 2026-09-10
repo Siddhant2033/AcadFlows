@@ -7,12 +7,11 @@ import {
   TeacherSubjectController,
   ScheduleController,
 } from './controller';
-import { authenticate, requireRole } from '../../middleware/auth';
+import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
 
-// All academic routes require authentication
-router.use(authenticate);
+router.use(ensureTenantMatch);
 
 // Academic Years
 router.get('/academic-years', AcademicYearController.getAll);
