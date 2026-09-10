@@ -6,6 +6,8 @@ import api from '../lib/api';
 import ThemeToggle from '../components/ThemeToggle';
 import { cn } from '../lib/cn';
 
+// ─── Step sub-components (kept inline for simplicity) ───
+
 const inputClass =
   'mt-1.5 block w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors';
 
@@ -52,6 +54,230 @@ function StepRoleSelection({ selectedRole, onRoleSelect, tenantName, schoolCode 
   );
 }
 
+// StepAdminForm, StepGuardianForm, StepStudentForm, StepTeacherForm
+// are imported from separate files for the student/teacher ones.
+
+import StepStudentForm from '../components/StepStudentForm';
+import StepTeacherForm from '../components/StepTeacherForm';
+
+function StepGuardianForm({
+  formData,
+  onChange,
+  onBack,
+  onSubmit,
+  isLoading,
+  error,
+  tenantName,
+  tenantId,
+}: any) {
+  const [rollNo, setRollNo] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+  const [verifiedStudents, setVerifiedStudents] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (formData.children?.length) {
+      setVerifiedStudents(formData.children);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleVerify = async () => {
+    if (!rollNo.trim()) {
+      setVerifyError('Please enter a roll number');
+      return;
+    }
+
+    if (verifiedStudents.some(s => s.rollNo === rollNo.trim().toUpperCase())) {
+      setVerifyError('This student is already added');
+      return;
+    }
+
+    setVerifying(true);
+    setVerifyError('');
+
+    try {
+      const response = await api.post('/students/verify-rollno', {
+        rollNo: rollNo.trim().toUpperCase(),
+        tenantId,
+      });
+
+      const student = response.data.data.student;
+
+      if (student.hasGuardian) {
+        setVerifyError('This student already has a registered guardian');
+        return;
+      }
+
+      const newChild = {
+        studentId: student.id,
+        name: `${student.firstName} ${student.lastName}`,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        grade: student.grade,
+        section: student.section,
+        rollNo: student.rollNo,
+      };
+
+      setVerifiedStudents(prev => [...prev, newChild]);
+      onChange('children', [...(formData.children || []), newChild]);
+      setRollNo('');
+    } catch (err: any) {
+      setVerifyError(err.response?.data?.error || 'Failed to verify roll number');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleRemove = (studentId: string) => {
+    setVerifiedStudents(prev => prev.filter(s => s.studentId !== studentId));
+    onChange(
+      'children',
+      (formData.children || []).filter((c: any) => c.studentId !== studentId),
+    );
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-5">
+      <h3 className="text-xl font-semibold text-foreground">
+        Guardian registration{tenantName ? ` — ${tenantName}` : ''}
+      </h3>
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+      {/* Roll number verification */}
+      <div className="p-4 rounded-lg border border-border">
+        <h4 className="text-sm font-medium text-foreground mb-3">
+          Add Your Children (by Roll Number)
+        </h4>
+        <div className="flex gap-2">
+          <input
+            value={rollNo}
+            onChange={e => setRollNo(e.target.value.toUpperCase())}
+            placeholder="Enter student's roll number"
+            className={cn(inputClass, 'mt-0 flex-1')}
+            disabled={verifying}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleVerify();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleVerify}
+            disabled={verifying || !rollNo.trim()}
+            className={primaryBtnClass}
+          >
+            {verifying ? 'Verifying...' : 'Add Child'}
+          </button>
+        </div>
+        {verifyError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">{verifyError}</p>
+        )}
+
+        {verifiedStudents.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {verifiedStudents.map((student: any) => (
+              <div
+                key={student.studentId}
+                className="flex items-center justify-between p-3 rounded-lg bg-surface border border-border"
+              >
+                <div>
+                  <p className="font-medium text-foreground">
+                    {student.firstName} {student.lastName}
+                  </p>
+                  <p className="text-sm text-muted">
+                    {student.grade}
+                    {student.section ? ` - Section ${student.section}` : ''} · Roll:{' '}
+                    {student.rollNo}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemove(student.studentId)}
+                  className="text-red-500 hover:text-red-700 text-sm"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Personal info */}
+      {[
+        ['firstName', 'First name', 'text'],
+        ['lastName', 'Last name', 'text'],
+        ['email', 'Email', 'email'],
+        ['phone', 'Phone (10 digits)', 'tel'],
+        ['password', 'Password', 'password'],
+        ['confirmPassword', 'Confirm password', 'password'],
+        ['occupation', 'Occupation', 'text'],
+      ].map(([field, label, type]) => (
+        <label key={field} className={labelClass}>
+          {label}
+          {field === 'phone' && formData[field] ? ` (${formData[field]})` : ''}
+          <input
+            required={[
+              'firstName',
+              'lastName',
+              'email',
+              'password',
+              'confirmPassword',
+            ].includes(field)}
+            type={type}
+            value={formData[field] || ''}
+            onChange={event =>
+              onChange(
+                field,
+                field === 'phone'
+                  ? event.target.value.replace(/\D/g, '').slice(0, 10)
+                  : event.target.value,
+              )
+            }
+            className={inputClass}
+            maxLength={field === 'phone' ? 10 : undefined}
+          />
+        </label>
+      ))}
+
+      <label className={labelClass}>
+        Relationship to Student
+        <select
+          value={formData.relationship || ''}
+          onChange={e => onChange('relationship', e.target.value)}
+          className={inputClass}
+        >
+          <option value="">Select relationship</option>
+          <option value="father">Father</option>
+          <option value="mother">Mother</option>
+          <option value="guardian">Guardian</option>
+          <option value="grandfather">Grandfather</option>
+          <option value="grandmother">Grandmother</option>
+          <option value="uncle">Uncle</option>
+          <option value="aunt">Aunt</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+
+      <div className="flex items-center justify-between pt-2">
+        <button type="button" onClick={onBack} className={backBtnClass}>
+          ← Back
+        </button>
+        <button
+          type="submit"
+          disabled={isLoading || verifiedStudents.length === 0}
+          className={primaryBtnClass}
+        >
+          {isLoading ? 'Registering...' : 'Complete Registration'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function StepAdminForm({
   formData,
   onChange,
@@ -69,134 +295,41 @@ function StepAdminForm({
       </h3>
       {schoolCode && <p className="text-sm text-muted">School code: {schoolCode}</p>}
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {[
-        ['firstName', 'First name'],
-        ['lastName', 'Last name'],
-        ['email', 'Email'],
-        ['password', 'Password'],
-        ['confirmPassword', 'Confirm password'],
-      ].map(([field, label]) => (
-        <label key={field} className={labelClass}>
-          {label}
-          <input
-            required
-            type={field.toLowerCase().includes('password') ? 'password' : 'text'}
-            value={formData[field] || ''}
-            onChange={event => onChange(field, event.target.value)}
-            className={inputClass}
-          />
-        </label>
-      ))}
-      <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onBack} className={backBtnClass}>
-          ← Back
-        </button>
-        <button type="submit" disabled={isLoading} className={primaryBtnClass}>
-          {isLoading ? 'Registering...' : 'Register'}
-        </button>
-      </div>
-    </form>
-  );
-}
 
-function StepGuardianForm({
-  formData,
-  onChange,
-  onBack,
-  onSubmit,
-  isLoading,
-  error,
-  tenantName,
-}: any) {
-  return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <h3 className="text-xl font-semibold text-foreground">
-        Guardian registration{tenantName ? ` — ${tenantName}` : ''}
-      </h3>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {[
-        ['firstName', 'First name'],
-        ['lastName', 'Last name'],
-        ['email', 'Email'],
-        ['password', 'Password'],
-        ['confirmPassword', 'Confirm password'],
-        ['relationship', 'Relationship'],
-        ['phone', 'Phone'],
-        ['occupation', 'Occupation'],
-      ].map(([field, label]) => (
+        ['firstName', 'First name', 'text'],
+        ['lastName', 'Last name', 'text'],
+        ['email', 'Email', 'email'],
+        ['phone', 'Phone (10 digits)', 'tel'],
+        ['password', 'Password', 'password'],
+        ['confirmPassword', 'Confirm password', 'password'],
+      ].map(([field, label, type]) => (
         <label key={field} className={labelClass}>
           {label}
           <input
-            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(
-              field,
-            )}
-            type={field.toLowerCase().includes('password') ? 'password' : 'text'}
+            required={[
+              'firstName',
+              'lastName',
+              'email',
+              'password',
+              'confirmPassword',
+            ].includes(field)}
+            type={type}
             value={formData[field] || ''}
-            onChange={event => onChange(field, event.target.value)}
-            className={inputClass}
-          />
-        </label>
-      ))}
-      <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onBack} className={backBtnClass}>
-          ← Back
-        </button>
-        <button type="submit" disabled={isLoading} className={primaryBtnClass}>
-          {isLoading ? 'Registering...' : 'Register'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function StepStudentForm({
-  formData,
-  onChange,
-  onBack,
-  onSubmit,
-  isLoading,
-  error,
-  tenantName,
-}: any) {
-  return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <h3 className="text-xl font-semibold text-foreground">
-        Student registration{tenantName ? ` — ${tenantName}` : ''}
-      </h3>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {[
-        ['firstName', 'First name'],
-        ['lastName', 'Last name'],
-        ['email', 'Email'],
-        ['password', 'Password'],
-        ['confirmPassword', 'Confirm password'],
-        ['grade', 'Grade'],
-        ['section', 'Section'],
-        ['dateOfBirth', 'Date of birth'],
-        ['parentName', 'Parent name'],
-        ['parentPhone', 'Parent phone'],
-        ['parentEmail', 'Parent email'],
-        ['address', 'Address'],
-      ].map(([field, label]) => (
-        <label key={field} className={labelClass}>
-          {label}
-          <input
-            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(
-              field,
-            )}
-            type={
-              field.toLowerCase().includes('password')
-                ? 'password'
-                : field === 'dateOfBirth'
-                  ? 'date'
-                  : 'text'
+            onChange={event =>
+              onChange(
+                field,
+                field === 'phone'
+                  ? event.target.value.replace(/\D/g, '').slice(0, 10)
+                  : event.target.value,
+              )
             }
-            value={formData[field] || ''}
-            onChange={event => onChange(field, event.target.value)}
             className={inputClass}
+            maxLength={field === 'phone' ? 10 : undefined}
           />
         </label>
       ))}
+
       <div className="flex items-center justify-between pt-2">
         <button type="button" onClick={onBack} className={backBtnClass}>
           ← Back
@@ -209,63 +342,7 @@ function StepStudentForm({
   );
 }
 
-function StepTeacherForm({
-  formData,
-  onChange,
-  onBack,
-  onSubmit,
-  isLoading,
-  error,
-  tenantName,
-}: any) {
-  return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <h3 className="text-xl font-semibold text-foreground">
-        Teacher registration{tenantName ? ` — ${tenantName}` : ''}
-      </h3>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {[
-        ['firstName', 'First name'],
-        ['lastName', 'Last name'],
-        ['email', 'Email'],
-        ['password', 'Password'],
-        ['confirmPassword', 'Confirm password'],
-        ['employeeId', 'Employee ID'],
-        ['subject', 'Subject'],
-        ['qualification', 'Qualification'],
-        ['experience', 'Experience'],
-        ['joiningDate', 'Joining date'],
-      ].map(([field, label]) => (
-        <label key={field} className={labelClass}>
-          {label}
-          <input
-            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(
-              field,
-            )}
-            type={
-              field.toLowerCase().includes('password')
-                ? 'password'
-                : field === 'joiningDate'
-                  ? 'date'
-                  : 'text'
-            }
-            value={formData[field] || ''}
-            onChange={event => onChange(field, event.target.value)}
-            className={inputClass}
-          />
-        </label>
-      ))}
-      <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onBack} className={backBtnClass}>
-          ← Back
-        </button>
-        <button type="submit" disabled={isLoading} className={primaryBtnClass}>
-          {isLoading ? 'Registering...' : 'Register'}
-        </button>
-      </div>
-    </form>
-  );
-}
+// ─── Main RegisterPage ────────────────────────────────────
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -285,28 +362,41 @@ export default function RegisterPage() {
     'student',
   );
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Record<string, any>>({
     firstName: '',
     lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
+
+    // Student
     grade: '',
+    gradeId: '',
     section: '',
+    sectionId: '',
     dateOfBirth: '',
+    gender: '',
     parentName: '',
     parentPhone: '',
     parentEmail: '',
-    address: '',
+    addressStreet: '',
+    addressCity: '',
+    addressState: '',
+    addressPostalCode: '',
+    addressCountry: 'India',
+
+    // Teacher
+    phone: '',
     employeeId: '',
     subject: '',
     qualification: '',
     experience: '',
     joiningDate: '',
+
+    // Guardian
     relationship: '',
-    children: [] as { name: string; grade: string; studentId: string }[],
-    phone: '',
     occupation: '',
+    children: [],
   });
 
   useEffect(() => {
@@ -321,7 +411,7 @@ export default function RegisterPage() {
         setIsVerified(true);
         setCurrentStep(2);
       } catch {
-        /* user can enter code manually */
+        /* fallback */
       }
     }
     checkTenantFromSlug();
@@ -342,9 +432,7 @@ export default function RegisterPage() {
     setCurrentStep(3);
   };
 
-  const handleBackToRole = () => {
-    setCurrentStep(2);
-  };
+  const handleBackToRole = () => setCurrentStep(2);
 
   const handleFormChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -367,36 +455,60 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const registrationData = {
+      // Build role-specific payload
+      const registrationData: any = {
         email: formData.email,
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: selectedRole,
         tenantId,
-        ...(selectedRole === 'student' && {
-          grade: formData.grade,
-          section: formData.section,
-          dateOfBirth: formData.dateOfBirth,
-          parentName: formData.parentName,
-          parentPhone: formData.parentPhone,
-          parentEmail: formData.parentEmail,
-          address: formData.address,
-        }),
-        ...(selectedRole === 'teacher' && {
-          employeeId: formData.employeeId,
-          subject: formData.subject,
-          qualification: formData.qualification,
-          experience: formData.experience,
-          joiningDate: formData.joiningDate,
-        }),
-        ...(selectedRole === 'guardian' && {
-          relationship: formData.relationship,
-          children: formData.children,
-          phone: formData.phone,
-          occupation: formData.occupation,
-        }),
       };
+
+      if (selectedRole === 'student') {
+        registrationData.grade = formData.grade;
+        registrationData.gradeId = formData.gradeId;
+        registrationData.section = formData.section;
+        registrationData.sectionId = formData.sectionId;
+        registrationData.dateOfBirth = formData.dateOfBirth;
+        registrationData.gender = formData.gender;
+        registrationData.parentName = formData.parentName;
+        registrationData.parentPhone = formData.parentPhone;
+        registrationData.parentEmail = formData.parentEmail;
+        registrationData.address = {
+          street: formData.addressStreet,
+          city: formData.addressCity,
+          state: formData.addressState,
+          postalCode: formData.addressPostalCode,
+          country: formData.addressCountry || 'India',
+        };
+      }
+
+      if (selectedRole === 'teacher') {
+        registrationData.phone = formData.phone;
+        registrationData.dateOfBirth = formData.dateOfBirth;
+        registrationData.gender = formData.gender;
+        registrationData.subject = formData.subject;
+        registrationData.qualification = formData.qualification;
+        registrationData.experience = formData.experience;
+        registrationData.joiningDate = formData.joiningDate;
+        registrationData.address = {
+          city: formData.addressCity,
+          state: formData.addressState,
+          country: 'India',
+        };
+      }
+
+      if (selectedRole === 'guardian') {
+        registrationData.phone = formData.phone;
+        registrationData.relationship = formData.relationship;
+        registrationData.occupation = formData.occupation;
+        registrationData.children = formData.children || [];
+      }
+
+      if (selectedRole === 'admin') {
+        registrationData.phone = formData.phone;
+      }
 
       await register(registrationData);
       navigate(tenantSlug ? `/${tenantSlug}/dashboard` : '/dashboard');
@@ -434,6 +546,7 @@ export default function RegisterPage() {
                 isLoading={isLoading}
                 error={error}
                 tenantName={tenantName}
+                tenantId={tenantId}
               />
             );
           case 'teacher':
@@ -505,7 +618,10 @@ export default function RegisterPage() {
           </Link>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Link to="/" className="text-sm text-muted hover:text-foreground transition-colors">
+            <Link
+              to="/"
+              className="text-sm text-muted hover:text-foreground transition-colors"
+            >
               ← Back to home
             </Link>
           </div>
@@ -516,7 +632,7 @@ export default function RegisterPage() {
             <h1 className="text-3xl font-bold text-foreground">Join your school</h1>
             <p className="mt-2 text-sm text-muted">{stepSubtitle}</p>
 
-            {/* Progress steps */}
+            {/* Progress */}
             <div className="mt-6 flex items-center gap-2">
               {stepLabels.map((label, idx) => {
                 const step = idx + 1;

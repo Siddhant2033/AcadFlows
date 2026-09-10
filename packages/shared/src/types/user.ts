@@ -10,6 +10,21 @@ export interface User extends BaseEntity, TenantScoped {
   lastLoginAt?: Date;
 }
 
+export interface AddressInput {
+  street?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+}
+
+export interface ChildLinkInput {
+  studentId: string;
+  name?: string;
+  grade?: string;
+  rollNo?: string;
+}
+
 export interface UserCreateInput {
   email: string;
   password: string;
@@ -18,23 +33,31 @@ export interface UserCreateInput {
   role: Role;
   tenantId: string;
 
-  // Optional role-specific fields (all accepted by registerSchema)
-  grade?: string;
-  section?: string;
+  // ── Shared optional ──
+  phone?: string;
   dateOfBirth?: string;
   gender?: 'male' | 'female' | 'other';
-  phone?: string;
+
+  // ── Student ──
+  grade?: string;
+  section?: string;
+  sectionId?: string;
+  address?: AddressInput;
   parentName?: string;
   parentPhone?: string;
   parentEmail?: string;
+
+  // ── Teacher ──
   employeeId?: string;
   subject?: string;
   qualification?: string;
   experience?: string | number;
   joiningDate?: string;
+
+  // ── Guardian ──
   relationship?: string;
   occupation?: string;
-  children?: any[];
+  children?: ChildLinkInput[];
 }
 
 export interface UserLoginInput {

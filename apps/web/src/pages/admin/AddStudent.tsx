@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
-import { Card, Button, Input, Label, Select, Textarea, PhoneInput } from '../../components/ui';
+import {
+  Card,
+  Button,
+  Input,
+  Label,
+  Select,
+  Textarea,
+  PhoneInput,
+} from '../../components/ui';
 
 interface StudentFormData {
   firstName: string;
@@ -11,7 +18,9 @@ interface StudentFormData {
   email: string;
   password: string;
   grade: string;
+  gradeId: string;
   section: string;
+  sectionId: string;
   dateOfBirth: string;
   gender: string;
   bloodGroup: string;
@@ -59,7 +68,9 @@ const defaultFormData: StudentFormData = {
   email: '',
   password: '',
   grade: '',
+  gradeId: '',
   section: '',
+  sectionId: '',
   dateOfBirth: '',
   gender: 'other',
   bloodGroup: '',
@@ -83,17 +94,18 @@ const defaultFormData: StudentFormData = {
 export default function AddStudentPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState<StudentFormData>(defaultFormData);
   const [grades, setGrades] = useState<{ _id: string; name: string }[]>([]);
+  const [sections, setSections] = useState<{ _id: string; name: string; gradeId: string }[]>([]);
 
   const isEditMode = !!id;
 
   useEffect(() => {
     fetchGrades();
+    fetchSections();
     if (isEditMode) fetchStudent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -104,6 +116,15 @@ export default function AddStudentPage() {
       setGrades(response.data.data);
     } catch (err) {
       console.error('Failed to fetch grades:', err);
+    }
+  };
+
+  const fetchSections = async () => {
+    try {
+      const response = await api.get('/academic/sections');
+      setSections(response.data.data);
+    } catch (err) {
+      console.error('Failed to fetch sections:', err);
     }
   };
 
@@ -118,8 +139,10 @@ export default function AddStudentPage() {
         middleName: data.middleName || '',
         email: data.userId?.email || '',
         password: '',
-        grade: data.grade,
+        grade: data.grade || '',
+        gradeId: '',
         section: data.section || '',
+        sectionId: data.sectionId || '',
         dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split('T')[0] : '',
         gender: data.gender || 'other',
         bloodGroup: data.bloodGroup || '',
@@ -176,7 +199,15 @@ export default function AddStudentPage() {
     setError('');
 
     try {
-      const payload = { ...formData, dateOfBirth: new Date(formData.dateOfBirth) };
+      const payload: any = {
+        ...formData,
+        dateOfBirth: new Date(formData.dateOfBirth),
+      };
+
+      // Only include sectionId if set
+      if (!payload.sectionId) delete payload.sectionId;
+      if (!payload.gradeId) delete payload.gradeId;
+
       if (isEditMode) await api.put(`/students/${id}`, payload);
       else await api.post('/students', payload);
       navigate('/students');
@@ -195,9 +226,12 @@ export default function AddStudentPage() {
     );
   }
 
+  const sectionsForGrade = sections.filter(
+    s => !formData.gradeId || s.gradeId === formData.gradeId,
+  );
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">
           {isEditMode ? 'Edit Student' : 'Add New Student'}
@@ -313,13 +347,19 @@ export default function AddStudentPage() {
             <div>
               <Label required>Grade</Label>
               <Select
-                value={formData.grade}
-                onChange={e => handleChange('grade', e.target.value)}
+                value={formData.gradeId}
+                onChange={e => {
+                  const selected = grades.find(g => g._id === e.target.value);
+                  handleChange('gradeId', e.target.value);
+                  handleChange('grade', selected?.name || '');
+                  handleChange('sectionId', '');
+                  handleChange('section', '');
+                }}
                 required
               >
                 <option value="">Select Grade</option>
                 {grades.map(grade => (
-                  <option key={grade._id} value={grade.name}>
+                  <option key={grade._id} value={grade._id}>
                     {grade.name}
                   </option>
                 ))}
@@ -327,11 +367,28 @@ export default function AddStudentPage() {
             </div>
             <div>
               <Label>Section</Label>
-              <Input
-                value={formData.section}
-                onChange={e => handleChange('section', e.target.value)}
-                placeholder="e.g., A"
-              />
+              <Select
+                value={formData.sectionId}
+                onChange={e => {
+                  const selected = sectionsForGrade.find(s => s._id === e.target.value);
+                  handleChange('sectionId', e.target.value);
+                  handleChange('section', selected?.name || '');
+                }}
+                disabled={!formData.gradeId || sectionsForGrade.length === 0}
+              >
+                <option value="">
+                  {!formData.gradeId
+                    ? 'Select grade first'
+                    : sectionsForGrade.length === 0
+                      ? 'No sections available'
+                      : 'Select Section'}
+                </option>
+                {sectionsForGrade.map(s => (
+                  <option key={s._id} value={s._id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div>
               <Label>Phone</Label>
@@ -468,7 +525,9 @@ export default function AddStudentPage() {
                   <Label required>Relationship</Label>
                   <Select
                     value={guardian.relationship}
-                    onChange={e => handleGuardianChange(index, 'relationship', e.target.value)}
+                    onChange={e =>
+                      handleGuardianChange(index, 'relationship', e.target.value)
+                    }
                     required
                   >
                     <option value="father">Father</option>
@@ -485,7 +544,9 @@ export default function AddStudentPage() {
                   <Label>Occupation</Label>
                   <Input
                     value={guardian.occupation}
-                    onChange={e => handleGuardianChange(index, 'occupation', e.target.value)}
+                    onChange={e =>
+                      handleGuardianChange(index, 'occupation', e.target.value)
+                    }
                   />
                 </div>
               </div>

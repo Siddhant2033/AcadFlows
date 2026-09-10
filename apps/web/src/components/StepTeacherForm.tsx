@@ -1,5 +1,5 @@
 import React from 'react';
-import { Input, Label, PhoneInput, Button } from './ui';
+import { Input, Label, PhoneInput, Select, Button } from './ui';
 
 interface StepTeacherFormProps {
   formData: any;
@@ -36,6 +36,7 @@ export default function StepTeacherForm({
         </div>
       )}
 
+      {/* Name */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label required>First Name</Label>
@@ -55,6 +56,7 @@ export default function StepTeacherForm({
         </div>
       </div>
 
+      {/* Email */}
       <div>
         <Label required>Email</Label>
         <Input
@@ -65,6 +67,7 @@ export default function StepTeacherForm({
         />
       </div>
 
+      {/* Phone */}
       <div>
         <Label required>Phone</Label>
         <PhoneInput
@@ -74,18 +77,36 @@ export default function StepTeacherForm({
         />
       </div>
 
+      {/* DOB + Gender */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label required>Employee ID</Label>
+          <Label required>Date of Birth</Label>
           <Input
-            value={formData.employeeId || ''}
-            onChange={e => onChange('employeeId', e.target.value)}
-            placeholder="e.g., T-2024-001"
+            type="date"
+            value={formData.dateOfBirth || ''}
+            onChange={e => onChange('dateOfBirth', e.target.value)}
             required
           />
         </div>
         <div>
-          <Label required>Subject</Label>
+          <Label required>Gender</Label>
+          <Select
+            value={formData.gender || ''}
+            onChange={e => onChange('gender', e.target.value)}
+            required
+          >
+            <option value="">Select gender</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </Select>
+        </div>
+      </div>
+
+      {/* Subject + Qualification */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label required>Primary Subject</Label>
           <Input
             value={formData.subject || ''}
             onChange={e => onChange('subject', e.target.value)}
@@ -93,18 +114,18 @@ export default function StepTeacherForm({
             required
           />
         </div>
+        <div>
+          <Label required>Qualification</Label>
+          <Input
+            value={formData.qualification || ''}
+            onChange={e => onChange('qualification', e.target.value)}
+            placeholder="e.g., M.Sc. Mathematics"
+            required
+          />
+        </div>
       </div>
 
-      <div>
-        <Label required>Qualification</Label>
-        <Input
-          value={formData.qualification || ''}
-          onChange={e => onChange('qualification', e.target.value)}
-          placeholder="e.g., M.Sc. Mathematics"
-          required
-        />
-      </div>
-
+      {/* Experience + Joining Date */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label>Years of Experience</Label>
@@ -126,7 +147,29 @@ export default function StepTeacherForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      {/* Address */}
+      <div className="border-t border-border pt-4">
+        <h4 className="text-sm font-medium text-foreground mb-3">Address (optional)</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>City</Label>
+            <Input
+              value={formData.addressCity || ''}
+              onChange={e => onChange('addressCity', e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>State</Label>
+            <Input
+              value={formData.addressState || ''}
+              onChange={e => onChange('addressState', e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Password */}
+      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
         <div>
           <Label required>Password</Label>
           <Input

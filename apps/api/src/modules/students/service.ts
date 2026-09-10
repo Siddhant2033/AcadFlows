@@ -2,12 +2,12 @@ import mongoose from 'mongoose';
 import { Student } from '../../models/Student';
 import { User } from '../../models/User';
 import { Tenant } from '../../models/Tenant';
+import { AcademicYear } from '../../models/AcademicYear';
 import { AppError } from '../../middleware/error-handler';
 
 export class StudentService {
   /**
    * Public — minimal student list for a tenant.
-   * Used during guardian registration to show available children.
    */
   static async getPublicStudentList(tenantId: string) {
     return await Student.find({
@@ -83,6 +83,25 @@ export class StudentService {
         userId = user[0]._id.toString();
       }
 
+      // Auto-create enrollment if sectionId provided
+      const enrollments: any[] = data.enrollments || [];
+      if (enrollments.length === 0 && data.sectionId) {
+        const currentYear = await AcademicYear.findOne({
+          tenantId: data.tenantId,
+          isCurrent: true,
+        });
+
+        if (currentYear) {
+          enrollments.push({
+            academicYearId: currentYear._id.toString(),
+            sectionId: data.sectionId,
+            rollNo,
+            enrollmentDate: new Date(),
+            status: 'active',
+          });
+        }
+      }
+
       const student = await Student.create(
         [
           {
@@ -95,6 +114,7 @@ export class StudentService {
             middleName: data.middleName,
             grade: data.grade,
             section: data.section,
+            sectionId: data.sectionId || undefined,
             dateOfBirth: data.dateOfBirth,
             gender: data.gender,
             bloodGroup: data.bloodGroup,
@@ -111,7 +131,7 @@ export class StudentService {
             emergencyContact: data.emergencyContact,
             previousSchool: data.previousSchool,
             medicalInfo: data.medicalInfo,
-            enrollments: data.enrollments || [],
+            enrollments,
             status: 'active',
           },
         ],

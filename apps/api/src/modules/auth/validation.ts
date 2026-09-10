@@ -28,6 +28,21 @@ const statusSchema = z.enum(['active', 'inactive', 'archived'], {
   errorMap: () => ({ message: 'Status must be active, inactive, or archived' }),
 });
 
+const addressSchema = z.object({
+  street: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional().default('India'),
+  postalCode: z.string().optional(),
+});
+
+const childLinkSchema = z.object({
+  studentId: z.string().min(1),
+  name: z.string().optional(),
+  grade: z.string().optional(),
+  rollNo: z.string().optional(),
+});
+
 // ─── Auth Schemas ─────────────────────────────────────────
 
 export const registerSchema = z
@@ -46,28 +61,31 @@ export const registerSchema = z
     role: roleSchema,
     tenantId: objectIdSchema,
 
-    // Optional role-specific fields — accepted but not required.
-    // Student fields
-    grade: z.string().optional(),
-    section: z.string().optional(),
+    // ── Shared optional ──
+    phone: z.string().optional(),
     dateOfBirth: z.string().optional(),
     gender: z.enum(['male', 'female', 'other']).optional(),
-    phone: z.string().optional(),
+
+    // ── Student ──
+    grade: z.string().optional(),
+    section: z.string().optional(),
+    sectionId: z.string().optional(),
+    address: addressSchema.optional(),
     parentName: z.string().optional(),
     parentPhone: z.string().optional(),
     parentEmail: z.string().optional(),
 
-    // Teacher fields
+    // ── Teacher ──
     employeeId: z.string().optional(),
     subject: z.string().optional(),
     qualification: z.string().optional(),
     experience: z.union([z.string(), z.number()]).optional(),
     joiningDate: z.string().optional(),
 
-    // Guardian fields
+    // ── Guardian ──
     relationship: z.string().optional(),
     occupation: z.string().optional(),
-    children: z.array(z.any()).optional(),
+    children: z.array(childLinkSchema).optional(),
   })
   .strict();
 

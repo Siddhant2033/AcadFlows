@@ -22,14 +22,12 @@ export class AuthService {
       throw new AppError('Tenant not found or inactive', 400);
     }
 
-    // Global unique email — one person = one account
     const existingUser = await User.findOne({ email: input.email });
     if (existingUser) {
       throw new AppError('User already exists with this email', 409);
     }
 
-    // FIXED B20: enforce admin-first rule.
-    // If no admin exists for this tenant yet, force the role to 'admin'.
+    // Admin-first rule
     const adminExists = await User.exists({
       tenantId: input.tenantId,
       role: 'admin',
@@ -49,6 +47,9 @@ export class AuthService {
       firstName: input.firstName,
       lastName: input.lastName,
       role: finalRole,
+      phone: input.phone,
+      dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
+      gender: input.gender,
     });
 
     console.log('✅ User created:', {
@@ -58,8 +59,13 @@ export class AuthService {
       tenantId: user.tenantId,
     });
 
-    // Create role-specific profile document
+    // Create role-specific profile
     await this.createRoleProfile(user, input);
+
+    // ── Link guardian to students ──
+    if (finalRole === 'guardian') {
+      await this.linkGuardianToStudents(user, input);
+    }
 
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
@@ -69,17 +75,53 @@ export class AuthService {
   }
 
   /**
-   * Create the Student/Teacher profile document matching the user's role.
-   * Failures are logged but do not abort registration — the user can
-   * complete their profile later without losing their account.
+   * Create Student or Teacher profile document matching the user's role.
+   * All input fields from the register form are mapped through.
    */
   private static async createRoleProfile(user: any, input: UserCreateInput) {
     try {
       if (user.role === 'student') {
         const { Student } = await import('../../models/Student');
+        const { AcademicYear } = await import('../../models/AcademicYear');
         const { generateAdmissionNo } = await import('../../utils/admission');
 
         const admissionNo = await generateAdmissionNo(user.tenantId);
+
+        // Build address — use provided values or placeholder
+        const address =
+          input.address && (input.address.city || input.address.state)
+            ? {
+                street: input.address.street || '',
+                city: input.address.city || '',
+                state: input.address.state || '',
+                country: input.address.country || 'India',
+                postalCode: input.address.postalCode || '',
+              }
+            : {
+                city: 'N/A',
+                state: 'N/A',
+                country: 'India',
+                postalCode: '000000',
+              };
+
+        // Auto-enroll in the current academic year if a section was selected
+        const enrollments: any[] = [];
+        if (input.sectionId) {
+          const currentYear = await AcademicYear.findOne({
+            tenantId: user.tenantId,
+            isCurrent: true,
+          });
+
+          if (currentYear) {
+            enrollments.push({
+              academicYearId: currentYear._id.toString(),
+              sectionId: input.sectionId,
+              rollNo: admissionNo,
+              enrollmentDate: new Date(),
+              status: 'active',
+            });
+          }
+        }
 
         await Student.create({
           tenantId: user.tenantId,
@@ -88,37 +130,36 @@ export class AuthService {
           rollNo: admissionNo,
           firstName: user.firstName,
           lastName: user.lastName,
-          grade: (input as any).grade || 'Unassigned',
-          section: (input as any).section || '',
-          dateOfBirth: (input as any).dateOfBirth
-            ? new Date((input as any).dateOfBirth)
+          grade: input.grade || 'Unassigned',
+          section: input.section || '',
+          sectionId: input.sectionId || undefined,
+          dateOfBirth: input.dateOfBirth
+            ? new Date(input.dateOfBirth)
             : new Date('2010-01-01'),
-          gender: (input as any).gender || 'other',
-          guardians: (input as any).parentName
+          gender: input.gender || 'other',
+          guardians: input.parentName
             ? [
                 {
-                  name: (input as any).parentName,
-                  phone: (input as any).parentPhone || '',
-                  email: (input as any).parentEmail || '',
+                  name: input.parentName,
+                  phone: input.parentPhone || '',
+                  email: input.parentEmail || '',
                   relationship: 'guardian',
                   isVerified: false,
                 },
               ]
             : [],
-          address: {
-            city: 'N/A',
-            state: 'N/A',
-            country: 'India',
-            postalCode: '000000',
-          },
+          address,
           emergencyContact: {
-            name: (input as any).parentName || user.firstName,
-            phone: (input as any).parentPhone || '0000000000',
+            name: input.parentName || user.firstName,
+            phone: input.parentPhone || '0000000000',
             relationship: 'guardian',
           },
+          enrollments,
           status: 'active',
           isDeleted: false,
         });
+
+        console.log('✅ Student profile created:', { userId: user._id, admissionNo });
       }
 
       if (user.role === 'teacher') {
@@ -127,31 +168,66 @@ export class AuthService {
 
         const employeeId = await generateEmployeeId(user.tenantId);
 
+        const address =
+          input.address && (input.address.city || input.address.state)
+            ? {
+                street: input.address.street || '',
+                city: input.address.city || '',
+                state: input.address.state || '',
+                country: input.address.country || 'India',
+                postalCode: input.address.postalCode || '',
+              }
+            : {
+                city: 'N/A',
+                state: 'N/A',
+                country: 'India',
+                postalCode: '000000',
+              };
+
+        // Map the simple string fields into structured arrays
+        const qualifications: any[] = input.qualification
+          ? [
+              {
+                degree: input.qualification,
+                institution: 'N/A',
+                year: new Date().getFullYear(),
+              },
+            ]
+          : [];
+
+        const experience: any[] = [];
+        if (input.experience !== undefined && input.experience !== null && input.experience !== '') {
+          experience.push({
+            institution: 'N/A',
+            position: 'Teacher',
+            fromDate: new Date(),
+            isCurrent: true,
+            responsibilities: String(input.experience),
+          });
+        }
+
+        const subjects: string[] = input.subject ? [input.subject] : [];
+
         await Teacher.create({
           tenantId: user.tenantId,
           userId: user._id.toString(),
           employeeId,
           firstName: user.firstName,
           lastName: user.lastName,
-          dateOfBirth: (input as any).dateOfBirth
-            ? new Date((input as any).dateOfBirth)
+          dateOfBirth: input.dateOfBirth
+            ? new Date(input.dateOfBirth)
             : new Date('1990-01-01'),
-          gender: (input as any).gender || 'other',
-          phone: (input as any).phone || '0000000000',
+          gender: input.gender || 'other',
+          phone: input.phone || '0000000000',
           email: user.email,
-          address: {
-            city: 'N/A',
-            state: 'N/A',
-            country: 'India',
-            postalCode: '000000',
-          },
-          qualifications: [],
-          experience: [],
-          subjects: [],
+          address,
+          qualifications,
+          experience,
+          subjects,
           assignedSections: [],
           specialization: [],
-          joiningDate: (input as any).joiningDate
-            ? new Date((input as any).joiningDate)
+          joiningDate: input.joiningDate
+            ? new Date(input.joiningDate)
             : new Date(),
           employmentType: 'permanent',
           emergencyContact: {
@@ -162,13 +238,71 @@ export class AuthService {
           status: 'active',
           isDeleted: false,
         });
+
+        console.log('✅ Teacher profile created:', { userId: user._id, employeeId });
       }
 
-      // Guardians don't have their own profile document — they're linked
-      // to students via Student.guardians[].userId, which is set during
-      // the guardian registration flow (StepGuardianForm).
+      // Admins and guardians don't have separate profile docs
     } catch (profileError) {
       console.error('❌ Failed to create role profile:', profileError);
+    }
+  }
+
+  /**
+   * Link a newly registered guardian to their children.
+   * Called after User is created, using `input.children[]` (from roll-number verification).
+   */
+  private static async linkGuardianToStudents(user: any, input: UserCreateInput) {
+    try {
+      if (!input.children || input.children.length === 0) {
+        console.log('ℹ️  Guardian registered with no children to link');
+        return;
+      }
+
+      const { Student } = await import('../../models/Student');
+
+      let linked = 0;
+
+      for (const child of input.children) {
+        if (!child.studentId) continue;
+
+        const student = await Student.findOne({
+          _id: child.studentId,
+          tenantId: input.tenantId,
+          isDeleted: false,
+        });
+
+        if (!student) {
+          console.warn('⚠️  Student not found for guardian link:', child.studentId);
+          continue;
+        }
+
+        const alreadyLinked = student.guardians.some(
+          g => g.userId === user._id.toString(),
+        );
+
+        if (alreadyLinked) {
+          console.log('ℹ️  Guardian already linked to student:', child.studentId);
+          continue;
+        }
+
+        student.guardians.push({
+          userId: user._id.toString(),
+          name: `${user.firstName} ${user.lastName}`,
+          phone: input.phone || '',
+          email: user.email,
+          relationship: (input.relationship as any) || 'guardian',
+          occupation: input.occupation || '',
+          isVerified: true,
+        });
+
+        await student.save();
+        linked++;
+      }
+
+      console.log(`✅ Guardian linked to ${linked} student(s)`);
+    } catch (linkError) {
+      console.error('❌ Failed to link guardian to students:', linkError);
     }
   }
 
@@ -231,17 +365,12 @@ export class AuthService {
 
   static async forgotPassword(email: string): Promise<void> {
     const user = await User.findOne({ email, status: 'active' });
-    if (!user) {
-      // Silently succeed to prevent email enumeration
-      return;
-    }
+    if (!user) return;
 
     const token = crypto.randomBytes(32).toString('hex');
 
-    // Invalidate prior tokens
     await PasswordResetToken.deleteMany({ userId: user.id });
 
-    // Persist new token with 1-hour TTL
     await PasswordResetToken.create({
       userId: user.id,
       token,
