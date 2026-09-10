@@ -2,18 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { SchoolCodeInput } from '../components/SchoolCodeInput';
-import { getTenantBySchoolCode } from '../lib/tenant';
 import api from '../lib/api';
+import ThemeToggle from '../components/ThemeToggle';
+import { cn } from '../lib/cn';
 
 const inputClass =
-  'mt-1.5 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+  'mt-1.5 block w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors';
 
-const labelClass = 'block text-sm font-medium text-gray-700';
+const labelClass = 'block text-sm font-medium text-foreground';
 
 const primaryBtnClass =
   'rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
 
-const backBtnClass = 'text-sm font-medium text-gray-500 hover:text-gray-700';
+const backBtnClass = 'text-sm font-medium text-muted hover:text-foreground transition-colors';
 
 function StepRoleSelection({ selectedRole, onRoleSelect, tenantName, schoolCode }: any) {
   const roles = [
@@ -25,23 +26,25 @@ function StepRoleSelection({ selectedRole, onRoleSelect, tenantName, schoolCode 
 
   return (
     <div>
-      <h3 className="text-xl font-semibold text-gray-900">
+      <h3 className="text-xl font-semibold text-foreground">
         Select your role{tenantName ? ` at ${tenantName}` : ''}
       </h3>
-      {schoolCode && <p className="mt-1 text-sm text-gray-500">School code: {schoolCode}</p>}
+      {schoolCode && <p className="mt-1 text-sm text-muted">School code: {schoolCode}</p>}
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {roles.map(([role, label, icon]) => (
           <button
             key={role}
             type="button"
             onClick={() => onRoleSelect(role)}
-            className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors ${selectedRole === role
-                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                : 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
-              }`}
+            className={cn(
+              'flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors',
+              selectedRole === role
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400'
+                : 'border-border hover:border-primary-300 hover:bg-elevated',
+            )}
           >
             <span className="text-xl">{icon}</span>
-            <span className="text-sm font-medium">{label}</span>
+            <span className="text-sm font-medium text-foreground">{label}</span>
           </button>
         ))}
       </div>
@@ -49,17 +52,29 @@ function StepRoleSelection({ selectedRole, onRoleSelect, tenantName, schoolCode 
   );
 }
 
-function StepAdminForm({ formData, onChange, onBack, onSubmit, isLoading, error, tenantName, schoolCode }: any) {
+function StepAdminForm({
+  formData,
+  onChange,
+  onBack,
+  onSubmit,
+  isLoading,
+  error,
+  tenantName,
+  schoolCode,
+}: any) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <h3 className="text-xl font-semibold text-gray-900">
+      <h3 className="text-xl font-semibold text-foreground">
         School administrator registration{tenantName ? ` — ${tenantName}` : ''}
       </h3>
-      {schoolCode && <p className="text-sm text-gray-500">School code: {schoolCode}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {schoolCode && <p className="text-sm text-muted">School code: {schoolCode}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {[
-        ['firstName', 'First name'], ['lastName', 'Last name'], ['email', 'Email'],
-        ['password', 'Password'], ['confirmPassword', 'Confirm password'],
+        ['firstName', 'First name'],
+        ['lastName', 'Last name'],
+        ['email', 'Email'],
+        ['password', 'Password'],
+        ['confirmPassword', 'Confirm password'],
       ].map(([field, label]) => (
         <label key={field} className={labelClass}>
           {label}
@@ -67,13 +82,15 @@ function StepAdminForm({ formData, onChange, onBack, onSubmit, isLoading, error,
             required
             type={field.toLowerCase().includes('password') ? 'password' : 'text'}
             value={formData[field] || ''}
-            onChange={(event) => onChange(field, event.target.value)}
+            onChange={event => onChange(field, event.target.value)}
             className={inputClass}
           />
         </label>
       ))}
       <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onBack} className={backBtnClass}>← Back</button>
+        <button type="button" onClick={onBack} className={backBtnClass}>
+          ← Back
+        </button>
         <button type="submit" disabled={isLoading} className={primaryBtnClass}>
           {isLoading ? 'Registering...' : 'Register'}
         </button>
@@ -82,31 +99,48 @@ function StepAdminForm({ formData, onChange, onBack, onSubmit, isLoading, error,
   );
 }
 
-function StepGuardianForm({ formData, onChange, onBack, onSubmit, isLoading, error, tenantName }: any) {
+function StepGuardianForm({
+  formData,
+  onChange,
+  onBack,
+  onSubmit,
+  isLoading,
+  error,
+  tenantName,
+}: any) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <h3 className="text-xl font-semibold text-gray-900">
+      <h3 className="text-xl font-semibold text-foreground">
         Guardian registration{tenantName ? ` — ${tenantName}` : ''}
       </h3>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {[
-        ['firstName', 'First name'], ['lastName', 'Last name'], ['email', 'Email'],
-        ['password', 'Password'], ['confirmPassword', 'Confirm password'],
-        ['relationship', 'Relationship'], ['phone', 'Phone'], ['occupation', 'Occupation'],
+        ['firstName', 'First name'],
+        ['lastName', 'Last name'],
+        ['email', 'Email'],
+        ['password', 'Password'],
+        ['confirmPassword', 'Confirm password'],
+        ['relationship', 'Relationship'],
+        ['phone', 'Phone'],
+        ['occupation', 'Occupation'],
       ].map(([field, label]) => (
         <label key={field} className={labelClass}>
           {label}
           <input
-            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(field)}
+            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(
+              field,
+            )}
             type={field.toLowerCase().includes('password') ? 'password' : 'text'}
             value={formData[field] || ''}
-            onChange={(event) => onChange(field, event.target.value)}
+            onChange={event => onChange(field, event.target.value)}
             className={inputClass}
           />
         </label>
       ))}
       <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onBack} className={backBtnClass}>← Back</button>
+        <button type="button" onClick={onBack} className={backBtnClass}>
+          ← Back
+        </button>
         <button type="submit" disabled={isLoading} className={primaryBtnClass}>
           {isLoading ? 'Registering...' : 'Register'}
         </button>
@@ -115,33 +149,58 @@ function StepGuardianForm({ formData, onChange, onBack, onSubmit, isLoading, err
   );
 }
 
-function StepStudentForm({ formData, onChange, onBack, onSubmit, isLoading, error, tenantName }: any) {
+function StepStudentForm({
+  formData,
+  onChange,
+  onBack,
+  onSubmit,
+  isLoading,
+  error,
+  tenantName,
+}: any) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <h3 className="text-xl font-semibold text-gray-900">
+      <h3 className="text-xl font-semibold text-foreground">
         Student registration{tenantName ? ` — ${tenantName}` : ''}
       </h3>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {[
-        ['firstName', 'First name'], ['lastName', 'Last name'], ['email', 'Email'],
-        ['password', 'Password'], ['confirmPassword', 'Confirm password'],
-        ['grade', 'Grade'], ['section', 'Section'], ['dateOfBirth', 'Date of birth'],
-        ['parentName', 'Parent name'], ['parentPhone', 'Parent phone'],
-        ['parentEmail', 'Parent email'], ['address', 'Address'],
+        ['firstName', 'First name'],
+        ['lastName', 'Last name'],
+        ['email', 'Email'],
+        ['password', 'Password'],
+        ['confirmPassword', 'Confirm password'],
+        ['grade', 'Grade'],
+        ['section', 'Section'],
+        ['dateOfBirth', 'Date of birth'],
+        ['parentName', 'Parent name'],
+        ['parentPhone', 'Parent phone'],
+        ['parentEmail', 'Parent email'],
+        ['address', 'Address'],
       ].map(([field, label]) => (
         <label key={field} className={labelClass}>
           {label}
           <input
-            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(field)}
-            type={field.toLowerCase().includes('password') ? 'password' : field === 'dateOfBirth' ? 'date' : 'text'}
+            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(
+              field,
+            )}
+            type={
+              field.toLowerCase().includes('password')
+                ? 'password'
+                : field === 'dateOfBirth'
+                  ? 'date'
+                  : 'text'
+            }
             value={formData[field] || ''}
-            onChange={(event) => onChange(field, event.target.value)}
+            onChange={event => onChange(field, event.target.value)}
             className={inputClass}
           />
         </label>
       ))}
       <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onBack} className={backBtnClass}>← Back</button>
+        <button type="button" onClick={onBack} className={backBtnClass}>
+          ← Back
+        </button>
         <button type="submit" disabled={isLoading} className={primaryBtnClass}>
           {isLoading ? 'Registering...' : 'Register'}
         </button>
@@ -150,33 +209,56 @@ function StepStudentForm({ formData, onChange, onBack, onSubmit, isLoading, erro
   );
 }
 
-function StepTeacherForm({ formData, onChange, onBack, onSubmit, isLoading, error, tenantName }: any) {
+function StepTeacherForm({
+  formData,
+  onChange,
+  onBack,
+  onSubmit,
+  isLoading,
+  error,
+  tenantName,
+}: any) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <h3 className="text-xl font-semibold text-gray-900">
+      <h3 className="text-xl font-semibold text-foreground">
         Teacher registration{tenantName ? ` — ${tenantName}` : ''}
       </h3>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {[
-        ['firstName', 'First name'], ['lastName', 'Last name'], ['email', 'Email'],
-        ['password', 'Password'], ['confirmPassword', 'Confirm password'],
-        ['employeeId', 'Employee ID'], ['subject', 'Subject'],
-        ['qualification', 'Qualification'], ['experience', 'Experience'],
+        ['firstName', 'First name'],
+        ['lastName', 'Last name'],
+        ['email', 'Email'],
+        ['password', 'Password'],
+        ['confirmPassword', 'Confirm password'],
+        ['employeeId', 'Employee ID'],
+        ['subject', 'Subject'],
+        ['qualification', 'Qualification'],
+        ['experience', 'Experience'],
         ['joiningDate', 'Joining date'],
       ].map(([field, label]) => (
         <label key={field} className={labelClass}>
           {label}
           <input
-            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(field)}
-            type={field.toLowerCase().includes('password') ? 'password' : field === 'joiningDate' ? 'date' : 'text'}
+            required={['firstName', 'lastName', 'email', 'password', 'confirmPassword'].includes(
+              field,
+            )}
+            type={
+              field.toLowerCase().includes('password')
+                ? 'password'
+                : field === 'joiningDate'
+                  ? 'date'
+                  : 'text'
+            }
             value={formData[field] || ''}
-            onChange={(event) => onChange(field, event.target.value)}
+            onChange={event => onChange(field, event.target.value)}
             className={inputClass}
           />
         </label>
       ))}
       <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onBack} className={backBtnClass}>← Back</button>
+        <button type="button" onClick={onBack} className={backBtnClass}>
+          ← Back
+        </button>
         <button type="submit" disabled={isLoading} className={primaryBtnClass}>
           {isLoading ? 'Registering...' : 'Register'}
         </button>
@@ -190,28 +272,25 @@ export default function RegisterPage() {
   const { tenantSlug } = useParams();
   const { register } = useAuth();
 
-  // Steps: 1 = School Code, 2 = Role Selection, 3 = Registration Form
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Step 1: School Code
   const [schoolCode, setSchoolCode] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [tenantName, setTenantName] = useState('');
   const [isVerified, setIsVerified] = useState(false);
 
-  // Step 2: Role Selection
-  const [selectedRole, setSelectedRole] = useState<'student' | 'teacher' | 'guardian' | 'admin'>('student');
+  const [selectedRole, setSelectedRole] = useState<'student' | 'teacher' | 'guardian' | 'admin'>(
+    'student',
+  );
 
-  // Step 3: Registration Form Data
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
-    // Student specific
     grade: '',
     section: '',
     dateOfBirth: '',
@@ -219,45 +298,40 @@ export default function RegisterPage() {
     parentPhone: '',
     parentEmail: '',
     address: '',
-    // Teacher specific
     employeeId: '',
     subject: '',
     qualification: '',
     experience: '',
     joiningDate: '',
-    // Guardian specific
     relationship: '',
     children: [] as { name: string; grade: string; studentId: string }[],
     phone: '',
     occupation: '',
-    // Admin specific (already have school details from step 1)
   });
 
-  // Auto-detect tenant from URL
   useEffect(() => {
     async function checkTenantFromSlug() {
-      if (tenantSlug) {
-        try {
-          const response = await api.get(`/tenants/public/${tenantSlug}`);
-          const tenant = response.data.data;
-          setTenantId(tenant.id);
-          setTenantName(tenant.name);
-          setSchoolCode(tenant.schoolCode);
-          setIsVerified(true);
-          setCurrentStep(2);
-        } catch (err) {
-          // Silent fail - user can enter code manually
-        }
+      if (!tenantSlug) return;
+      try {
+        const response = await api.get(`/tenants/public/${tenantSlug}`);
+        const tenant = response.data.data;
+        setTenantId(tenant.id);
+        setTenantName(tenant.name);
+        setSchoolCode(tenant.schoolCode);
+        setIsVerified(true);
+        setCurrentStep(2);
+      } catch {
+        /* user can enter code manually */
       }
     }
     checkTenantFromSlug();
   }, [tenantSlug]);
 
-  const handleSchoolCodeChange = (code: string, tenantId?: string, tenantName?: string) => {
+  const handleSchoolCodeChange = (code: string, tId?: string, tName?: string) => {
     setSchoolCode(code);
-    if (tenantId && tenantName) {
-      setTenantId(tenantId);
-      setTenantName(tenantName);
+    if (tId && tName) {
+      setTenantId(tId);
+      setTenantName(tName);
       setIsVerified(true);
       setCurrentStep(2);
     }
@@ -273,16 +347,12 @@ export default function RegisterPage() {
   };
 
   const handleFormChange = (field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate password match
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -303,8 +373,7 @@ export default function RegisterPage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         role: selectedRole,
-        tenantId: tenantId,
-        // Additional data based on role
+        tenantId,
         ...(selectedRole === 'student' && {
           grade: formData.grade,
           section: formData.section,
@@ -332,22 +401,18 @@ export default function RegisterPage() {
       await register(registrationData);
       navigate(tenantSlug ? `/${tenantSlug}/dashboard` : '/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Registration failed. Please try again.');
+      setError(
+        err.response?.data?.error || err.message || 'Registration failed. Please try again.',
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Render step content
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return (
-          <SchoolCodeInput
-            value={schoolCode}
-            onChange={handleSchoolCodeChange}
-          />
-        );
+        return <SchoolCodeInput value={schoolCode} onChange={handleSchoolCodeChange} />;
       case 2:
         return (
           <StepRoleSelection
@@ -426,7 +491,7 @@ export default function RegisterPage() {
         : `Complete your ${selectedRole} registration`;
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex bg-background text-foreground">
       {/* Left: form panel */}
       <div className="w-full lg:w-[46%] flex flex-col px-6 sm:px-12 lg:px-16 py-10">
         <div className="flex items-center justify-between">
@@ -434,19 +499,22 @@ export default function RegisterPage() {
             <div className="w-9 h-9 bg-primary-600 rounded-lg flex items-center justify-center">
               <span className="text-lg">🏫</span>
             </div>
-            <span className="font-semibold text-gray-900 tracking-tight">
-              Acad<span className="text-primary-600">Flows</span>
+            <span className="font-semibold text-foreground tracking-tight">
+              School<span className="text-primary-600">Hub</span>
             </span>
           </Link>
-          <Link to="/" className="text-sm text-gray-400 hover:text-gray-600">
-            ← Back to home
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link to="/" className="text-sm text-muted hover:text-foreground transition-colors">
+              ← Back to home
+            </Link>
+          </div>
         </div>
 
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-md mx-auto">
-            <h1 className="text-3xl font-bold text-gray-900">Join your school</h1>
-            <p className="mt-2 text-sm text-gray-500">{stepSubtitle}</p>
+            <h1 className="text-3xl font-bold text-foreground">Join your school</h1>
+            <p className="mt-2 text-sm text-muted">{stepSubtitle}</p>
 
             {/* Progress steps */}
             <div className="mt-6 flex items-center gap-2">
@@ -457,17 +525,29 @@ export default function RegisterPage() {
                   <div key={label} className="flex items-center flex-1 last:flex-none">
                     <div className="flex items-center gap-2">
                       <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ${active ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400'
-                          }`}
+                        className={cn(
+                          'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0',
+                          active ? 'bg-primary-600 text-white' : 'bg-elevated text-muted',
+                        )}
                       >
                         {currentStep > step ? '✓' : step}
                       </div>
-                      <span className={`text-xs whitespace-nowrap ${active ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
+                      <span
+                        className={cn(
+                          'text-xs whitespace-nowrap',
+                          active ? 'text-foreground font-medium' : 'text-muted',
+                        )}
+                      >
                         {label}
                       </span>
                     </div>
                     {step < stepLabels.length && (
-                      <div className={`flex-1 h-px mx-3 ${currentStep > step ? 'bg-primary-600' : 'bg-gray-200'}`} />
+                      <div
+                        className={cn(
+                          'flex-1 h-px mx-3',
+                          currentStep > step ? 'bg-primary-600' : 'bg-border',
+                        )}
+                      />
                     )}
                   </div>
                 );
@@ -476,9 +556,12 @@ export default function RegisterPage() {
 
             <div className="mt-8">{renderStep()}</div>
 
-            <p className="mt-6 text-center text-sm text-gray-500">
+            <p className="mt-6 text-center text-sm text-muted">
               Already have an account?{' '}
-              <Link to={tenantSlug ? `/${tenantSlug}/login` : '/login'} className="font-medium text-primary-600 hover:text-primary-700">
+              <Link
+                to={tenantSlug ? `/${tenantSlug}/login` : '/login'}
+                className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              >
                 Sign in
               </Link>
             </p>
@@ -509,8 +592,8 @@ export default function RegisterPage() {
               Built for every seat in the school.
             </h2>
             <p className="mt-3 text-sm text-white/80 leading-relaxed">
-              Students, teachers, guardians, and admins each get a setup made
-              for their role, from day-one attendance to fee tracking.
+              Students, teachers, guardians, and admins each get a setup made for their role,
+              from day-one attendance to fee tracking.
             </p>
           </div>
 

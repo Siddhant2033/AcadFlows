@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../lib/api';
 import { formatCurrency, formatTimeAgo } from '../../lib/format';
-import { Card, CardTitle, Badge, Button } from '../ui';
+import { Card, CardTitle } from '../ui';
 import { cn } from '../../lib/cn';
 
 interface AdminDashboardProps {
@@ -30,7 +29,6 @@ interface Notification {
 }
 
 export default function AdminDashboard({ data, tenant, user }: AdminDashboardProps) {
-  const { isDark } = useTheme();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
@@ -39,6 +37,7 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
   useEffect(() => {
     fetchNotifications();
     fetchRecentActivities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchNotifications = async () => {
@@ -79,7 +78,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
   const markAsRead = async (id: string) => {
     try {
       await api.put(`/communication/notifications/${id}/read`);
-      setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+      setNotifications(prev =>
+        prev.map(n => (n.id === id ? { ...n, read: true } : n)),
+      );
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
@@ -94,59 +95,56 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
     }
   };
 
+  // ── Stats from API (no hardcoded fallbacks) ──
   const stats = [
     {
       label: 'Total Students',
-      value: data?.stats?.totalStudents || 0,
+      value: data?.stats?.totalStudents ?? 0,
       icon: '👨‍🎓',
       color: 'blue',
       change: '0%',
     },
     {
       label: 'Total Teachers',
-      value: data?.stats?.totalTeachers || 0,
+      value: data?.stats?.totalTeachers ?? 0,
       icon: '👨‍🏫',
       color: 'green',
       change: '0%',
     },
     {
       label: 'Attendance Today',
-      value: data?.stats?.attendance || '0%',
+      value: data?.stats?.attendance ?? '0%',
       icon: '📊',
       color: 'purple',
       change: '0%',
     },
     {
       label: 'Revenue This Month',
-      value: formatCurrency(data?.stats?.revenue || 0),
+      value: formatCurrency(data?.stats?.revenue ?? 0),
       icon: '💰',
       color: 'orange',
       change: '0%',
     },
   ];
 
-  const quickActions = data?.quickActions || [
-    { label: 'Add Student', icon: '➕', path: '/students/add' },
-    { label: 'Add Teacher', icon: '👨‍🏫', path: '/teachers/add' },
-    { label: 'Create Class', icon: '📚', path: '/academic/sections/add' },
-    { label: 'Manage Fees', icon: '💰', path: '/fees/invoices' },
-    { label: 'Generate Reports', icon: '📊', path: '/reports' },
-    { label: 'Send Announcement', icon: '📢', path: '/announcements' },
-  ];
+  // ── Quick actions come from backend; empty array if not provided ──
+  const quickActions: any[] = data?.quickActions ?? [];
 
-  const quickStats = data?.quickStats || {
+  // ── Quick stats from backend ──
+  const quickStats = data?.quickStats ?? {
     totalRevenue: formatCurrency(0),
     pendingInvoices: 0,
     newMessages: 0,
     leaveRequests: 0,
   };
 
-  // Icon bubble colors (static — no theme branching)
   const bubbleColors: Record<string, string> = {
     blue: 'bg-blue-50 dark:bg-blue-900/20',
     green: 'bg-green-50 dark:bg-green-900/20',
     purple: 'bg-purple-50 dark:bg-purple-900/20',
     orange: 'bg-orange-50 dark:bg-orange-900/20',
+    red: 'bg-red-50 dark:bg-red-900/20',
+    teal: 'bg-teal-50 dark:bg-teal-900/20',
   };
 
   return (
@@ -203,7 +201,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted">No notifications</div>
+                      <div className="p-4 text-center text-sm text-muted">
+                        No notifications
+                      </div>
                     ) : (
                       notifications.map(n => (
                         <button
@@ -211,9 +211,8 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                           type="button"
                           onClick={() => markAsRead(n.id)}
                           className={cn(
-                            'w-full text-left p-3 border-b border-border transition-colors',
+                            'w-full text-left p-3 border-b border-border transition-colors hover:bg-elevated',
                             !n.read && 'bg-blue-50 dark:bg-blue-900/10',
-                            'hover:bg-elevated',
                           )}
                         >
                           <div className="flex items-start gap-3">
@@ -230,7 +229,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                                 {formatTimeAgo(n.createdAt)}
                               </p>
                             </div>
-                            {!n.read && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
+                            {!n.read && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                            )}
                           </div>
                         </button>
                       ))
@@ -255,7 +256,7 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
       {/* ─── Stats Grid ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(stat => (
-          <Card key={stat.label} padding="default">
+          <Card key={stat.label}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div
@@ -282,23 +283,25 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
         {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Quick Actions */}
-          <Card>
-            <CardTitle className="mb-4">Quick Actions</CardTitle>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {quickActions.map((action: any) => (
-                <Link
-                  key={action.label}
-                  to={action.path}
-                  className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-border transition-all hover:border-primary-300 hover:bg-primary-50 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/10"
-                >
-                  <span className="text-2xl mb-1">{action.icon}</span>
-                  <span className="text-sm font-medium text-center text-foreground">
-                    {action.label}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </Card>
+          {quickActions.length > 0 && (
+            <Card>
+              <CardTitle className="mb-4">Quick Actions</CardTitle>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {quickActions.map((action: any) => (
+                  <Link
+                    key={action.label}
+                    to={action.path}
+                    className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-border transition-all hover:border-primary-300 hover:bg-primary-50 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/10"
+                  >
+                    <span className="text-2xl mb-1">{action.icon}</span>
+                    <span className="text-sm font-medium text-center text-foreground">
+                      {action.label}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Recent Activity */}
           <Card>
