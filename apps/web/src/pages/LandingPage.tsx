@@ -493,7 +493,7 @@ export default function LandingPage() {
                 <section id="features" className="bg-[#f7f9fc] px-5 py-20 sm:px-7 lg:px-8 lg:py-28 dark:bg-slate-950">
                     <div className="mx-auto w-full">
                         <div className="max-w-2xl">
-                            <p className="text-[13px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">Everything in one place</p>
+                            {/* <p className="text-[13px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">Everything in one place</p> */}
                             <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] sm:text-5xl">
                                 Everything, in one place.
                             </h2>
