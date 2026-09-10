@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
 import { Card, Button, Input, Label, Textarea, Select, PhoneInput } from '../components/ui';
-import ThemeToggle from '../components/ThemeToggle';
+import { DashboardLayout, PageHeader } from '../components/layout';
 import { formatDate, getInitials } from '../lib/format';
 
 interface UserProfile {
@@ -25,7 +24,6 @@ interface UserProfile {
 }
 
 export default function ProfilePage() {
-  const navigate = useNavigate();
   const { logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,7 +88,10 @@ export default function ProfilePage() {
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       setIsEditing(false);
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to update profile' });
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.error || 'Failed to update profile',
+      });
     } finally {
       setIsSaving(false);
     }
@@ -118,7 +119,10 @@ export default function ProfilePage() {
       setShowPasswordModal(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to change password' });
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.error || 'Failed to change password',
+      });
     } finally {
       setIsChangingPassword(false);
     }
@@ -138,7 +142,10 @@ export default function ProfilePage() {
       );
       setMessage({ type: 'success', text: 'Profile picture updated!' });
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to upload picture' });
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.error || 'Failed to upload picture',
+      });
     }
   };
 
@@ -148,169 +155,161 @@ export default function ProfilePage() {
       setProfile(prev => (prev ? { ...prev, profilePicture: '' } : null));
       setMessage({ type: 'success', text: 'Profile picture removed!' });
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to remove picture' });
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.error || 'Failed to remove picture',
+      });
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-border border-t-primary-500" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 border-b border-border bg-surface/95 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-4">
-              <Link to="/dashboard" className="flex items-center gap-2">
-                <span className="text-2xl">🏫</span>
-                <h1 className="text-xl font-bold text-foreground">AcadFlows</h1>
-              </Link>
-              <span className="text-sm px-3 py-1 rounded-full bg-elevated text-muted">
-                Profile
-              </span>
-            </div>
-            <div className="flex items-center gap-4">
-              <ThemeToggle />
+    <DashboardLayout>
+      <PageHeader
+        title="Profile"
+        description="Manage your personal information and account settings"
+        breadcrumb={[{ label: 'Dashboard', path: '/dashboard' }, { label: 'Profile' }]}
+      />
+
+      {/* Messages */}
+      {message && (
+        <div
+          className={`mb-4 p-4 rounded-lg border animate-fade-down ${
+            message.type === 'success'
+              ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+              : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+          }`}
+        >
+          {message.text}
+          <button
+            type="button"
+            onClick={() => setMessage(null)}
+            className="float-right text-sm hover:opacity-70"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Two-column grid: profile card + details */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: profile summary */}
+        <div className="lg:col-span-1">
+          <Card className="text-center">
+            {/* Profile Picture */}
+            <div className="relative inline-block">
+              <div className="w-28 h-28 mx-auto rounded-full overflow-hidden flex items-center justify-center bg-primary-500/10 dark:bg-primary-500/20 shadow-sm">
+                {profile?.profilePicture ? (
+                  <img
+                    src={profile.profilePicture}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-4xl font-bold text-primary-600 dark:text-primary-400">
+                    {getInitials(profile?.firstName, profile?.lastName)}
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
-                onClick={() => navigate('/dashboard')}
-                className="text-sm text-muted hover:text-foreground transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute bottom-0 right-0 p-2 rounded-full bg-primary-500 text-white hover:bg-primary-600 transition-colors shadow-md"
+                aria-label="Upload profile picture"
               >
-                ← Back to Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {message && (
-          <div
-            className={`mb-4 p-4 rounded-lg border ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
-                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
-            }`}
-          >
-            {message.text}
-            <button
-              type="button"
-              onClick={() => setMessage(null)}
-              className="float-right text-sm hover:opacity-70"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        <Card padding="none">
-          {/* Profile Header */}
-          <div className="p-6 border-b border-border">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                {/* Profile Picture */}
-                <div className="relative">
-                  <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center bg-primary-100 dark:bg-primary-900/30">
-                    {profile?.profilePicture ? (
-                      <img
-                        src={profile.profilePicture}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-3xl font-bold text-primary-600 dark:text-primary-400">
-                        {getInitials(profile?.firstName, profile?.lastName)}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute bottom-0 right-0 p-1 rounded-full bg-primary-600 text-white hover:bg-primary-700 transition-colors"
-                    aria-label="Upload profile picture"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleProfilePictureUpload}
-                    className="hidden"
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
                   />
-                  {profile?.profilePicture && (
-                    <button
-                      type="button"
-                      onClick={handleRemoveProfilePicture}
-                      className="absolute top-0 right-0 p-0.5 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors"
-                      aria-label="Remove profile picture"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground">
-                    {profile?.firstName} {profile?.lastName}
-                  </h2>
-                  <p className="text-sm text-muted">
-                    {profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : ''}
-                    {profile?.emailVerified ? ' ✅' : ' ⚠️ Not verified'}
-                  </p>
-                  <p className="text-sm text-muted">{profile?.email}</p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {!isEditing ? (
-                  <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
-                ) : (
-                  <Button variant="secondary" onClick={() => setIsEditing(false)}>
-                    Cancel
-                  </Button>
-                )}
-                <Button variant="secondary" onClick={() => setShowPasswordModal(true)}>
-                  Change Password
-                </Button>
-                <Button variant="danger" onClick={logout}>
-                  Logout
-                </Button>
-              </div>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleProfilePictureUpload}
+                className="hidden"
+              />
+              {profile?.profilePicture && (
+                <button
+                  type="button"
+                  onClick={handleRemoveProfilePicture}
+                  className="absolute top-0 right-0 p-1 rounded-full bg-danger text-white hover:bg-red-700 transition-colors shadow-md"
+                  aria-label="Remove profile picture"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
-          </div>
 
-          {/* Content */}
-          <div className="p-6">
+            <h2 className="mt-4 text-xl font-bold text-foreground">
+              {profile?.firstName} {profile?.lastName}
+            </h2>
+            <p className="text-sm text-muted mt-1">{profile?.email}</p>
+            <div className="mt-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 capitalize">
+                {profile?.role}
+              </span>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-border flex flex-col gap-2">
+              {!isEditing ? (
+                <Button variant="primary" fullWidth onClick={() => setIsEditing(true)}>
+                  Edit Profile
+                </Button>
+              ) : (
+                <Button variant="outline" fullWidth onClick={() => setIsEditing(false)}>
+                  Cancel Editing
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => setShowPasswordModal(true)}
+              >
+                Change Password
+              </Button>
+              <Button variant="ghost" fullWidth onClick={logout} className="text-danger hover:bg-danger/10">
+                Logout
+              </Button>
+            </div>
+          </Card>
+        </div>
+
+        {/* Right: details or edit form */}
+        <div className="lg:col-span-2">
+          <Card>
             {isEditing ? (
               <form onSubmit={handleProfileUpdate} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-lg font-semibold text-foreground">Edit Profile</h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label required>First Name</Label>
                     <Input
@@ -337,13 +336,15 @@ export default function ProfilePage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Date of Birth</Label>
                     <Input
                       type="date"
                       value={editData.dateOfBirth}
-                      onChange={e => setEditData({ ...editData, dateOfBirth: e.target.value })}
+                      onChange={e =>
+                        setEditData({ ...editData, dateOfBirth: e.target.value })
+                      }
                     />
                   </div>
                   <div>
@@ -382,7 +383,11 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                  <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsEditing(false)}
+                  >
                     Cancel
                   </Button>
                   <Button type="submit" loading={isSaving}>
@@ -391,81 +396,101 @@ export default function ProfilePage() {
                 </div>
               </form>
             ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-5">
+                <h3 className="text-lg font-semibold text-foreground">Account Details</h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <Label>Full Name</Label>
-                    <p className="text-foreground">
+                    <p className="text-xs uppercase tracking-wider text-muted mb-1">
+                      Full Name
+                    </p>
+                    <p className="text-sm text-foreground font-medium">
                       {profile?.firstName} {profile?.lastName}
                     </p>
                   </div>
                   <div>
-                    <Label>Email</Label>
-                    <p className="text-foreground">{profile?.email}</p>
+                    <p className="text-xs uppercase tracking-wider text-muted mb-1">Email</p>
+                    <p className="text-sm text-foreground font-medium">{profile?.email}</p>
+                  </div>
+
+                  {profile?.phone && (
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-muted mb-1">
+                        Phone
+                      </p>
+                      <p className="text-sm text-foreground font-medium">
+                        +91 {profile.phone}
+                      </p>
+                    </div>
+                  )}
+
+                  {profile?.dateOfBirth && (
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-muted mb-1">
+                        Date of Birth
+                      </p>
+                      <p className="text-sm text-foreground font-medium">
+                        {formatDate(profile.dateOfBirth)}
+                      </p>
+                    </div>
+                  )}
+
+                  {profile?.gender && (
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-muted mb-1">
+                        Gender
+                      </p>
+                      <p className="text-sm text-foreground font-medium capitalize">
+                        {profile.gender}
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-muted mb-1">
+                      Status
+                    </p>
+                    <p className="text-sm font-medium text-success">
+                      {profile?.status || 'Active'}
+                    </p>
                   </div>
                 </div>
 
-                {profile?.phone && (
-                  <div>
-                    <Label>Phone</Label>
-                    <p className="text-foreground">+91 {profile.phone}</p>
-                  </div>
-                )}
-
-                {(profile?.dateOfBirth || profile?.gender) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {profile?.dateOfBirth && (
-                      <div>
-                        <Label>Date of Birth</Label>
-                        <p className="text-foreground">{formatDate(profile.dateOfBirth)}</p>
-                      </div>
-                    )}
-                    {profile?.gender && (
-                      <div>
-                        <Label>Gender</Label>
-                        <p className="text-foreground">
-                          {profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {profile?.address && (
-                  <div>
-                    <Label>Address</Label>
-                    <p className="text-foreground">{profile.address}</p>
+                  <div className="pt-5 border-t border-border">
+                    <p className="text-xs uppercase tracking-wider text-muted mb-1">
+                      Address
+                    </p>
+                    <p className="text-sm text-foreground">{profile.address}</p>
                   </div>
                 )}
 
                 {profile?.bio && (
-                  <div>
-                    <Label>Bio</Label>
-                    <p className="text-foreground">{profile.bio}</p>
+                  <div className="pt-5 border-t border-border">
+                    <p className="text-xs uppercase tracking-wider text-muted mb-1">Bio</p>
+                    <p className="text-sm text-foreground">{profile.bio}</p>
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-border">
-                  <p className="text-sm text-muted">
-                    Member since: {profile?.createdAt ? formatDate(profile.createdAt) : '—'}
-                  </p>
-                  <p className="text-sm text-muted">
-                    Status:{' '}
-                    <span className="text-green-600 dark:text-green-400 font-medium">
-                      {profile?.status}
-                    </span>
-                  </p>
+                <div className="pt-5 border-t border-border flex flex-wrap gap-4 text-xs text-muted">
+                  <span>
+                    Member since:{' '}
+                    {profile?.createdAt ? formatDate(profile.createdAt) : '—'}
+                  </span>
+                  <span>
+                    Email verified: {profile?.emailVerified ? '✅ Yes' : '⚠️ No'}
+                  </span>
                 </div>
               </div>
             )}
-          </div>
-        </Card>
-      </main>
+          </Card>
+        </div>
+      </div>
 
       {/* Password Modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card padding="default" className="max-w-md w-full">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <Card padding="lg" className="max-w-md w-full animate-scale-in">
             <h3 className="text-xl font-bold text-foreground mb-4">Change Password</h3>
             <form onSubmit={handlePasswordChange} className="space-y-4">
               <div>
@@ -505,7 +530,7 @@ export default function ProfilePage() {
               <div className="flex justify-end gap-3 pt-4">
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   onClick={() => {
                     setShowPasswordModal(false);
                     setPasswordData({
@@ -525,6 +550,6 @@ export default function ProfilePage() {
           </Card>
         </div>
       )}
-    </div>
+    </DashboardLayout>
   );
 }

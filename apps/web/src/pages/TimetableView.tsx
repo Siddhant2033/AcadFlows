@@ -1,68 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import api from '../lib/api';
+import { Card, Button, Badge } from '../components/ui';
+import { DashboardLayout, PageHeader } from '../components/layout';
+import { formatDate } from '../lib/format';
+import { cn } from '../lib/cn';
 
 interface TimetableEntry {
   _id: string;
   dayOfWeek: string;
   startTime: string;
   endTime: string;
-  subjectId: {
-    _id: string;
-    name: string;
-    code: string;
-  };
-  teacherId: {
-    _id: string;
-    firstName: string;
-    lastName: string;
-  };
-  sectionId: {
-    _id: string;
-    name: string;
-  };
-  gradeId: {
-    _id: string;
-    name: string;
-  };
+  subjectId?: { _id: string; name: string; code: string };
+  teacherId?: { _id: string; firstName: string; lastName: string };
+  sectionId?: { _id: string; name: string };
+  gradeId?: { _id: string; name: string };
   roomNumber?: string;
   isBreak: boolean;
   breakType?: string;
-  notes?: string;
 }
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAY_LABELS: Record<string, string> = {
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+  sunday: 'Sunday',
+};
 
 export default function TimetableViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { theme } = useTheme();
   const [timetable, setTimetable] = useState<any>(null);
   const [entries, setEntries] = useState<Record<string, TimetableEntry[]>>({});
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<'week' | 'day'>('week');
-  const [selectedDay, setSelectedDay] = useState<string>('monday');
-  const [timeSlots, setTimeSlots] = useState<any[]>([]);
+  const [selectedDay, setSelectedDay] = useState('monday');
 
   useEffect(() => {
     fetchTimetable();
-    fetchTimeSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchTimetable = async () => {
     setLoading(true);
     try {
       const response = await api.get(`/timetable/${id}`);
-      setTimetable(response.data.data);
-      
-      // Group entries by day
+      const data = response.data.data;
+      setTimetable(data);
+
       const grouped: Record<string, TimetableEntry[]> = {};
       DAYS.forEach(day => {
-        grouped[day] = response.data.data.entries?.filter(
-          (e: TimetableEntry) => e.dayOfWeek === day
-        ) || [];
+        grouped[day] = (data.entries || []).filter(
+          (e: TimetableEntry) => e.dayOfWeek === day,
+        );
       });
       setEntries(grouped);
     } catch (error) {
@@ -70,19 +64,6 @@ export default function TimetableViewPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchTimeSlots = async () => {
-    try {
-      const response = await api.get('/timetable/time-slots');
-      setTimeSlots(response.data.data);
-    } catch (error) {
-      console.error('Failed to fetch time slots:', error);
-    }
-  };
-
-  const getDayEntries = (day: string) => {
-    return entries[day] || [];
   };
 
   const getBreakLabel = (type?: string) => {
@@ -94,280 +75,242 @@ export default function TimetableViewPage() {
     return labels[type || ''] || 'Break';
   };
 
-  const getDayLabel = (day: string) => {
-    const labels: Record<string, string> = {
-      monday: 'Monday',
-      tuesday: 'Tuesday',
-      wednesday: 'Wednesday',
-      thursday: 'Thursday',
-      friday: 'Friday',
-      saturday: 'Saturday',
-      sunday: 'Sunday',
-    };
-    return labels[day] || day;
-  };
-
-  const renderWeekView = () => {
-    return (
-      <div className="overflow-x-auto">
-        <div className="min-w-[800px]">
-          <div className="grid grid-cols-8 gap-1">
-            {/* Header */}
-            <div className={`p-3 font-semibold text-center transition-colors duration-200 ${
-              theme ? 'bg-gray-50 text-gray-700' : 'dark:bg-[#0F172A] dark:text-[#94A3B8]'
-            }`}>
-              Time
+  const renderWeekView = () => (
+    <div className="overflow-x-auto">
+      <div className="min-w-[900px]">
+        <div className="grid grid-cols-8 gap-2">
+          <div className="bg-elevated rounded-lg p-3 font-semibold text-xs uppercase tracking-wider text-muted text-center">
+            Day
+          </div>
+          {DAYS.slice(0, 6).map(day => (
+            <div
+              key={day}
+              className="bg-elevated rounded-lg p-3 font-semibold text-xs uppercase tracking-wider text-foreground text-center"
+            >
+              {DAY_LABELS[day]}
             </div>
-            {DAYS.map((day) => (
-              <div key={day} className={`p-3 font-semibold text-center transition-colors duration-200 ${
-                theme ? 'bg-gray-50 text-gray-700' : 'dark:bg-[#0F172A] dark:text-[#94A3B8]'
-              }`}>
-                {getDayLabel(day)}
-              </div>
-            ))}
+          ))}
+        </div>
 
-            {/* Time slots */}
-            {timeSlots.map((slot, index) => (
-              <React.Fragment key={index}>
-                <div className={`p-2 text-sm text-center border-r transition-colors duration-200 ${
-                  theme ? 'border-gray-200 text-gray-500' : 'dark:border-[#334155] dark:text-[#94A3B8]'
-                }`}>
-                  {slot.startTime} - {slot.endTime}
+        {/* Entries organized by time slot */}
+        <div className="mt-2 space-y-2">
+          {(() => {
+            // Collect all unique time slots from all days
+            const allSlots = new Set<string>();
+            DAYS.forEach(day => {
+              (entries[day] || []).forEach(e => {
+                allSlots.add(`${e.startTime}–${e.endTime}`);
+              });
+            });
+            const sortedSlots = Array.from(allSlots).sort();
+
+            if (sortedSlots.length === 0) {
+              return (
+                <div className="text-center py-12 text-muted text-sm">
+                  No entries in this timetable yet
                 </div>
-                {DAYS.map((day) => {
-                  const dayEntries = getDayEntries(day);
-                  const entry = dayEntries.find(e => 
-                    e.startTime === slot.startTime || 
-                    (e.startTime <= slot.startTime && e.endTime > slot.startTime)
-                  );
+              );
+            }
 
-                  return (
-                    <div key={`${day}-${index}`} className={`p-2 min-h-[60px] border-r border-b transition-colors duration-200 ${
-                      theme ? 'border-gray-200' : 'dark:border-[#334155]'
-                    }`}>
-                      {entry ? (
-                        <div className={`p-2 rounded-lg text-xs ${
-                          entry.isBreak
-                            ? theme ? 'bg-gray-100 text-gray-600' : 'dark:bg-[#0F172A] dark:text-[#94A3B8]'
-                            : 'bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300'
-                        }`}>
-                          {entry.isBreak ? (
-                            <div className="text-center font-medium">
-                              {getBreakLabel(entry.breakType)}
+            return sortedSlots.map(slot => {
+              const [start, end] = slot.split('–');
+              return (
+                <div key={slot} className="grid grid-cols-8 gap-2">
+                  <div className="bg-surface border border-border rounded-lg p-3 text-center">
+                    <p className="text-xs font-mono text-foreground">
+                      {start}
+                    </p>
+                    <p className="text-[10px] text-muted">{end}</p>
+                  </div>
+                  {DAYS.slice(0, 6).map(day => {
+                    const entry = (entries[day] || []).find(
+                      e => e.startTime === start && e.endTime === end,
+                    );
+                    return (
+                      <div
+                        key={`${day}-${slot}`}
+                        className="min-h-[70px] bg-surface border border-border rounded-lg p-2"
+                      >
+                        {entry ? (
+                          entry.isBreak ? (
+                            <div className="flex flex-col items-center justify-center h-full text-muted">
+                              <span className="text-lg">☕</span>
+                              <span className="text-[10px] mt-1">
+                                {getBreakLabel(entry.breakType)}
+                              </span>
                             </div>
                           ) : (
-                            <div>
-                              <div className="font-medium">{entry.subjectId?.name}</div>
-                              <div className="text-xs opacity-75">
-                                {entry.teacherId?.firstName} {entry.teacherId?.lastName}
-                              </div>
+                            <div className="flex flex-col h-full">
+                              <p className="text-xs font-semibold text-foreground truncate">
+                                {entry.subjectId?.name || 'Subject'}
+                              </p>
+                              <p className="text-[10px] text-muted truncate mt-0.5">
+                                {entry.teacherId
+                                  ? `${entry.teacherId.firstName} ${entry.teacherId.lastName}`
+                                  : ''}
+                              </p>
                               {entry.roomNumber && (
-                                <div className="text-xs opacity-75">Room: {entry.roomNumber}</div>
+                                <p className="text-[10px] text-muted mt-auto">
+                                  Room {entry.roomNumber}
+                                </p>
                               )}
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="h-full min-h-[40px]" />
-                      )}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
+                          )
+                        ) : (
+                          <div className="h-full" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
   const renderDayView = () => {
-    const dayEntries = getDayEntries(selectedDay);
+    const dayEntries = (entries[selectedDay] || []).sort((a, b) =>
+      a.startTime.localeCompare(b.startTime),
+    );
 
     return (
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            {getDayLabel(selectedDay)}
-          </h3>
-          <div className="flex gap-2">
-            {DAYS.map((day) => (
-              <button
-                key={day}
-                onClick={() => setSelectedDay(day)}
-                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                  selectedDay === day
-                    ? 'bg-primary-600 text-white'
-                    : theme
-                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    : 'dark:bg-[#334155] dark:text-[#94A3B8] dark:hover:bg-[#475569]'
-                }`}
-              >
-                {getDayLabel(day).slice(0, 3)}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-2 mb-6">
+          {DAYS.slice(0, 6).map(day => (
+            <button
+              key={day}
+              type="button"
+              onClick={() => setSelectedDay(day)}
+              className={cn(
+                'px-4 py-2 text-sm rounded-lg font-medium transition-all duration-200',
+                selectedDay === day
+                  ? 'bg-primary-500 text-white shadow-sm'
+                  : 'bg-elevated text-muted hover:bg-surface-tint hover:text-foreground',
+              )}
+            >
+              {DAY_LABELS[day]}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-2">
-          {dayEntries.length === 0 ? (
-            <div className={`p-8 text-center rounded-lg transition-colors duration-200 ${
-              theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-            }`}>
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>
-                No classes scheduled for this day
-              </p>
-            </div>
-          ) : (
-            dayEntries.sort((a, b) => a.startTime.localeCompare(b.startTime)).map((entry) => (
-              <div
+        {dayEntries.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-5xl mb-3">📅</p>
+            <p className="text-sm text-muted">No classes scheduled for this day</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {dayEntries.map(entry => (
+              <Card
                 key={entry._id}
-                className={`p-4 rounded-lg flex items-center justify-between transition-colors duration-200 ${
-                  entry.isBreak
-                    ? theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-                    : theme ? 'bg-primary-50' : 'dark:bg-primary-900/10'
-                }`}
+                className={cn(
+                  entry.isBreak ? 'bg-surface-tint' : 'bg-surface',
+                  'flex items-center gap-4',
+                )}
               >
-                <div className="flex items-center gap-4">
-                  <div className={`text-sm font-medium min-w-[80px] transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    {entry.startTime} - {entry.endTime}
-                  </div>
-                  {entry.isBreak ? (
-                    <div className={`font-medium transition-colors duration-200 ${
-                      theme ? 'text-gray-600' : 'dark:text-[#94A3B8]'
-                    }`}>
+                <div className="text-center flex-shrink-0 w-20">
+                  <p className="text-sm font-mono font-medium text-foreground">
+                    {entry.startTime}
+                  </p>
+                  <p className="text-xs text-muted">{entry.endTime}</p>
+                </div>
+
+                {entry.isBreak ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">☕</span>
+                    <span className="font-medium text-foreground">
                       {getBreakLabel(entry.breakType)}
-                    </div>
-                  ) : (
-                    <div>
-                      <div className={`font-medium transition-colors duration-200 ${
-                        theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                      }`}>
-                        {entry.subjectId?.name}
-                      </div>
-                      <div className={`text-sm transition-colors duration-200 ${
-                        theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                      }`}>
-                        {entry.teacherId?.firstName} {entry.teacherId?.lastName}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="text-sm">
-                  {entry.roomNumber && (
-                    <span className={`transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Room {entry.roomNumber}
                     </span>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground">
+                      {entry.subjectId?.name}
+                    </p>
+                    <p className="text-sm text-muted">
+                      {entry.teacherId
+                        ? `${entry.teacherId.firstName} ${entry.teacherId.lastName}`
+                        : ''}
+                    </p>
+                  </div>
+                )}
+
+                {entry.roomNumber && (
+                  <Badge variant="default">Room {entry.roomNumber}</Badge>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-border border-t-primary-500" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!timetable) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 dark:text-[#94A3B8]">Timetable not found</p>
-        <button
-          onClick={() => navigate('/timetable')}
-          className="mt-4 text-primary-600 hover:text-primary-700"
-        >
-          Back to Timetables
-        </button>
-      </div>
+      <DashboardLayout>
+        <Card className="max-w-2xl mx-auto text-center py-12">
+          <p className="text-5xl mb-3">🔍</p>
+          <p className="text-muted">Timetable not found</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => navigate('/timetable')}
+          >
+            Back to Timetables
+          </Button>
+        </Card>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-      theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-    }`}>
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            {timetable.name}
-          </h2>
-          {timetable.description && (
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              {timetable.description}
-            </p>
-          )}
-          <div className="flex gap-4 mt-2 text-sm">
-            <span className={`transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              Type: {timetable.type.toUpperCase()}
-            </span>
-            <span className={`transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              {new Date(timetable.startDate).toLocaleDateString()} - {new Date(timetable.endDate).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setViewType('week')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              viewType === 'week'
-                ? 'bg-primary-600 text-white'
-                : theme
-                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'dark:bg-[#334155] dark:text-[#94A3B8] dark:hover:bg-[#475569]'
-            }`}
-          >
-            Week View
-          </button>
-          <button
-            onClick={() => setViewType('day')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              viewType === 'day'
-                ? 'bg-primary-600 text-white'
-                : theme
-                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'dark:bg-[#334155] dark:text-[#94A3B8] dark:hover:bg-[#475569]'
-            }`}
-          >
-            Day View
-          </button>
-          <button
-            onClick={() => navigate('/timetable')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              theme ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'dark:bg-[#334155] dark:text-[#F1F5F9] dark:hover:bg-[#475569]'
-            }`}
-          >
-            Back
-          </button>
-        </div>
-      </div>
+    <DashboardLayout>
+      <PageHeader
+        title={timetable.name}
+        description={`${timetable.type.toUpperCase()} · ${formatDate(timetable.startDate)} — ${formatDate(timetable.endDate)}`}
+        breadcrumb={[
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Timetables', path: '/timetable' },
+          { label: timetable.name },
+        ]}
+        actions={
+          <>
+            <Button
+              variant={viewType === 'week' ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setViewType('week')}
+            >
+              Week View
+            </Button>
+            <Button
+              variant={viewType === 'day' ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setViewType('day')}
+            >
+              Day View
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/timetable')}>
+              Back
+            </Button>
+          </>
+        }
+      />
 
-      {/* Timetable Content */}
-      {viewType === 'week' ? renderWeekView() : renderDayView()}
-    </div>
+      <Card>{viewType === 'week' ? renderWeekView() : renderDayView()}</Card>
+    </DashboardLayout>
   );
 }

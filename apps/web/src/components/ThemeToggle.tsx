@@ -1,6 +1,12 @@
 import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { cn } from '../lib/cn';
 
+/**
+ * Themed toggle switch.
+ * Light mode: cream background, primary-colored knob
+ * Dark mode: warm brown background, amber-colored knob
+ */
 export default function ThemeToggle() {
   const { isDark, toggleTheme } = useTheme();
 
@@ -8,16 +14,29 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-      style={{ backgroundColor: isDark ? '#334155' : '#CBD5E1' }}
+      className={cn(
+        'relative w-14 h-7 rounded-full',
+        'transition-colors duration-200',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        isDark ? 'bg-secondary-500/30' : 'bg-primary-500/15',
+      )}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       <div
-        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform duration-200 flex items-center justify-center text-xs ${
-          isDark ? 'translate-x-6 bg-primary-500' : 'translate-x-0 bg-white'
-        }`}
+        className={cn(
+          'absolute top-0.5 left-0.5 w-6 h-6 rounded-full',
+          'flex items-center justify-center text-xs',
+          'transition-transform duration-200 ease-out',
+          'shadow-sm',
+          isDark
+            ? 'translate-x-7 bg-secondary-500'
+            : 'translate-x-0 bg-primary-500',
+        )}
       >
-        {isDark ? <span className="text-white">🌙</span> : <span className="text-gray-700">☀️</span>}
+        <span className="text-white" aria-hidden="true">
+          {isDark ? '🌙' : '☀️'}
+        </span>
       </div>
     </button>
   );

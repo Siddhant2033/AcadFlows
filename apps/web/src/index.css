@@ -5,29 +5,34 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────
-   THEME VARIABLES
-   Light is the default; .dark on <html> overrides them.
-   Values are space-separated RGB (e.g. "248 250 252" = #F8FAFC)
-   so Tailwind can apply opacity: bg-surface/50 works.
+   AcadFlows Theme Variables
+   ─────────────────────────────────────────────────────────────
+   Light: warm cream backgrounds, dark warm text
+   Dark:  deep warm brown-black backgrounds, soft cream text
+   All values are space-separated RGB so Tailwind opacity works.
    ───────────────────────────────────────────────────────────── */
+
 :root {
-  --bg:       248 250 252;   /* #F8FAFC  page background */
-  --surface:  255 255 255;   /* #FFFFFF  cards, modals */
-  --elevated: 241 245 249;   /* #F1F5F9  hover, secondary bg */
-  --muted:    148 163 184;   /* #94A3B8  subtle text, icons */
-  --fg:        15  23  42;   /* #0F172A  primary text */
-  --border:   226 232 240;   /* #E2E8F0  dividers, inputs */
-  --ring:     249 115  22;   /* #F97316  primary focus ring */
+  /* Light mode (default) */
+  --bg: 250 247 244;              /* #FAF7F4 — warm off-white */
+  --surface: 255 255 255;         /* #FFFFFF */
+  --surface-tint: 255 241 209;    /* #FFF1D1 — cream */
+  --elevated: 249 244 238;        /* #F9F4EE */
+  --muted: 120 113 108;           /* #78716C */
+  --fg: 30 20 15;                 /* #1E140F */
+  --border: 232 224 214;          /* #E8E0D6 */
+  --ring: 223 48 28;              /* #DF301C — primary */
 }
 
 .dark {
-  --bg:        11  15  23;   /* #0B0F17 */
-  --surface:   30  41  59;   /* #1E293B */
-  --elevated:  15  23  42;   /* #0F172A */
-  --muted:    148 163 184;   /* #94A3B8 */
-  --fg:       241 245 249;   /* #F1F5F9 */
-  --border:    51  65  85;   /* #334155 */
-  --ring:     249 115  22;   /* #F97316 */
+  --bg: 15 11 9;                  /* #0F0B09 */
+  --surface: 26 20 17;            /* #1A1411 */
+  --surface-tint: 40 28 20;       /* #281C14 — warm dark */
+  --elevated: 21 16 13;           /* #15100D */
+  --muted: 161 152 145;           /* #A19891 */
+  --fg: 250 244 240;              /* #FAF4F0 */
+  --border: 58 44 36;             /* #3A2C24 */
+  --ring: 255 145 0;              /* #FF9100 — brighter in dark */
 }
 
 @layer base {
@@ -39,6 +44,8 @@
 
   html {
     scroll-behavior: smooth;
+    /* Full-width by default */
+    width: 100%;
   }
 
   body {
@@ -47,45 +54,127 @@
     color: rgb(var(--fg));
     transition: background-color 0.2s ease, color 0.2s ease;
     -webkit-font-smoothing: antialiased;
+    /* Full-width */
+    width: 100%;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100vh;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: -0.015em;
+  }
+
+  /* Selection color — brand-tinted */
+  ::selection {
+    background-color: rgb(223 48 28 / 0.2);
+    color: rgb(var(--fg));
+  }
+
+  /* Focus rings — accessible + brand-colored */
+  :focus-visible {
+    outline: 2px solid rgb(var(--ring));
+    outline-offset: 2px;
   }
 
   /* Scrollbar */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
   ::-webkit-scrollbar-track {
     background: rgb(var(--elevated));
-    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb {
-    background: #F97316;
-    border-radius: 4px;
+    background: rgb(var(--border));
+    border-radius: 5px;
+    transition: background 0.2s;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #EA580C;
+    background: rgb(223 48 28 / 0.5);
   }
 }
 
 @layer utilities {
+  /* Micro-animations used site-wide */
   .animate-fade-in {
-    animation: fade-in 0.6s ease-out forwards;
+    animation: fade-in 0.25s ease-out;
   }
-  .animate-slide-up {
-    animation: slide-up 0.5s ease-out forwards;
+  .animate-fade-up {
+    animation: fade-up 0.3s ease-out;
+  }
+  .animate-fade-down {
+    animation: fade-down 0.3s ease-out;
+  }
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out;
+  }
+  .animate-pulse-soft {
+    animation: pulse-soft 2s ease-in-out infinite;
+  }
+
+  /* Staggered list animations */
+  .stagger-1 { animation-delay: 0.03s; }
+  .stagger-2 { animation-delay: 0.06s; }
+  .stagger-3 { animation-delay: 0.09s; }
+  .stagger-4 { animation-delay: 0.12s; }
+  .stagger-5 { animation-delay: 0.15s; }
+  .stagger-6 { animation-delay: 0.18s; }
+
+  /* Full-width helpers */
+  .full-width {
+    width: 100vw;
+    max-width: 100%;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
   }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(40px); }
+@keyframes fade-down {
+  from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

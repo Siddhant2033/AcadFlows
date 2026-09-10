@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import { Card, Button, Input, Select, Badge } from '../../components/ui';
+import { DashboardLayout, PageHeader } from '../../components/layout';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { cn } from '../../lib/cn';
 
 interface Invoice {
   _id: string;
@@ -22,10 +24,7 @@ interface Invoice {
   createdAt: string;
 }
 
-const statusVariant: Record<
-  string,
-  'default' | 'info' | 'success' | 'warning' | 'danger'
-> = {
+const statusVariant: Record<string, 'default' | 'info' | 'success' | 'warning' | 'danger'> = {
   draft: 'default',
   sent: 'info',
   paid: 'success',
@@ -72,34 +71,72 @@ export default function InvoicesPage() {
     }
   };
 
+  // Aggregate stats
+  const stats = {
+    total: invoices.reduce((sum, i) => sum + i.total, 0),
+    paid: invoices.reduce((sum, i) => sum + i.paidAmount, 0),
+    due: invoices.reduce((sum, i) => sum + i.balanceDue, 0),
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">Invoices</h2>
-            <p className="text-sm text-muted">Manage all invoices and payments</p>
-          </div>
+    <DashboardLayout>
+      <PageHeader
+        title="Invoices"
+        description={`${pagination.total} invoice${pagination.total === 1 ? '' : 's'}`}
+        breadcrumb={[
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Fees' },
+          { label: 'Invoices' },
+        ]}
+        actions={
           <Link to="/fees/invoices/generate">
-            <Button>+ Generate Invoice</Button>
+            <Button variant="primary" leftIcon="➕">
+              Generate Invoice
+            </Button>
           </Link>
-        </div>
-      </Card>
+        }
+      />
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card>
+          <p className="text-xs uppercase tracking-wider text-muted">Total Invoiced</p>
+          <p className="text-2xl font-bold text-foreground mt-1">
+            {formatCurrency(stats.total)}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-wider text-muted">Collected</p>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+            {formatCurrency(stats.paid)}
+          </p>
+        </Card>
+        <Card>
+          <p className="text-xs uppercase tracking-wider text-muted">Outstanding</p>
+          <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
+            {formatCurrency(stats.due)}
+          </p>
+        </Card>
+      </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Search</label>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
+              Search
+            </label>
             <Input
               value={filters.search}
               onChange={e => setFilters({ ...filters, search: e.target.value })}
               placeholder="Invoice #, Student name..."
+              leftIcon="🔍"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Status</label>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
+              Status
+            </label>
             <Select
               value={filters.status}
               onChange={e => setFilters({ ...filters, status: e.target.value })}
@@ -113,39 +150,36 @@ export default function InvoicesPage() {
               <option value="cancelled">Cancelled</option>
             </Select>
           </div>
-          <div className="flex items-end">
-            <Button onClick={fetchInvoices} className="w-full">
-              Apply Filters
-            </Button>
-          </div>
         </div>
       </Card>
 
       {/* Table */}
-      <Card padding="none">
+      <Card padding="none" className="overflow-hidden">
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
+            <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-border border-t-primary-500" />
           </div>
         ) : invoices.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-sm text-muted">No invoices found.</p>
+          <div className="text-center py-16">
+            <p className="text-5xl mb-3">📄</p>
+            <p className="text-sm text-muted">No invoices found</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-elevated">
+                <thead className="bg-elevated border-b border-border">
                   <tr>
                     {['Invoice #', 'Student', 'Amount', 'Balance', 'Status', 'Due Date', ''].map(
-                      (header, i) => (
+                      (h, i) => (
                         <th
                           key={i}
-                          className={`px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted ${
-                            i === 6 ? 'text-right' : 'text-left'
-                          }`}
+                          className={cn(
+                            'px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted',
+                            i === 6 ? 'text-right' : 'text-left',
+                          )}
                         >
-                          {header}
+                          {h}
                         </th>
                       ),
                     )}
@@ -153,17 +187,22 @@ export default function InvoicesPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {invoices.map(invoice => (
-                    <tr key={invoice._id} className="hover:bg-elevated/50">
+                    <tr
+                      key={invoice._id}
+                      className="hover:bg-elevated/50 transition-colors"
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-mono font-medium text-foreground">
                           {invoice.invoiceNumber}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-foreground">
+                        <p className="text-sm text-foreground">
                           {invoice.studentId?.firstName} {invoice.studentId?.lastName}
-                        </span>
-                        <p className="text-xs text-muted">Roll: {invoice.studentId?.rollNo}</p>
+                        </p>
+                        <p className="text-xs text-muted">
+                          Roll: {invoice.studentId?.rollNo}
+                        </p>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-medium text-foreground">
@@ -172,38 +211,43 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`text-sm font-medium ${
+                          className={cn(
+                            'text-sm font-medium',
                             invoice.balanceDue > 0
                               ? 'text-red-600 dark:text-red-400'
-                              : 'text-green-600 dark:text-green-400'
-                          }`}
+                              : 'text-green-600 dark:text-green-400',
+                          )}
                         >
                           {formatCurrency(invoice.balanceDue)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={statusVariant[invoice.status] || 'default'}>
+                        <Badge variant={statusVariant[invoice.status] || 'default'} dot>
                           {invoice.status.replace('_', ' ').toUpperCase()}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-muted">{formatDate(invoice.dueDate)}</span>
+                        <span className="text-sm text-muted">
+                          {formatDate(invoice.dueDate)}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <Link
-                          to={`/fees/invoices/${invoice._id}`}
-                          className="text-primary-600 hover:text-primary-700 dark:text-primary-400 text-sm font-medium mr-3"
-                        >
-                          View
-                        </Link>
-                        {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+                        <div className="flex justify-end gap-3">
                           <Link
-                            to={`/fees/invoices/${invoice._id}/pay`}
-                            className="text-green-600 hover:text-green-700 dark:text-green-400 text-sm font-medium"
+                            to={`/fees/invoices/${invoice._id}`}
+                            className="text-primary-600 hover:text-primary-700 dark:text-primary-400 text-sm font-medium"
                           >
-                            Pay
+                            View
                           </Link>
-                        )}
+                          {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+                            <Link
+                              to={`/fees/invoices/${invoice._id}/pay`}
+                              className="text-green-600 hover:text-green-700 dark:text-green-400 text-sm font-medium"
+                            >
+                              Pay
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -212,26 +256,30 @@ export default function InvoicesPage() {
             </div>
 
             {pagination.totalPages > 1 && (
-              <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+              <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
                 <p className="text-sm text-muted">
-                  Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
-                  {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                  {pagination.total} invoices
+                  Showing{' '}
+                  <span className="text-foreground font-medium">
+                    {(pagination.page - 1) * pagination.limit + 1}–
+                    {Math.min(pagination.page * pagination.limit, pagination.total)}
+                  </span>{' '}
+                  of <span className="text-foreground font-medium">{pagination.total}</span>{' '}
+                  invoices
                 </p>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="secondary"
+                    variant="outline"
                     size="sm"
                     onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
                     disabled={pagination.page === 1}
                   >
                     Previous
                   </Button>
-                  <span className="px-3 py-1 text-sm text-foreground self-center">
+                  <span className="px-3 py-1.5 text-sm text-foreground bg-elevated rounded-lg">
                     Page {pagination.page} of {pagination.totalPages}
                   </span>
                   <Button
-                    variant="secondary"
+                    variant="outline"
                     size="sm"
                     onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
                     disabled={pagination.page === pagination.totalPages}
@@ -244,6 +292,6 @@ export default function InvoicesPage() {
           </>
         )}
       </Card>
-    </div>
+    </DashboardLayout>
   );
 }

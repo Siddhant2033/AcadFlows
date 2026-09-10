@@ -13,6 +13,8 @@ import DashboardPage from './pages/Dashboard';
 import ForgotPasswordPage from './pages/ForgotPassword';
 import ResetPasswordPage from './pages/ResetPassword';
 import ProfilePage from './pages/Profile';
+import NotFoundPage from './pages/NotFound';
+
 import StudentsPage from './pages/admin/Students';
 import AddStudentPage from './pages/admin/AddStudent';
 import StudentDetailPage from './pages/admin/StudentDetail';
@@ -43,23 +45,23 @@ function App() {
       <AuthProvider>
         <TenantProvider>
           <Routes>
-            {/* Landing Page */}
+            {/* Landing */}
             <Route path="/" element={<LandingPage />} />
 
-            {/* Public routes */}
+            {/* Public auth */}
             <Route path="/school/register" element={<SchoolRegistrationPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* Tenant-specific public routes */}
+            {/* Tenant-slug variants */}
             <Route path="/:tenantSlug/login" element={<LoginPage />} />
             <Route path="/:tenantSlug/register" element={<RegisterPage />} />
             <Route path="/:tenantSlug/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/:tenantSlug/reset-password" element={<ResetPasswordPage />} />
 
-            {/* Protected routes */}
+            {/* Dashboard */}
             <Route
               path="/dashboard"
               element={
@@ -76,6 +78,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Profile */}
             <Route
               path="/profile"
               element={
@@ -84,6 +88,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Students */}
             <Route
               path="/students"
               element={
@@ -124,6 +130,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Teachers */}
             <Route
               path="/teachers"
               element={
@@ -156,6 +164,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Attendance */}
             <Route
               path="/attendance/mark"
               element={
@@ -172,6 +182,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Fees */}
             <Route
               path="/fees/structures"
               element={
@@ -212,6 +224,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Assignments */}
             <Route
               path="/assignments"
               element={
@@ -252,6 +266,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Gradebook */}
             <Route
               path="/gradebook"
               element={
@@ -260,6 +276,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Report cards */}
             <Route
               path="/report-cards"
               element={
@@ -268,6 +286,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Communication */}
             <Route
               path="/announcements"
               element={
@@ -284,6 +304,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Timetable */}
             <Route
               path="/timetable"
               element={
@@ -317,7 +339,8 @@ function App() {
               }
             />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 404 — must be last */}
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </TenantProvider>
       </AuthProvider>

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
+import { Card, Button, Input, Select, Badge } from '../../components/ui';
+import { DashboardLayout, PageHeader } from '../../components/layout';
+import { formatDate } from '../../lib/format';
+import { cn } from '../../lib/cn';
 
 interface Assignment {
   _id: string;
@@ -14,33 +17,28 @@ interface Assignment {
   dueDate: string;
   status: string;
   isPublished: boolean;
-  subjectId: {
-    _id: string;
-    name: string;
-    code: string;
-  };
-  sectionId: {
-    _id: string;
-    name: string;
-  };
-  teacherId: {
-    _id: string;
-    firstName: string;
-    lastName: string;
-  };
-  submissions?: number;
+  subjectId: { _id: string; name: string; code: string };
+  sectionId: { _id: string; name: string };
+  teacherId: { _id: string; firstName: string; lastName: string };
 }
 
+const typeVariant: Record<
+  string,
+  'primary' | 'secondary' | 'accent' | 'success' | 'warning' | 'danger' | 'info'
+> = {
+  homework: 'primary',
+  classwork: 'success',
+  project: 'accent',
+  quiz: 'warning',
+  test: 'danger',
+  exam: 'info',
+};
+
 export default function AssignmentsPage() {
-  const { theme } = useTheme();
   const { user } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    status: '',
-    type: '',
-    search: '',
-  });
+  const [filters, setFilters] = useState({ status: '', type: '', search: '' });
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -50,6 +48,7 @@ export default function AssignmentsPage() {
 
   useEffect(() => {
     fetchAssignments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, pagination.page]);
 
   const fetchAssignments = async () => {
@@ -75,97 +74,46 @@ export default function AssignmentsPage() {
     }
   };
 
-  const getTypeBadge = (type: string) => {
-    const classes: Record<string, string> = {
-      homework: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      classwork: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      project: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-      quiz: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      test: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      exam: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-    };
-    return classes[type] || classes.homework;
-  };
-
-  const getStatusBadge = (status: string, isPublished: boolean) => {
-    if (isPublished) {
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-    }
-    const classes: Record<string, string> = {
-      draft: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
-      closed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      archived: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
-    };
-    return classes[status] || classes.draft;
-  };
-
-  const isOverdue = (dueDate: string) => {
-    return new Date(dueDate) < new Date();
-  };
+  const isOverdue = (dueDate: string) => new Date(dueDate) < new Date();
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Assignments
-            </h2>
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              Manage all assignments and submissions
-            </p>
-          </div>
-          {(user?.role === 'admin' || user?.role === 'teacher') && (
-            <Link
-              to="/assignments/create"
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              + Create Assignment
+    <DashboardLayout>
+      <PageHeader
+        title="Assignments"
+        description="Manage all assignments and submissions"
+        breadcrumb={[{ label: 'Dashboard', path: '/dashboard' }, { label: 'Assignments' }]}
+        actions={
+          (user?.role === 'admin' || user?.role === 'teacher') && (
+            <Link to="/assignments/create">
+              <Button variant="primary" leftIcon="➕">
+                Create Assignment
+              </Button>
             </Link>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {/* Filters */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
+      <Card className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Search
             </label>
-            <input
-              type="text"
+            <Input
               value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              onChange={e => setFilters({ ...filters, search: e.target.value })}
               placeholder="Search assignments..."
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              leftIcon="🔍"
             />
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Type
             </label>
-            <select
+            <Select
               value={filters.type}
-              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setFilters({ ...filters, type: e.target.value })}
             >
               <option value="">All Types</option>
               <option value="homework">Homework</option>
@@ -174,222 +122,134 @@ export default function AssignmentsPage() {
               <option value="quiz">Quiz</option>
               <option value="test">Test</option>
               <option value="exam">Exam</option>
-            </select>
+            </Select>
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Status
             </label>
-            <select
+            <Select
               value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setFilters({ ...filters, status: e.target.value })}
             >
               <option value="">All Status</option>
               <option value="draft">Draft</option>
               <option value="published">Published</option>
               <option value="closed">Closed</option>
               <option value="archived">Archived</option>
-            </select>
+            </Select>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Assignments Grid */}
       {loading ? (
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-border border-t-primary-500" />
         </div>
       ) : assignments.length === 0 ? (
-        <div className={`rounded-lg shadow p-12 text-center transition-colors duration-200 ${
-          theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-        }`}>
-          <p className={`text-sm transition-colors duration-200 ${
-            theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-          }`}>
-            No assignments found.
-          </p>
-        </div>
+        <Card className="text-center py-16">
+          <p className="text-5xl mb-3">📝</p>
+          <p className="text-sm text-muted">No assignments found</p>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {assignments.map((assignment) => (
-            <div
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {assignments.map((assignment, idx) => (
+            <Card
               key={assignment._id}
-              className={`rounded-lg shadow overflow-hidden transition-all duration-200 hover:shadow-lg ${
-                theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-              }`}
+              hoverable
+              className={cn(
+                'flex flex-col',
+                'animate-fade-up',
+                idx < 6 ? `stagger-${Math.min(idx + 1, 6)}` : '',
+              )}
+              style={{ opacity: 0, animationFillMode: 'forwards' }}
             >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-2">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTypeBadge(assignment.type)}`}>
-                    {assignment.type.toUpperCase()}
-                  </span>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(assignment.status, assignment.isPublished)}`}>
-                    {assignment.isPublished ? 'Published' : assignment.status.toUpperCase()}
-                  </span>
-                </div>
+              {/* Badges */}
+              <div className="flex items-start justify-between mb-3">
+                <Badge variant={typeVariant[assignment.type] || 'default'}>
+                  {assignment.type.toUpperCase()}
+                </Badge>
+                <Badge variant={assignment.isPublished ? 'success' : 'default'} dot>
+                  {assignment.isPublished
+                    ? 'Published'
+                    : assignment.status.toUpperCase()}
+                </Badge>
+              </div>
 
-                <h3 className={`text-lg font-semibold mb-2 transition-colors duration-200 ${
-                  theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                }`}>
-                  {assignment.title}
-                </h3>
+              <h3 className="text-base font-semibold text-foreground mb-2 line-clamp-2">
+                {assignment.title}
+              </h3>
+              <p className="text-sm text-muted line-clamp-2 mb-4">
+                {assignment.description}
+              </p>
 
-                <p className={`text-sm line-clamp-2 mb-3 transition-colors duration-200 ${
-                  theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                }`}>
-                  {assignment.description}
-                </p>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className={`transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Subject
-                    </span>
-                    <span className={`font-medium transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      {assignment.subjectId?.name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Section
-                    </span>
-                    <span className={`font-medium transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      {assignment.sectionId?.name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Max Score
-                    </span>
-                    <span className={`font-medium transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      {assignment.maxScore}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Weightage
-                    </span>
-                    <span className={`font-medium transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      {assignment.weightage}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Due Date
-                    </span>
-                    <span className={`font-medium ${isOverdue(assignment.dueDate) ? 'text-red-600 dark:text-red-400' : ''}`}>
-                      {new Date(assignment.dueDate).toLocaleDateString()}
+              <div className="space-y-1.5 text-xs flex-1">
+                <Row label="Subject" value={assignment.subjectId?.name || 'N/A'} />
+                <Row label="Section" value={assignment.sectionId?.name || 'N/A'} />
+                <Row label="Max Score" value={String(assignment.maxScore)} />
+                <Row label="Weightage" value={`${assignment.weightage}%`} />
+                <Row
+                  label="Due Date"
+                  value={
+                    <span
+                      className={cn(
+                        isOverdue(assignment.dueDate) &&
+                          'text-red-600 dark:text-red-400 font-medium',
+                      )}
+                    >
+                      {formatDate(assignment.dueDate)}
                       {isOverdue(assignment.dueDate) && ' ⚠️'}
                     </span>
-                  </div>
-                </div>
-
-                <div className={`mt-4 pt-4 border-t flex justify-between items-center transition-colors duration-200 ${
-                  theme ? 'border-gray-200' : 'dark:border-[#334155]'
-                }`}>
-                  <Link
-                    to={`/assignments/${assignment._id}`}
-                    className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                  >
-                    View Details →
-                  </Link>
-                  {user?.role === 'student' && assignment.isPublished && (
-                    <Link
-                      to={`/assignments/${assignment._id}/submit`}
-                      className="px-3 py-1 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-                    >
-                      Submit
-                    </Link>
-                  )}
-                  {(user?.role === 'admin' || user?.role === 'teacher') && (
-                    <div className="flex gap-2">
-                      <Link
-                        to={`/assignments/${assignment._id}/submissions`}
-                        className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg transition-colors"
-                      >
-                        Submissions
-                      </Link>
-                      <Link
-                        to={`/assignments/${assignment._id}/edit`}
-                        className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 rounded-lg transition-colors"
-                      >
-                        Edit
-                      </Link>
-                    </div>
-                  )}
-                </div>
+                  }
+                />
               </div>
-            </div>
+
+              <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
+                <Link
+                  to={`/assignments/${assignment._id}`}
+                  className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium"
+                >
+                  View Details →
+                </Link>
+                {user?.role === 'student' && assignment.isPublished && (
+                  <Button variant="primary" size="xs">
+                    Submit
+                  </Button>
+                )}
+                {(user?.role === 'admin' || user?.role === 'teacher') && (
+                  <div className="flex gap-1.5">
+                    <Link to={`/assignments/${assignment._id}/submissions`}>
+                      <Button variant="outline" size="xs">
+                        Submissions
+                      </Button>
+                    </Link>
+                    <Link to={`/assignments/${assignment._id}/edit`}>
+                      <Button variant="ghost" size="xs">
+                        Edit
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </Card>
           ))}
         </div>
       )}
+    </DashboardLayout>
+  );
+}
 
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className={`rounded-lg shadow px-6 py-4 transition-colors duration-200 ${
-          theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-        }`}>
-          <div className="flex items-center justify-between">
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Showing {(pagination.page - 1) * pagination.limit + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} assignments
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                disabled={pagination.page === 1}
-                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                  pagination.page === 1
-                    ? 'opacity-50 cursor-not-allowed'
-                    : theme ? 'hover:bg-gray-100' : 'dark:hover:bg-[#334155]'
-                }`}
-              >
-                Previous
-              </button>
-              <span className={`px-3 py-1 text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#F1F5F9]'
-              }`}>
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                disabled={pagination.page === pagination.totalPages}
-                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                  pagination.page === pagination.totalPages
-                    ? 'opacity-50 cursor-not-allowed'
-                    : theme ? 'hover:bg-gray-100' : 'dark:hover:bg-[#334155]'
-                }`}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+function Row({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-muted">{label}</span>
+      <span className="text-foreground font-medium">{value}</span>
     </div>
   );
 }

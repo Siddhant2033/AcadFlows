@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../lib/api';
+import { Card, Button, Select, Badge } from '../../components/ui';
+import { DashboardLayout, PageHeader } from '../../components/layout';
+import { formatCurrency } from '../../lib/format';
+import { cn } from '../../lib/cn';
 
 interface FeeStructure {
   _id: string;
@@ -21,8 +24,20 @@ interface FeeStructure {
   createdAt: string;
 }
 
+const categoryVariant: Record<
+  string,
+  'primary' | 'secondary' | 'accent' | 'success' | 'warning' | 'info' | 'default'
+> = {
+  tuition: 'primary',
+  admission: 'success',
+  exam: 'accent',
+  transport: 'warning',
+  library: 'info',
+  sports: 'secondary',
+  other: 'default',
+};
+
 export default function FeeStructuresPage() {
-  const { theme } = useTheme();
   const [structures, setStructures] = useState<FeeStructure[]>([]);
   const [loading, setLoading] = useState(true);
   const [academicYears, setAcademicYears] = useState<any[]>([]);
@@ -36,6 +51,7 @@ export default function FeeStructuresPage() {
     if (selectedYear) {
       fetchStructures();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedYear]);
 
   const fetchAcademicYears = async () => {
@@ -43,9 +59,7 @@ export default function FeeStructuresPage() {
       const response = await api.get('/academic/academic-years');
       setAcademicYears(response.data.data);
       const current = response.data.data.find((y: any) => y.isCurrent);
-      if (current) {
-        setSelectedYear(current._id);
-      }
+      if (current) setSelectedYear(current._id);
     } catch (error) {
       console.error('Failed to fetch academic years:', error);
     }
@@ -82,176 +96,128 @@ export default function FeeStructuresPage() {
     }
   };
 
-  const getCategoryBadge = (category: string) => {
-    const classes: Record<string, string> = {
-      tuition: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      admission: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      exam: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-      transport: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      library: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
-      sports: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-      other: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
-    };
-    return classes[category] || classes.other;
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Fee Structures
-            </h2>
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              Manage fee structures for different academic years
-            </p>
-          </div>
-          <Link
-            to="/fees/structures/add"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            + Add Fee Structure
+    <DashboardLayout>
+      <PageHeader
+        title="Fee Structures"
+        description="Manage fee structures for different academic years"
+        breadcrumb={[
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Fees' },
+          { label: 'Structures' },
+        ]}
+        actions={
+          <Link to="/fees/structures/add">
+            <Button variant="primary" leftIcon="➕">
+              Add Fee Structure
+            </Button>
           </Link>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Filter */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
+      {/* Academic Year filter */}
+      <Card className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Academic Year
             </label>
-            <select
+            <Select
               value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setSelectedYear(e.target.value)}
             >
               <option value="">Select Academic Year</option>
-              {academicYears.map((year) => (
+              {academicYears.map(year => (
                 <option key={year._id} value={year._id}>
                   {year.name} {year.isCurrent ? '(Current)' : ''}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Fee Structures List */}
-      <div className={`rounded-lg shadow overflow-hidden transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          </div>
-        ) : structures.length === 0 ? (
-          <div className="text-center py-12">
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              No fee structures found for this academic year.
-            </p>
-            <Link
-              to="/fees/structures/add"
-              className="mt-4 inline-block text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+      {/* Structures */}
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-border border-t-primary-500" />
+        </div>
+      ) : structures.length === 0 ? (
+        <Card className="text-center py-16">
+          <p className="text-5xl mb-3">💰</p>
+          <p className="text-sm text-muted">No fee structures for this academic year</p>
+          <Link to="/fees/structures/add">
+            <Button variant="primary" className="mt-4" leftIcon="➕">
+              Create First Fee Structure
+            </Button>
+          </Link>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {structures.map((structure, idx) => (
+            <Card
+              key={structure._id}
+              hoverable
+              className={cn(
+                'animate-fade-up',
+                idx < 6 ? `stagger-${Math.min(idx + 1, 6)}` : '',
+              )}
+              style={{ opacity: 0, animationFillMode: 'forwards' }}
             >
-              Create your first fee structure →
-            </Link>
-          </div>
-        ) : (
-          <div className={`divide-y transition-colors duration-200 ${
-            theme ? 'divide-gray-200' : 'dark:divide-[#334155]'
-          }`}>
-            {structures.map((structure) => (
-              <div key={structure._id} className="p-6 hover:bg-gray-50 dark:hover:bg-[#1E293B]/50 transition-colors">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-                        theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                      }`}>
-                        {structure.name}
-                      </h3>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        structure.isActive
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                      }`}>
-                        {structure.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                    {structure.description && (
-                      <p className={`text-sm mt-1 transition-colors duration-200 ${
-                        theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                      }`}>
-                        {structure.description}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {structure.items.map((item, index) => (
-                        <span
-                          key={index}
-                          className={`px-2 py-1 text-xs rounded-full ${getCategoryBadge(item.category)}`}
-                        >
-                          {item.name}: ${item.amount}
-                          {item.isOptional && ' (Optional)'}
-                        </span>
-                      ))}
-                    </div>
+              <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      {structure.name}
+                    </h3>
+                    <Badge variant={structure.isActive ? 'success' : 'default'} dot>
+                      {structure.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-lg font-bold transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      ${structure.totalAmount}
-                    </span>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleToggleStatus(structure._id, structure.isActive)}
-                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
-                          structure.isActive
-                            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400'
-                            : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
-                        }`}
-                      >
-                        {structure.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
-                      <Link
-                        to={`/fees/structures/${structure._id}/edit`}
-                        className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg transition-colors"
-                      >
+                  {structure.description && (
+                    <p className="text-sm text-muted mb-3">{structure.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {structure.items.map((item, i) => (
+                      <Badge key={i} variant={categoryVariant[item.category] || 'default'}>
+                        {item.name}: {formatCurrency(item.amount)}
+                        {item.isOptional && ' · Optional'}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                  <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                    {formatCurrency(structure.totalAmount)}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleToggleStatus(structure._id, structure.isActive)}
+                    >
+                      {structure.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                    <Link to={`/fees/structures/${structure._id}/edit`}>
+                      <Button variant="accent" size="sm">
                         Edit
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(structure._id)}
-                        className="px-3 py-1 text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 rounded-lg transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDelete(structure._id)}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </DashboardLayout>
   );
 }

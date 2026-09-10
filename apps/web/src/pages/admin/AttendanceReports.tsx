@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../lib/api';
+import { Card, Button, Select, Input, Badge } from '../../components/ui';
+import { DashboardLayout, PageHeader } from '../../components/layout';
+import { formatDate } from '../../lib/format';
+import { cn } from '../../lib/cn';
 
 interface Section {
   _id: string;
@@ -46,11 +49,9 @@ interface ReportData {
 
 export default function AttendanceReportsPage() {
   const navigate = useNavigate();
-  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<ReportData | null>(null);
 
-  // Filters
   const [academicYearId, setAcademicYearId] = useState('');
   const [sectionId, setSectionId] = useState('');
   const [month, setMonth] = useState(new Date().getMonth());
@@ -69,9 +70,7 @@ export default function AttendanceReportsPage() {
       const response = await api.get('/academic/academic-years');
       setAcademicYears(response.data.data);
       const current = response.data.data.find((y: AcademicYear) => y.isCurrent);
-      if (current) {
-        setAcademicYearId(current._id);
-      }
+      if (current) setAcademicYearId(current._id);
     } catch (error) {
       console.error('Failed to fetch academic years:', error);
     }
@@ -87,14 +86,12 @@ export default function AttendanceReportsPage() {
   };
 
   const fetchReport = async () => {
-    if (!sectionId || !academicYearId) {
-      return;
-    }
+    if (!sectionId || !academicYearId) return;
 
     setLoading(true);
     try {
       const response = await api.get(
-        `/attendance/sections/${sectionId}/report?academicYearId=${academicYearId}&month=${month}&year=${year}`
+        `/attendance/sections/${sectionId}/report?academicYearId=${academicYearId}&month=${month}&year=${year}`,
       );
       setReportData(response.data.data);
     } catch (error) {
@@ -109,363 +106,284 @@ export default function AttendanceReportsPage() {
     fetchReport();
   };
 
-  const getStatusBadgeClass = (percentage: number) => {
-    if (percentage >= 90) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-    if (percentage >= 75) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
-    if (percentage >= 60) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-    return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+  const getStatusVariant = (
+    percentage: number,
+  ): 'success' | 'primary' | 'warning' | 'danger' => {
+    if (percentage >= 90) return 'success';
+    if (percentage >= 75) return 'primary';
+    if (percentage >= 60) return 'warning';
+    return 'danger';
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Attendance Reports
-            </h2>
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              View and generate attendance reports
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate('/attendance/mark')}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              Mark Attendance
-            </button>
-          </div>
-        </div>
-      </div>
+    <DashboardLayout>
+      <PageHeader
+        title="Attendance Reports"
+        description="View and generate attendance reports"
+        breadcrumb={[
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Attendance' },
+          { label: 'Reports' },
+        ]}
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => navigate('/attendance/mark')}
+            leftIcon="📋"
+          >
+            Mark Attendance
+          </Button>
+        }
+      />
 
-      {/* Filters */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
-        <form onSubmit={handleGenerateReport} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+      <Card className="mb-6">
+        <form onSubmit={handleGenerateReport} className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Academic Year *
             </label>
-            <select
+            <Select
               value={academicYearId}
-              onChange={(e) => setAcademicYearId(e.target.value)}
+              onChange={e => setAcademicYearId(e.target.value)}
               required
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
             >
               <option value="">Select Academic Year</option>
-              {academicYears.map((year) => (
+              {academicYears.map(year => (
                 <option key={year._id} value={year._id}>
-                  {year.name} {year.isCurrent ? '(Current)' : ''}
+                  {year.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
-          <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Section *
             </label>
-            <select
+            <Select
               value={sectionId}
-              onChange={(e) => setSectionId(e.target.value)}
+              onChange={e => setSectionId(e.target.value)}
               required
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
             >
               <option value="">Select Section</option>
-              {sections.map((section) => (
+              {sections.map(section => (
                 <option key={section._id} value={section._id}>
                   {section.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Month
             </label>
-            <select
-              value={month}
-              onChange={(e) => setMonth(parseInt(e.target.value))}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
-            >
+            <Select value={month} onChange={e => setMonth(parseInt(e.target.value))}>
               {[
                 'January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'
+                'July', 'August', 'September', 'October', 'November', 'December',
               ].map((name, index) => (
-                <option key={index} value={index}>{name}</option>
+                <option key={index} value={index}>
+                  {name}
+                </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Year
             </label>
-            <input
+            <Input
               type="number"
               value={year}
-              onChange={(e) => setYear(parseInt(e.target.value))}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setYear(parseInt(e.target.value))}
             />
           </div>
-          <div className="md:col-span-4">
-            <button
-              type="submit"
-              className="w-full md:w-auto px-6 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-            >
+          <div className="md:col-span-5">
+            <Button type="submit" variant="primary" fullWidth leftIcon="📊">
               Generate Report
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
+      </Card>
 
-      {/* Report Results */}
       {loading ? (
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-border border-t-primary-500" />
         </div>
       ) : reportData ? (
-        <div className="space-y-6">
-          {/* Summary Cards */}
+        <div className="space-y-6 animate-fade-up">
+          {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-              theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-            }`}>
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>Total Students</p>
-              <p className={`text-2xl font-bold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>{reportData.summary.totalStudents}</p>
-            </div>
-            <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-              theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-            }`}>
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>Total Days</p>
-              <p className={`text-2xl font-bold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>{reportData.summary.totalDays}</p>
-            </div>
-            <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-              theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-            }`}>
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>Average Attendance</p>
-              <p className={`text-2xl font-bold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>{reportData.summary.averageAttendance.toFixed(1)}%</p>
-            </div>
+            <SummaryCard
+              label="Total Students"
+              value={reportData.summary.totalStudents}
+              icon="👨‍🎓"
+            />
+            <SummaryCard
+              label="Total Days"
+              value={reportData.summary.totalDays}
+              icon="📅"
+            />
+            <SummaryCard
+              label="Average Attendance"
+              value={`${reportData.summary.averageAttendance.toFixed(1)}%`}
+              icon="📊"
+            />
           </div>
 
-          {/* Student Attendance Table */}
-          <div className={`rounded-lg shadow overflow-hidden transition-colors duration-200 ${
-            theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-          }`}>
-            <div className={`px-6 py-4 border-b transition-colors duration-200 ${
-              theme ? 'border-gray-200' : 'dark:border-[#334155]'
-            }`}>
-              <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>
+          {/* Student-wise */}
+          <Card padding="none" className="overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h3 className="text-base font-semibold text-foreground">
                 Student-wise Attendance
               </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className={`transition-colors duration-200 ${
-                  theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-                }`}>
+                <thead className="bg-elevated border-b border-border">
                   <tr>
-                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Roll No</th>
-                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Student</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Present</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Absent</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Late</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Half Day</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Total</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Percentage</th>
+                    {['Roll No', 'Student', 'Present', 'Absent', 'Late', 'Half Day', 'Total', 'Percentage'].map(h => (
+                      <th
+                        key={h}
+                        className={cn(
+                          'px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted',
+                          ['Present', 'Absent', 'Late', 'Half Day', 'Total', 'Percentage'].includes(h)
+                            ? 'text-center'
+                            : 'text-left',
+                        )}
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className={`divide-y transition-colors duration-200 ${
-                  theme ? 'divide-gray-200' : 'dark:divide-[#334155]'
-                }`}>
-                  {reportData.students.map((student) => (
-                    <tr key={student.student.id} className={`transition-colors duration-200 ${
-                      theme ? 'hover:bg-gray-50' : 'dark:hover:bg-[#1E293B]/50'
-                    }`}>
+                <tbody className="divide-y divide-border">
+                  {reportData.students.map(student => (
+                    <tr key={student.student.id} className="hover:bg-elevated/50">
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`text-sm font-mono transition-colors duration-200 ${
-                          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                        }`}>
+                        <span className="text-sm font-mono text-foreground">
                           {student.student.rollNo}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`text-sm transition-colors duration-200 ${
-                          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                        }`}>
+                        <span className="text-sm text-foreground">
                           {student.student.name}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-green-600 dark:text-green-400">
+                      <td className="px-4 py-3 text-center text-sm text-green-600 dark:text-green-400 font-medium">
                         {student.present}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-red-600 dark:text-red-400">
+                      <td className="px-4 py-3 text-center text-sm text-red-600 dark:text-red-400 font-medium">
                         {student.absent}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-yellow-600 dark:text-yellow-400">
+                      <td className="px-4 py-3 text-center text-sm text-yellow-600 dark:text-yellow-400 font-medium">
                         {student.late}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-orange-600 dark:text-orange-400">
+                      <td className="px-4 py-3 text-center text-sm text-primary-600 dark:text-primary-400 font-medium">
                         {student.halfDay}
                       </td>
-                      <td className={`px-4 py-3 text-center text-sm transition-colors duration-200 ${
-                        theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                      }`}>
+                      <td className="px-4 py-3 text-center text-sm text-foreground font-medium">
                         {student.total}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeClass(student.percentage)}`}>
+                        <Badge variant={getStatusVariant(student.percentage)} dot>
                           {student.percentage}%
-                        </span>
+                        </Badge>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
 
-          {/* Daily Attendance Table */}
-          <div className={`rounded-lg shadow overflow-hidden transition-colors duration-200 ${
-            theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-          }`}>
-            <div className={`px-6 py-4 border-b transition-colors duration-200 ${
-              theme ? 'border-gray-200' : 'dark:border-[#334155]'
-            }`}>
-              <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>
+          {/* Daily */}
+          <Card padding="none" className="overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h3 className="text-base font-semibold text-foreground">
                 Daily Attendance
               </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className={`transition-colors duration-200 ${
-                  theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-                }`}>
+                <thead className="bg-elevated border-b border-border">
                   <tr>
-                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Date</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Present</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Absent</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Late</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Half Day</th>
-                    <th className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>Percentage</th>
+                    {['Date', 'Present', 'Absent', 'Late', 'Half Day', 'Percentage'].map(h => (
+                      <th
+                        key={h}
+                        className={cn(
+                          'px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted',
+                          h === 'Date' ? 'text-left' : 'text-center',
+                        )}
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className={`divide-y transition-colors duration-200 ${
-                  theme ? 'divide-gray-200' : 'dark:divide-[#334155]'
-                }`}>
+                <tbody className="divide-y divide-border">
                   {reportData.sessions.map((session, index) => (
-                    <tr key={index} className={`transition-colors duration-200 ${
-                      theme ? 'hover:bg-gray-50' : 'dark:hover:bg-[#1E293B]/50'
-                    }`}>
+                    <tr key={index} className="hover:bg-elevated/50">
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`text-sm transition-colors duration-200 ${
-                          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                        }`}>
-                          {new Date(session.date).toLocaleDateString()}
+                        <span className="text-sm text-foreground">
+                          {formatDate(session.date)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-green-600 dark:text-green-400">
+                      <td className="px-4 py-3 text-center text-sm text-green-600 dark:text-green-400 font-medium">
                         {session.present}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-red-600 dark:text-red-400">
+                      <td className="px-4 py-3 text-center text-sm text-red-600 dark:text-red-400 font-medium">
                         {session.absent}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-yellow-600 dark:text-yellow-400">
+                      <td className="px-4 py-3 text-center text-sm text-yellow-600 dark:text-yellow-400 font-medium">
                         {session.late}
                       </td>
-                      <td className="px-4 py-3 text-center text-sm text-orange-600 dark:text-orange-400">
+                      <td className="px-4 py-3 text-center text-sm text-primary-600 dark:text-primary-400 font-medium">
                         {session.halfDay}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeClass(session.percentage)}`}>
+                        <Badge variant={getStatusVariant(session.percentage)} dot>
                           {session.percentage}%
-                        </span>
+                        </Badge>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         </div>
       ) : (
-        <div className={`rounded-lg shadow p-12 text-center transition-colors duration-200 ${
-          theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-        }`}>
-          <p className={`text-sm transition-colors duration-200 ${
-            theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-          }`}>
+        <Card className="text-center py-16">
+          <p className="text-5xl mb-3">📊</p>
+          <p className="text-sm text-muted">
             Select filters and click "Generate Report" to view attendance data.
           </p>
-        </div>
+        </Card>
       )}
-    </div>
+    </DashboardLayout>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  icon: string;
+}) {
+  return (
+    <Card>
+      <div className="flex items-center gap-4">
+        <div className="w-14 h-14 rounded-xl bg-primary-500/10 flex items-center justify-center text-2xl">
+          {icon}
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted">{label}</p>
+          <p className="text-2xl font-bold text-foreground mt-0.5">{value}</p>
+        </div>
+      </div>
+    </Card>
   );
 }

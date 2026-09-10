@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
+import { Card, Button, Badge, Input, Label, Select, Textarea } from '../components/ui';
+import { DashboardLayout, PageHeader } from '../components/layout';
+import { formatDate, formatTimeAgo } from '../lib/format';
+import { cn } from '../lib/cn';
 
 interface Announcement {
   _id: string;
@@ -14,24 +17,38 @@ interface Announcement {
   isPublished: boolean;
   publishedAt: string;
   expiresAt: string;
-  createdBy: {
-    firstName: string;
-    lastName: string;
-  };
+  createdBy: { firstName: string; lastName: string };
   readBy: { userId: string }[];
   attachments: { name: string; url: string }[];
 }
 
+const priorityVariant: Record<
+  string,
+  'default' | 'info' | 'warning' | 'danger'
+> = {
+  low: 'default',
+  medium: 'info',
+  high: 'warning',
+  urgent: 'danger',
+};
+
+const typeVariant: Record<
+  string,
+  'default' | 'primary' | 'success' | 'danger' | 'accent'
+> = {
+  general: 'default',
+  academic: 'primary',
+  event: 'success',
+  emergency: 'danger',
+  holiday: 'accent',
+};
+
 export default function AnnouncementsPage() {
-  const { theme } = useTheme();
   const { user } = useAuth();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [filters, setFilters] = useState({
-    type: '',
-    priority: '',
-  });
+  const [filters, setFilters] = useState({ type: '', priority: '' });
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -41,6 +58,7 @@ export default function AnnouncementsPage() {
 
   useEffect(() => {
     fetchAnnouncements();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, pagination.page]);
 
   const fetchAnnouncements = async () => {
@@ -69,85 +87,47 @@ export default function AnnouncementsPage() {
   const markAsRead = async (id: string) => {
     try {
       await api.put(`/communication/announcements/${id}/read`);
-      // Refresh to update read status
       fetchAnnouncements();
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
   };
 
-  const getPriorityBadge = (priority: string) => {
-    const classes: Record<string, string> = {
-      low: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
-      medium: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      high: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      urgent: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    };
-    return classes[priority] || classes.medium;
-  };
-
-  const getTypeBadge = (type: string) => {
-    const classes: Record<string, string> = {
-      general: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
-      academic: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      event: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      emergency: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      holiday: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-    };
-    return classes[type] || classes.general;
-  };
-
-  const isRead = (announcement: Announcement) => {
-    return announcement.readBy.some(r => r.userId === user?.id);
-  };
+  const isRead = (announcement: Announcement) =>
+    announcement.readBy.some(r => r.userId === user?.id);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              📢 Announcements
-            </h2>
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              School announcements and updates
-            </p>
-          </div>
-          {(user?.role === 'admin' || user?.role === 'teacher') && (
-            <button
+    <DashboardLayout>
+      <PageHeader
+        title="Announcements"
+        description="School announcements and updates"
+        breadcrumb={[
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Announcements' },
+        ]}
+        actions={
+          (user?.role === 'admin' || user?.role === 'teacher') && (
+            <Button
+              variant="primary"
+              leftIcon="➕"
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
             >
-              + New Announcement
-            </button>
-          )}
-        </div>
-      </div>
+              New Announcement
+            </Button>
+          )
+        }
+      />
 
       {/* Filters */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
+      <Card className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Type
             </label>
-            <select
+            <Select
               value={filters.type}
-              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setFilters({ ...filters, type: e.target.value })}
             >
               <option value="">All Types</option>
               <option value="general">General</option>
@@ -155,186 +135,134 @@ export default function AnnouncementsPage() {
               <option value="event">Event</option>
               <option value="emergency">Emergency</option>
               <option value="holiday">Holiday</option>
-            </select>
+            </Select>
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Priority
             </label>
-            <select
+            <Select
               value={filters.priority}
-              onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setFilters({ ...filters, priority: e.target.value })}
             >
               <option value="">All Priorities</option>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
               <option value="urgent">Urgent</option>
-            </select>
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={fetchAnnouncements}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              Apply Filters
-            </button>
+            </Select>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Announcements List */}
       {loading ? (
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-border border-t-primary-500" />
         </div>
       ) : announcements.length === 0 ? (
-        <div className={`rounded-lg shadow p-12 text-center transition-colors duration-200 ${
-          theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-        }`}>
-          <p className={`text-sm transition-colors duration-200 ${
-            theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-          }`}>
-            No announcements found.
-          </p>
-        </div>
+        <Card className="text-center py-16">
+          <p className="text-5xl mb-3">📢</p>
+          <p className="text-sm text-muted">No announcements yet</p>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {announcements.map((announcement) => (
-            <div
+          {announcements.map((announcement, idx) => (
+            <Card
               key={announcement._id}
-              className={`rounded-lg shadow p-6 transition-all duration-200 ${
-                theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-              } ${!isRead(announcement) ? 'border-l-4 border-primary-500' : ''}`}
+              className={cn(
+                'animate-fade-up',
+                idx < 6 ? `stagger-${Math.min(idx + 1, 6)}` : '',
+                !isRead(announcement) && 'border-l-4 border-l-primary-500',
+              )}
+              style={{ opacity: 0, animationFillMode: 'forwards' }}
             >
-              <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                <div className="flex-1">
+              <div className="flex flex-col md:flex-row justify-between gap-4">
+                <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getTypeBadge(announcement.type)}`}>
+                    <Badge variant={typeVariant[announcement.type] || 'default'}>
                       {announcement.type.toUpperCase()}
-                    </span>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityBadge(announcement.priority)}`}>
+                    </Badge>
+                    <Badge variant={priorityVariant[announcement.priority] || 'default'} dot>
                       {announcement.priority.toUpperCase()}
-                    </span>
-                    {!isRead(announcement) && (
-                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">
-                        New
-                      </span>
-                    )}
-                    <span className={`text-xs transition-colors duration-200 ${
-                      theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                    }`}>
-                      {new Date(announcement.publishedAt).toLocaleDateString()}
+                    </Badge>
+                    {!isRead(announcement) && <Badge variant="info">NEW</Badge>}
+                    <span className="text-xs text-muted">
+                      {formatDate(announcement.publishedAt)}
                     </span>
                   </div>
-                  
-                  <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-                    theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                  }`}>
+                  <h3 className="text-lg font-semibold text-foreground">
                     {announcement.title}
                   </h3>
-                  
-                  <p className={`mt-2 text-sm transition-colors duration-200 ${
-                    theme ? 'text-gray-600' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    {announcement.content}
-                  </p>
-                  
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <span className={`text-xs transition-colors duration-200 ${
-                      theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                    }`}>
-                      By: {announcement.createdBy?.firstName} {announcement.createdBy?.lastName}
+                  <p className="text-sm text-muted mt-2">{announcement.content}</p>
+                  <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-muted">
+                    <span>
+                      By: {announcement.createdBy?.firstName}{' '}
+                      {announcement.createdBy?.lastName}
                     </span>
-                    <span className={`text-xs transition-colors duration-200 ${
-                      theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                    }`}>
-                      Target: {announcement.targetAudience.toUpperCase()}
-                    </span>
+                    <span>·</span>
+                    <span>Target: {announcement.targetAudience.toUpperCase()}</span>
                     {announcement.attachments?.length > 0 && (
-                      <span className={`text-xs transition-colors duration-200 ${
-                        theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                      }`}>
-                        📎 {announcement.attachments.length} attachment(s)
-                      </span>
+                      <>
+                        <span>·</span>
+                        <span>📎 {announcement.attachments.length}</span>
+                      </>
                     )}
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {!isRead(announcement) && (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => markAsRead(announcement._id)}
-                      className="px-3 py-1 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
                     >
                       Mark as Read
-                    </button>
+                    </Button>
                   )}
                   {(user?.role === 'admin' || user?.role === 'teacher') && (
-                    <Link
-                      to={`/announcements/${announcement._id}/edit`}
-                      className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 rounded-lg transition-colors"
-                    >
-                      Edit
+                    <Link to={`/announcements/${announcement._id}/edit`}>
+                      <Button variant="ghost" size="sm">
+                        Edit
+                      </Button>
                     </Link>
                   )}
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
-        </div>
-      )}
 
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className={`rounded-lg shadow px-6 py-4 transition-colors duration-200 ${
-          theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-        }`}>
-          <div className="flex items-center justify-between">
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Showing {(pagination.page - 1) * pagination.limit + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} announcements
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+          {pagination.totalPages > 1 && (
+            <div className="flex justify-center gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setPagination({ ...pagination, page: pagination.page - 1 })
+                }
                 disabled={pagination.page === 1}
-                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                  pagination.page === 1
-                    ? 'opacity-50 cursor-not-allowed'
-                    : theme ? 'hover:bg-gray-100' : 'dark:hover:bg-[#334155]'
-                }`}
               >
                 Previous
-              </button>
-              <span className={`px-3 py-1 text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#F1F5F9]'
-              }`}>
+              </Button>
+              <span className="px-4 py-1.5 text-sm text-foreground bg-elevated rounded-lg self-center">
                 Page {pagination.page} of {pagination.totalPages}
               </span>
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setPagination({ ...pagination, page: pagination.page + 1 })
+                }
                 disabled={pagination.page === pagination.totalPages}
-                className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                  pagination.page === pagination.totalPages
-                    ? 'opacity-50 cursor-not-allowed'
-                    : theme ? 'hover:bg-gray-100' : 'dark:hover:bg-[#334155]'
-                }`}
               >
                 Next
-              </button>
+              </Button>
             </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Create Announcement Modal */}
+      {/* Create Modal */}
       {showCreateModal && (
         <CreateAnnouncementModal
           onClose={() => setShowCreateModal(false)}
@@ -344,22 +272,29 @@ export default function AnnouncementsPage() {
           }}
         />
       )}
-    </div>
+    </DashboardLayout>
   );
 }
 
-// Create Announcement Modal Component
-function CreateAnnouncementModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const { theme } = useTheme();
+/* ─────────────────────────────────────────────────────── */
+/* Create modal (uses primitives, animated)                */
+/* ─────────────────────────────────────────────────────── */
+
+function CreateAnnouncementModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     type: 'general',
     priority: 'medium',
     targetAudience: 'all',
-    targetGrades: [] as string[],
-    targetSections: [] as string[],
     expiresAt: '',
     isPublished: true,
   });
@@ -367,190 +302,136 @@ function CreateAnnouncementModal({ onClose, onSuccess }: { onClose: () => void; 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     try {
       await api.post('/communication/announcements', formData);
       onSuccess();
-    } catch (error) {
-      console.error('Failed to create announcement:', error);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create announcement');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className={`max-w-2xl w-full rounded-lg shadow-xl p-6 max-h-[90vh] overflow-y-auto transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className={`text-xl font-bold transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            New Announcement
-          </h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+      <Card
+        padding="lg"
+        className="max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-scale-in"
+      >
+        <div className="flex justify-between items-start mb-5">
+          <h3 className="text-xl font-bold text-foreground">New Announcement</h3>
           <button
+            type="button"
             onClick={onClose}
-            className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500 hover:text-gray-700' : 'dark:text-[#94A3B8] dark:hover:text-[#F1F5F9]'
-            }`}
+            className="text-muted hover:text-foreground transition-colors text-xl"
+            aria-label="Close"
           >
             ✕
           </button>
         </div>
 
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Title *
-            </label>
-            <input
-              type="text"
+            <Label required>Title</Label>
+            <Input
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={e => setFormData({ ...formData, title: e.target.value })}
               required
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
             />
           </div>
 
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Content *
-            </label>
-            <textarea
+            <Label required>Content</Label>
+            <Textarea
               value={formData.content}
-              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+              onChange={e => setFormData({ ...formData, content: e.target.value })}
               required
               rows={4}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Type *
-              </label>
-              <select
+              <Label required>Type</Label>
+              <Select
                 value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => setFormData({ ...formData, type: e.target.value })}
               >
                 <option value="general">General</option>
                 <option value="academic">Academic</option>
                 <option value="event">Event</option>
                 <option value="emergency">Emergency</option>
                 <option value="holiday">Holiday</option>
-              </select>
+              </Select>
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Priority *
-              </label>
-              <select
+              <Label required>Priority</Label>
+              <Select
                 value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => setFormData({ ...formData, priority: e.target.value })}
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
-              </select>
+              </Select>
             </div>
           </div>
 
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Target Audience *
-            </label>
-            <select
+            <Label required>Target Audience</Label>
+            <Select
               value={formData.targetAudience}
-              onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
-              required
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e =>
+                setFormData({ ...formData, targetAudience: e.target.value })
+              }
             >
               <option value="all">All Users</option>
               <option value="students">Students Only</option>
               <option value="teachers">Teachers Only</option>
               <option value="guardians">Guardians Only</option>
               <option value="specific">Specific Users</option>
-            </select>
+            </Select>
           </div>
 
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Expires At (Optional)
-            </label>
-            <input
+            <Label>Expires At (Optional)</Label>
+            <Input
               type="date"
               value={formData.expiresAt}
-              onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setFormData({ ...formData, expiresAt: e.target.value })}
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={formData.isPublished}
-              onChange={(e) => setFormData({ ...formData, isPublished: e.target.checked })}
-              className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              onChange={e =>
+                setFormData({ ...formData, isPublished: e.target.checked })
+              }
+              className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
             />
-            <label className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Publish immediately
-            </label>
-          </div>
+            <span className="text-sm text-foreground">Publish immediately</span>
+          </label>
 
-          <div className={`flex justify-end gap-3 pt-4 border-t transition-colors duration-200 ${
-            theme ? 'border-gray-200' : 'dark:border-[#334155]'
-          }`}>
-            <button
-              type="button"
-              onClick={onClose}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                theme ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'dark:bg-[#334155] dark:text-[#F1F5F9] dark:hover:bg-[#475569]'
-              }`}
-            >
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
-            >
+            </Button>
+            <Button type="submit" variant="primary" loading={loading}>
               {loading ? 'Creating...' : 'Create Announcement'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../lib/api';
+import {
+  Card,
+  CardTitle,
+  Button,
+  Input,
+  Label,
+  Select,
+  Textarea,
+} from '../../components/ui';
+import { DashboardLayout, PageHeader } from '../../components/layout';
+import { formatCurrency } from '../../lib/format';
 
 interface FeeItem {
   name: string;
@@ -24,7 +34,6 @@ const defaultItem: FeeItem = {
 export default function AddFeeStructurePage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,9 +54,8 @@ export default function AddFeeStructurePage() {
   useEffect(() => {
     fetchAcademicYears();
     fetchGrades();
-    if (isEditMode) {
-      fetchStructure();
-    }
+    if (isEditMode) fetchStructure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchAcademicYears = async () => {
@@ -101,9 +109,8 @@ export default function AddFeeStructurePage() {
     }
   };
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: string, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
 
   const handleItemChange = (index: number, field: string, value: any) => {
     const items = [...formData.items];
@@ -111,12 +118,8 @@ export default function AddFeeStructurePage() {
     setFormData(prev => ({ ...prev, items }));
   };
 
-  const addItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, { ...defaultItem }],
-    }));
-  };
+  const addItem = () =>
+    setFormData(prev => ({ ...prev, items: [...prev.items, { ...defaultItem }] }));
 
   const removeItem = (index: number) => {
     if (formData.items.length <= 1) return;
@@ -131,8 +134,9 @@ export default function AddFeeStructurePage() {
     setSaving(true);
     setError('');
 
-    // Validate items
-    const invalidItems = formData.items.filter(item => !item.name || item.amount <= 0);
+    const invalidItems = formData.items.filter(
+      item => !item.name || item.amount <= 0,
+    );
     if (invalidItems.length > 0) {
       setError('All items must have a name and amount greater than 0');
       setSaving(false);
@@ -149,11 +153,8 @@ export default function AddFeeStructurePage() {
         })),
       };
 
-      if (isEditMode) {
-        await api.put(`/fees/structures/${id}`, data);
-      } else {
-        await api.post('/fees/structures', data);
-      }
+      if (isEditMode) await api.put(`/fees/structures/${id}`, data);
+      else await api.post('/fees/structures', data);
 
       navigate('/fees/structures');
     } catch (err: any) {
@@ -173,338 +174,236 @@ export default function AddFeeStructurePage() {
     { value: 'other', label: 'Other' },
   ];
 
+  const totalAmount = formData.items.reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0,
+  );
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-border border-t-primary-500" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-      theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-    }`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-        }`}>
-          {isEditMode ? 'Edit Fee Structure' : 'Add Fee Structure'}
-        </h2>
-        <button
-          onClick={() => navigate('/fees/structures')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            theme ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'dark:bg-[#334155] dark:text-[#F1F5F9] dark:hover:bg-[#475569]'
-          }`}
-        >
-          Cancel
-        </button>
-      </div>
+    <DashboardLayout>
+      <PageHeader
+        title={isEditMode ? 'Edit Fee Structure' : 'Add Fee Structure'}
+        description="Configure fee items and total amount for the academic year"
+        breadcrumb={[
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Fees', path: '/fees/structures' },
+          { label: isEditMode ? 'Edit' : 'Add' },
+        ]}
+        actions={
+          <Button
+            variant="outline"
+            onClick={() => navigate('/fees/structures')}
+          >
+            Cancel
+          </Button>
+        }
+      />
 
       {error && (
-        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
-        <div>
-          <h3 className={`text-lg font-semibold mb-4 transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            Basic Information
-          </h3>
+        {/* Basic Info */}
+        <Card>
+          <CardTitle className="mb-4">Basic Information</CardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Name *
-              </label>
-              <input
-                type="text"
+              <Label required>Name</Label>
+              <Input
                 value={formData.name}
-                onChange={(e) => handleChange('name', e.target.value)}
+                onChange={e => handleChange('name', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
-                placeholder="e.g., Annual Tuition Fee 2024"
+                placeholder="e.g., Annual Tuition Fee 2025-26"
               />
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Academic Year *
-              </label>
-              <select
+              <Label required>Academic Year</Label>
+              <Select
                 value={formData.academicYearId}
-                onChange={(e) => handleChange('academicYearId', e.target.value)}
+                onChange={e => handleChange('academicYearId', e.target.value)}
                 required
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
               >
                 <option value="">Select Academic Year</option>
-                {academicYears.map((year) => (
+                {academicYears.map(year => (
                   <option key={year._id} value={year._id}>
                     {year.name} {year.isCurrent ? '(Current)' : ''}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Grade (Optional)
-              </label>
-              <select
+              <Label>Grade (Optional)</Label>
+              <Select
                 value={formData.gradeId}
-                onChange={(e) => handleChange('gradeId', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('gradeId', e.target.value)}
               >
                 <option value="">All Grades</option>
-                {grades.map((grade) => (
+                {grades.map(grade => (
                   <option key={grade._id} value={grade._id}>
                     {grade.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
-              <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-              }`}>
-                Student Type
-              </label>
-              <select
+              <Label>Student Type</Label>
+              <Select
                 value={formData.studentType}
-                onChange={(e) => handleChange('studentType', e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                  theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                }`}
+                onChange={e => handleChange('studentType', e.target.value)}
               >
                 <option value="all">All Students</option>
                 <option value="new">New Students Only</option>
                 <option value="existing">Existing Students Only</option>
-              </select>
+              </Select>
+            </div>
+            <div className="md:col-span-2">
+              <Label>Description</Label>
+              <Textarea
+                value={formData.description}
+                onChange={e => handleChange('description', e.target.value)}
+                rows={2}
+                placeholder="Additional details about this fee structure"
+              />
             </div>
           </div>
+        </Card>
 
-          <div className="mt-4">
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Description
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={2}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
-              placeholder="Additional details about this fee structure"
-            />
-          </div>
-        </div>
-
-        {/* Fee Items */}
-        <div className={`border-t pt-6 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
+        {/* Items */}
+        <Card>
           <div className="flex items-center justify-between mb-4">
-            <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Fee Items
-            </h3>
-            <button
-              type="button"
-              onClick={addItem}
-              className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-            >
-              + Add Item
-            </button>
+            <CardTitle>Fee Items</CardTitle>
+            <Button type="button" variant="ghost" size="sm" onClick={addItem} leftIcon="➕">
+              Add Item
+            </Button>
           </div>
 
-          {formData.items.map((item, index) => (
-            <div
-              key={index}
-              className={`p-4 rounded-lg mb-4 transition-colors duration-200 ${
-                theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-              }`}
-            >
-              <div className="flex justify-between items-start mb-3">
-                <h4 className={`text-sm font-medium transition-colors duration-200 ${
-                  theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                }`}>
-                  Item {index + 1}
-                </h4>
-                {formData.items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeItem(index)}
-                    className="text-red-500 hover:text-red-700 text-sm"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Item Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                    required
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
-                    placeholder="e.g., Tuition Fee"
-                  />
+          <div className="space-y-4">
+            {formData.items.map((item, index) => (
+              <div
+                key={index}
+                className="p-4 rounded-lg bg-elevated border border-border"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    Item {index + 1}
+                  </p>
+                  {formData.items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="text-xs text-danger hover:text-red-700 font-medium"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Amount *
-                  </label>
-                  <input
-                    type="number"
-                    value={item.amount}
-                    onChange={(e) => handleItemChange(index, 'amount', parseFloat(e.target.value))}
-                    required
-                    min="0"
-                    step="0.01"
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Category
-                  </label>
-                  <select
-                    value={item.category}
-                    onChange={(e) => handleItemChange(index, 'category', e.target.value)}
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
-                  >
-                    {categories.map((cat) => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Due Date (Optional)
-                  </label>
-                  <input
-                    type="date"
-                    value={item.dueDate}
-                    onChange={(e) => handleItemChange(index, 'dueDate', e.target.value)}
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    value={item.description}
-                    onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                    className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
-                    placeholder="Additional details about this fee item"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={item.isOptional}
-                      onChange={(e) => handleItemChange(index, 'isOptional', e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label required>Item Name</Label>
+                    <Input
+                      value={item.name}
+                      onChange={e => handleItemChange(index, 'name', e.target.value)}
+                      required
+                      placeholder="e.g., Tuition Fee"
                     />
-                    <span className={`text-sm transition-colors duration-200 ${
-                      theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      This fee item is optional
-                    </span>
-                  </label>
+                  </div>
+                  <div>
+                    <Label required>Amount (₹)</Label>
+                    <Input
+                      type="number"
+                      value={item.amount}
+                      onChange={e =>
+                        handleItemChange(index, 'amount', parseFloat(e.target.value) || 0)
+                      }
+                      required
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <Label>Category</Label>
+                    <Select
+                      value={item.category}
+                      onChange={e => handleItemChange(index, 'category', e.target.value)}
+                    >
+                      {categories.map(cat => (
+                        <option key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Due Date (Optional)</Label>
+                    <Input
+                      type="date"
+                      value={item.dueDate}
+                      onChange={e => handleItemChange(index, 'dueDate', e.target.value)}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Description</Label>
+                    <Input
+                      value={item.description}
+                      onChange={e => handleItemChange(index, 'description', e.target.value)}
+                      placeholder="Optional details"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={item.isOptional}
+                        onChange={e =>
+                          handleItemChange(index, 'isOptional', e.target.checked)
+                        }
+                        className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-foreground">
+                        This fee item is optional
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
 
           {/* Total */}
-          <div className={`p-4 rounded-lg mt-2 transition-colors duration-200 ${
-            theme ? 'bg-blue-50' : 'dark:bg-blue-900/20'
-          }`}>
-            <div className="flex justify-between items-center">
-              <span className={`font-medium transition-colors duration-200 ${
-                theme ? 'text-blue-800' : 'dark:text-blue-400'
-              }`}>
-                Total Amount:
-              </span>
-              <span className={`text-xl font-bold transition-colors duration-200 ${
-                theme ? 'text-blue-900' : 'dark:text-blue-300'
-              }`}>
-                ${formData.items.reduce((sum, item) => sum + (item.amount || 0), 0).toFixed(2)}
-              </span>
-            </div>
+          <div className="mt-4 p-4 rounded-lg bg-primary-500/10 border border-primary-500/20 flex items-center justify-between">
+            <span className="font-semibold text-primary-700 dark:text-primary-400">
+              Total Amount
+            </span>
+            <span className="text-2xl font-bold text-primary-700 dark:text-primary-400">
+              {formatCurrency(totalAmount)}
+            </span>
           </div>
-        </div>
+        </Card>
 
-        {/* Form Actions */}
-        <div className={`border-t pt-6 flex justify-end gap-3 transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <button
-            type="button"
-            onClick={() => navigate('/fees/structures')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              theme ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'dark:bg-[#334155] dark:text-[#F1F5F9] dark:hover:bg-[#475569]'
-            }`}
-          >
+        {/* Actions */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-border">
+          <Button type="button" variant="outline" onClick={() => navigate('/fees/structures')}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
-          >
+          </Button>
+          <Button type="submit" variant="primary" loading={saving}>
             {saving ? 'Saving...' : isEditMode ? 'Update Structure' : 'Create Structure'}
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+    </DashboardLayout>
   );
 }

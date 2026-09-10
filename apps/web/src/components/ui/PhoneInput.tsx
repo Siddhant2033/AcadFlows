@@ -30,8 +30,9 @@ export function PhoneInput({
   name,
 }: PhoneInputProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Keep only digits, cap at 10
-    const digits = e.target.value.replace(/\D/g, '').slice(0, INDIA.phone.maxLength);
+    const digits = e.target.value
+      .replace(/\D/g, '')
+      .slice(0, INDIA.phone.maxLength);
     onChange(digits);
   };
 
@@ -39,9 +40,9 @@ export function PhoneInput({
     <div className={cn('flex', className)}>
       <span
         className={cn(
-          'inline-flex items-center gap-1 px-3 rounded-l-lg border border-r-0 text-sm font-medium',
+          'inline-flex items-center gap-1.5 px-3 rounded-l-lg border border-r-0 text-sm font-medium',
           'bg-elevated text-muted',
-          error ? 'border-red-500' : 'border-border',
+          error ? 'border-danger' : 'border-border',
         )}
       >
         <span aria-hidden>🇮🇳</span>
@@ -61,10 +62,10 @@ export function PhoneInput({
         maxLength={INDIA.phone.maxLength}
         className={cn(
           'flex-1 rounded-r-lg border bg-surface px-3.5 py-2.5 text-sm text-foreground',
-          'placeholder:text-muted transition-colors',
+          'placeholder:text-muted/70 transition-all duration-200',
           'focus:outline-none focus:ring-2',
           error
-            ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+            ? 'border-danger focus:border-danger focus:ring-danger'
             : 'border-border focus:border-primary-500 focus:ring-primary-500',
           'disabled:opacity-50 disabled:cursor-not-allowed',
         )}

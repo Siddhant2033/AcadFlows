@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
+import { Card, Button, Input, Badge } from '../components/ui';
+import { DashboardLayout, PageHeader } from '../components/layout';
+import { formatTimeAgo } from '../lib/format';
+import { cn } from '../lib/cn';
 
 interface Conversation {
   _id: string;
-  participants: {
-    userId: string;
-    userType: string;
-  }[];
+  participants: { userId: string; userType: string }[];
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
@@ -26,7 +26,6 @@ interface Message {
 }
 
 export default function MessagesPage() {
-  const { theme } = useTheme();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -35,9 +34,8 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
     fetchConversations();
@@ -47,7 +45,8 @@ export default function MessagesPage() {
     if (selectedConversation) {
       fetchMessages();
     }
-  }, [selectedConversation, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversation]);
 
   useEffect(() => {
     scrollToBottom();
@@ -57,7 +56,7 @@ export default function MessagesPage() {
     setLoading(true);
     try {
       const response = await api.get('/communication/messages/conversations');
-      setConversations(response.data.data.items);
+      setConversations(response.data.data.items || []);
     } catch (error) {
       console.error('Failed to fetch conversations:', error);
     } finally {
@@ -66,17 +65,17 @@ export default function MessagesPage() {
   };
 
   const fetchMessages = async () => {
+    if (!selectedConversation) return;
+    setLoadingMessages(true);
     try {
-      const response = await api.get(`/communication/messages/${selectedConversation}?page=${page}&limit=50`);
-      const data = response.data.data;
-      if (page === 1) {
-        setMessages(data.items);
-      } else {
-        setMessages(prev => [...data.items, ...prev]);
-      }
-      setHasMore(data.items.length === 50);
+      const response = await api.get(
+        `/communication/messages/${selectedConversation}?page=1&limit=100`,
+      );
+      setMessages(response.data.data.items || []);
     } catch (error) {
       console.error('Failed to fetch messages:', error);
+    } finally {
+      setLoadingMessages(false);
     }
   };
 
@@ -103,17 +102,20 @@ export default function MessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const getOtherParticipant = (conversation: Conversation) => {
-    return conversation.participants.find(p => p.userId !== user?.id);
-  };
+  const getOtherParticipant = (conversation: Conversation) =>
+    conversation.participants.find(p => p.userId !== user?.id);
 
   const formatTime = (date: string) => {
     const d = new Date(date);
     const now = new Date();
     if (d.toDateString() === now.toDateString()) {
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
     }
-    return d.toLocaleDateString();
+    return d.toLocaleDateString('en-IN');
   };
 
   const filteredConversations = conversations.filter(conv => {
@@ -122,192 +124,249 @@ export default function MessagesPage() {
     return participant.userType.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  return (
-    <div className={`rounded-lg shadow overflow-hidden transition-colors duration-200 ${
-      theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-    }`}>
-      <div className="flex h-[600px]">
-        {/* Conversations List */}
-        <div className={`w-1/3 border-r transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
-          <div className={`p-4 border-b transition-colors duration-200 ${
-            theme ? 'border-gray-200' : 'dark:border-[#334155]'
-          }`}>
-            <h3 className={`font-semibold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Messages
-            </h3>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search conversations..."
-              className={`mt-2 w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
-            />
-          </div>
+  const selectedConv = conversations.find(c => c._id === selectedConversation);
+  const selectedParticipant = selectedConv ? getOtherParticipant(selectedConv) : null;
 
-          <div className="overflow-y-auto h-[calc(100%-80px)]">
-            {loading ? (
-              <div className="flex justify-center items-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="text-center py-8">
-                <p className={`text-sm transition-colors duration-200 ${
-                  theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                }`}>
-                  No conversations
-                </p>
-              </div>
-            ) : (
-              filteredConversations.map((conversation) => {
-                const participant = getOtherParticipant(conversation);
-                if (!participant) return null;
-                return (
-                  <button
-                    key={conversation._id}
-                    onClick={() => setSelectedConversation(conversation._id)}
-                    className={`w-full p-4 text-left border-b transition-all duration-200 ${
-                      selectedConversation === conversation._id
-                        ? theme ? 'bg-primary-50' : 'dark:bg-primary-900/20'
-                        : theme ? 'hover:bg-gray-50' : 'dark:hover:bg-[#1E293B]/50'
-                    } ${theme ? 'border-gray-100' : 'dark:border-[#334155]'}`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className={`font-medium transition-colors duration-200 ${
-                          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                        }`}>
-                          {participant.userType.charAt(0).toUpperCase() + participant.userType.slice(1)}
-                        </p>
-                        <p className={`text-sm truncate max-w-[180px] transition-colors duration-200 ${
-                          theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                        }`}>
-                          {conversation.lastMessage}
-                        </p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className={`text-xs transition-colors duration-200 ${
-                          theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                        }`}>
-                          {formatTime(conversation.lastMessageAt)}
-                        </p>
-                        {conversation.unreadCount > 0 && (
-                          <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium bg-primary-600 text-white rounded-full">
-                            {conversation.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
+  return (
+    <DashboardLayout bare>
+      <div className="h-[calc(100vh-4rem)] flex flex-col">
+        {/* Page header */}
+        <div className="px-4 sm:px-6 lg:px-8 pt-6">
+          <PageHeader
+            title="Messages"
+            description="Your conversations with teachers, guardians, and staff"
+            breadcrumb={[
+              { label: 'Dashboard', path: '/dashboard' },
+              { label: 'Messages' },
+            ]}
+            className="mb-4"
+          />
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 flex flex-col">
-          {selectedConversation ? (
-            <>
-              {/* Messages Header */}
-              <div className={`p-4 border-b transition-colors duration-200 ${
-                theme ? 'border-gray-200' : 'dark:border-[#334155]'
-              }`}>
-                {(() => {
-                  const conv = conversations.find(c => c._id === selectedConversation);
-                  const participant = conv ? getOtherParticipant(conv) : null;
-                  return (
-                    <div>
-                      <p className={`font-medium transition-colors duration-200 ${
-                        theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                      }`}>
-                        {participant ? participant.userType.charAt(0).toUpperCase() + participant.userType.slice(1) : 'Unknown'}
-                      </p>
-                    </div>
-                  );
-                })()}
+        {/* Two-pane layout */}
+        <div className="flex-1 min-h-0 px-4 sm:px-6 lg:px-8 pb-6">
+          <Card padding="none" className="h-full overflow-hidden flex">
+            {/* LEFT: Conversations list */}
+            <div
+              className={cn(
+                'flex flex-col w-full md:w-80 lg:w-96 flex-shrink-0',
+                'border-r border-border',
+                selectedConversation && 'hidden md:flex',
+              )}
+            >
+              {/* Search */}
+              <div className="p-3 border-b border-border">
+                <Input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search conversations..."
+                  leftIcon="🔍"
+                />
               </div>
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {page < 5 && hasMore && (
-                  <button
-                    onClick={() => setPage(p => p + 1)}
-                    className="w-full text-center text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                  >
-                    Load older messages
-                  </button>
-                )}
-                {messages.map((message) => {
-                  const isOwn = message.senderId === user?.id;
-                  return (
-                    <div
-                      key={message._id}
-                      className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[70%] p-3 rounded-lg ${
-                          isOwn
-                            ? 'bg-primary-600 text-white'
-                            : theme
-                            ? 'bg-gray-100 text-gray-900'
-                            : 'dark:bg-[#0F172A] dark:text-[#F1F5F9]'
-                        }`}
+              {/* List */}
+              <div className="flex-1 overflow-y-auto">
+                {loading ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="animate-spin rounded-full h-6 w-6 border-[3px] border-border border-t-primary-500" />
+                  </div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="text-center py-12 px-4">
+                    <p className="text-4xl mb-2">💬</p>
+                    <p className="text-sm text-muted">No conversations</p>
+                    <p className="text-xs text-muted mt-1">
+                      Start by replying to a message
+                    </p>
+                  </div>
+                ) : (
+                  filteredConversations.map(conv => {
+                    const participant = getOtherParticipant(conv);
+                    if (!participant) return null;
+                    const isActive = selectedConversation === conv._id;
+
+                    return (
+                      <button
+                        key={conv._id}
+                        type="button"
+                        onClick={() => setSelectedConversation(conv._id)}
+                        className={cn(
+                          'w-full text-left px-4 py-3 border-b border-border',
+                          'transition-colors duration-150',
+                          'hover:bg-elevated/60',
+                          isActive
+                            ? 'bg-primary-500/10 border-l-4 border-l-primary-500'
+                            : 'border-l-4 border-l-transparent',
+                        )}
                       >
-                        <p className="text-sm">{message.content}</p>
-                        <p className={`text-xs mt-1 ${
-                          isOwn ? 'text-primary-100' : theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                        }`}>
-                          {formatTime(message.createdAt)}
-                          {isOwn && message.isRead && ' ✓'}
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-full bg-accent-500/15 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-semibold text-accent-600 dark:text-accent-400">
+                              {participant.userType.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <p className="text-sm font-medium text-foreground capitalize truncate">
+                                {participant.userType}
+                              </p>
+                              <span className="text-[10px] text-muted flex-shrink-0">
+                                {formatTime(conv.lastMessageAt)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted truncate mt-0.5">
+                              {conv.lastMessage || 'No messages yet'}
+                            </p>
+                          </div>
+                          {conv.unreadCount > 0 && (
+                            <span className="w-5 h-5 rounded-full bg-primary-500 text-white text-[10px] font-semibold flex items-center justify-center flex-shrink-0">
+                              {conv.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT: Message thread */}
+            <div
+              className={cn(
+                'flex-1 flex flex-col min-w-0',
+                !selectedConversation && 'hidden md:flex',
+              )}
+            >
+              {selectedConversation ? (
+                <>
+                  {/* Thread header */}
+                  <div className="px-4 py-3 border-b border-border flex items-center gap-3 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConversation(null)}
+                      className="md:hidden p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-elevated"
+                      aria-label="Back to conversations"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                    </button>
+
+                    <div className="w-10 h-10 rounded-full bg-accent-500/15 flex items-center justify-center">
+                      <span className="text-sm font-semibold text-accent-600 dark:text-accent-400">
+                        {selectedParticipant?.userType.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground capitalize">
+                        {selectedParticipant?.userType}
+                      </p>
+                      <p className="text-xs text-muted">Direct message</p>
+                    </div>
+                  </div>
+
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-background/40">
+                    {loadingMessages ? (
+                      <div className="flex justify-center items-center h-32">
+                        <div className="animate-spin rounded-full h-6 w-6 border-[3px] border-border border-t-primary-500" />
+                      </div>
+                    ) : messages.length === 0 ? (
+                      <div className="text-center py-12">
+                        <p className="text-4xl mb-2">👋</p>
+                        <p className="text-sm text-muted">
+                          Start the conversation below
                         </p>
                       </div>
-                    </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
+                    ) : (
+                      messages.map(message => {
+                        const isOwn = message.senderId === user?.id;
+                        return (
+                          <div
+                            key={message._id}
+                            className={cn(
+                              'flex',
+                              isOwn ? 'justify-end' : 'justify-start',
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'max-w-[75%] px-4 py-2.5 rounded-2xl',
+                                isOwn
+                                  ? 'bg-primary-500 text-white rounded-br-sm'
+                                  : 'bg-surface border border-border text-foreground rounded-bl-sm',
+                              )}
+                            >
+                              <p className="text-sm whitespace-pre-wrap break-words">
+                                {message.content}
+                              </p>
+                              <p
+                                className={cn(
+                                  'text-[10px] mt-1 text-right',
+                                  isOwn
+                                    ? 'text-white/70'
+                                    : 'text-muted',
+                                )}
+                              >
+                                {formatTime(message.createdAt)}
+                                {isOwn && message.isRead && ' ✓✓'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
 
-              {/* Message Input */}
-              <form onSubmit={sendMessage} className={`p-4 border-t transition-colors duration-200 ${
-                theme ? 'border-gray-200' : 'dark:border-[#334155]'
-              }`}>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type a message..."
-                    className={`flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                      theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-                    }`}
-                  />
-                  <button
-                    type="submit"
-                    disabled={sending || !newMessage.trim()}
-                    className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                  {/* Composer */}
+                  <form
+                    onSubmit={sendMessage}
+                    className="p-3 border-t border-border flex gap-2 flex-shrink-0 bg-surface"
                   >
-                    {sending ? 'Sending...' : 'Send'}
-                  </button>
+                    <Input
+                      value={newMessage}
+                      onChange={e => setNewMessage(e.target.value)}
+                      placeholder="Type a message..."
+                      className="flex-1"
+                      disabled={sending}
+                    />
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={sending || !newMessage.trim()}
+                      loading={sending}
+                      leftIcon="➤"
+                    >
+                      Send
+                    </Button>
+                  </form>
+                </>
+              ) : (
+                /* Empty state */
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-6xl mb-4">💬</p>
+                    <p className="text-sm text-muted">
+                      Select a conversation to start messaging
+                    </p>
+                  </div>
                 </div>
-              </form>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>
-                Select a conversation to start messaging
-              </p>
+              )}
             </div>
-          )}
+          </Card>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

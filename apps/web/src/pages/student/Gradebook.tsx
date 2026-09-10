@@ -1,29 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { Card, Select } from '../../components/ui';
+import { DashboardLayout, PageHeader } from '../../components/layout';
+import { cn } from '../../lib/cn';
 
 interface GradebookEntry {
-  subjectId: {
-    _id: string;
-    name: string;
-    code: string;
-  };
+  subjectId: { _id: string; name: string; code: string };
   totalScore: number;
   averageScore: number;
   grade: string;
   gradePoint: number;
-  assignments: {
-    assignmentId: string;
-    score: number;
-    maxScore: number;
-    weightage: number;
-  }[];
+  assignments: { assignmentId: string; score: number; maxScore: number; weightage: number }[];
 }
 
+const gradeColor = (grade: string) => {
+  if (!grade) return 'text-muted';
+  if (grade.startsWith('A')) return 'text-green-600 dark:text-green-400';
+  if (grade.startsWith('B')) return 'text-accent-600 dark:text-accent-400';
+  if (grade.startsWith('C')) return 'text-yellow-600 dark:text-yellow-400';
+  return 'text-red-600 dark:text-red-400';
+};
+
 export default function GradebookPage() {
-  const { theme } = useTheme();
   const { user } = useAuth();
   const [gradebook, setGradebook] = useState<GradebookEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,9 +34,8 @@ export default function GradebookPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedYear) {
-      fetchGradebook();
-    }
+    if (selectedYear) fetchGradebook();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedYear]);
 
   const fetchAcademicYears = async () => {
@@ -45,9 +43,7 @@ export default function GradebookPage() {
       const response = await api.get('/academic/academic-years');
       setAcademicYears(response.data.data);
       const current = response.data.data.find((y: any) => y.isCurrent);
-      if (current) {
-        setSelectedYear(current._id);
-      }
+      if (current) setSelectedYear(current._id);
     } catch (error) {
       console.error('Failed to fetch academic years:', error);
     }
@@ -65,176 +61,132 @@ export default function GradebookPage() {
     }
   };
 
-  const getGradeColor = (grade: string) => {
-    const colors: Record<string, string> = {
-      'A+': 'text-green-600 dark:text-green-400',
-      'A': 'text-green-500 dark:text-green-300',
-      'B+': 'text-blue-600 dark:text-blue-400',
-      'B': 'text-blue-500 dark:text-blue-300',
-      'C+': 'text-yellow-600 dark:text-yellow-400',
-      'C': 'text-yellow-500 dark:text-yellow-300',
-      'F': 'text-red-600 dark:text-red-400',
-    };
-    return colors[grade] || 'text-gray-600 dark:text-gray-400';
-  };
+  const overallAverage =
+    gradebook.length > 0
+      ? Math.round(
+          gradebook.reduce((sum, g) => sum + g.averageScore, 0) / gradebook.length,
+        )
+      : 0;
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
+  const overallGrade =
+    overallAverage >= 90 ? 'A+' :
+    overallAverage >= 80 ? 'A' :
+    overallAverage >= 70 ? 'B+' :
+    overallAverage >= 60 ? 'B' :
+    overallAverage >= 50 ? 'C+' :
+    overallAverage >= 40 ? 'C' : 'F';
 
   return (
-    <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-      theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-    }`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-        }`}>
-          📊 My Gradebook
-        </h2>
-      </div>
+    <DashboardLayout>
+      <PageHeader
+        title="My Gradebook"
+        description="Your grades across all subjects"
+        breadcrumb={[{ label: 'Dashboard', path: '/dashboard' }, { label: 'Gradebook' }]}
+      />
 
-      {/* Academic Year Filter */}
-      <div className="mb-6">
-        <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-          theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-        }`}>
-          Academic Year
-        </label>
-        <select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          className={`w-full max-w-xs px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-            theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-          }`}
-        >
-          {academicYears.map((year) => (
-            <option key={year._id} value={year._id}>
-              {year.name} {year.isCurrent ? '(Current)' : ''}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {gradebook.length === 0 ? (
-        <div className="text-center py-12">
-          <p className={`text-sm transition-colors duration-200 ${
-            theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-          }`}>
-            No grades available yet.
-          </p>
+      <Card className="mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
+              Academic Year
+            </label>
+            <Select
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+            >
+              {academicYears.map(year => (
+                <option key={year._id} value={year._id}>
+                  {year.name} {year.isCurrent ? '(Current)' : ''}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
+      </Card>
+
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-border border-t-primary-500" />
+        </div>
+      ) : gradebook.length === 0 ? (
+        <Card className="text-center py-16">
+          <p className="text-5xl mb-3">📚</p>
+          <p className="text-sm text-muted">No grades available yet</p>
+        </Card>
       ) : (
         <div className="space-y-6">
           {/* Overall Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`p-4 rounded-lg transition-colors duration-200 ${
-              theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-            }`}>
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>Average Score</p>
-              <p className={`text-2xl font-bold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>
-                {gradebook.length > 0 
-                  ? Math.round(gradebook.reduce((sum, g) => sum + g.averageScore, 0) / gradebook.length) 
-                  : 0}%
+            <Card>
+              <p className="text-xs uppercase tracking-wider text-muted">
+                Overall Average
               </p>
-            </div>
-            <div className={`p-4 rounded-lg transition-colors duration-200 ${
-              theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-            }`}>
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>Subjects</p>
-              <p className={`text-2xl font-bold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>{gradebook.length}</p>
-            </div>
-            <div className={`p-4 rounded-lg transition-colors duration-200 ${
-              theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-            }`}>
-              <p className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-              }`}>Overall Grade</p>
-              <p className={`text-2xl font-bold transition-colors duration-200 ${
-                theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-              }`}>
-                {gradebook.length > 0 
-                  ? gradebook.reduce((best, g) => {
-                      const bestPoint = best.gradePoint || 0;
-                      const currentPoint = g.gradePoint || 0;
-                      return currentPoint > bestPoint ? g : best;
-                    }, gradebook[0]).grade || 'N/A'
-                  : 'N/A'}
+              <p className="text-3xl font-bold text-foreground mt-1">
+                {overallAverage}%
               </p>
-            </div>
+            </Card>
+            <Card>
+              <p className="text-xs uppercase tracking-wider text-muted">
+                Overall Grade
+              </p>
+              <p className={cn('text-3xl font-bold mt-1', gradeColor(overallGrade))}>
+                {overallGrade}
+              </p>
+            </Card>
+            <Card>
+              <p className="text-xs uppercase tracking-wider text-muted">Subjects</p>
+              <p className="text-3xl font-bold text-foreground mt-1">
+                {gradebook.length}
+              </p>
+            </Card>
           </div>
 
           {/* Subject Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {gradebook.map((entry) => (
-              <div
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {gradebook.map((entry, idx) => (
+              <Card
                 key={entry.subjectId._id}
-                className={`rounded-lg border p-4 transition-colors duration-200 ${
-                  theme ? 'border-gray-200' : 'dark:border-[#334155]'
-                }`}
+                className={cn(
+                  'animate-fade-up',
+                  idx < 6 ? `stagger-${Math.min(idx + 1, 6)}` : '',
+                )}
+                style={{ opacity: 0, animationFillMode: 'forwards' }}
               >
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h3 className={`text-lg font-semibold transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
+                    <h3 className="text-base font-semibold text-foreground">
                       {entry.subjectId.name}
                     </h3>
-                    <p className={`text-sm transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
+                    <p className="text-xs text-muted mt-0.5">
                       {entry.subjectId.code}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className={`text-2xl font-bold ${getGradeColor(entry.grade)}`}>
+                    <p className={cn('text-3xl font-bold', gradeColor(entry.grade))}>
                       {entry.grade}
                     </p>
-                    <p className={`text-sm transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
+                    <p className="text-xs text-muted">
                       {Math.round(entry.averageScore)}%
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-3">
-                  <div className={`w-full h-2 rounded-full overflow-hidden transition-colors duration-200 ${
-                    theme ? 'bg-gray-200' : 'dark:bg-[#334155]'
-                  }`}>
-                    <div
-                      className="h-full rounded-full bg-primary-500 transition-all duration-500"
-                      style={{ width: `${Math.min(entry.averageScore, 100)}%` }}
-                    />
-                  </div>
+                <div className="w-full h-2 rounded-full bg-elevated overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary-500 transition-all duration-500"
+                    style={{ width: `${Math.min(entry.averageScore, 100)}%` }}
+                  />
                 </div>
 
-                <div className={`mt-3 pt-3 border-t transition-colors duration-200 ${
-                  theme ? 'border-gray-200' : 'dark:border-[#334155]'
-                }`}>
-                  <p className={`text-xs transition-colors duration-200 ${
-                    theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    {entry.assignments.length} assignments · GPA: {entry.gradePoint.toFixed(1)}
-                  </p>
+                <div className="mt-3 pt-3 border-t border-border flex justify-between text-xs text-muted">
+                  <span>{entry.assignments.length} assignment(s)</span>
+                  <span>GPA: {entry.gradePoint.toFixed(1)}</span>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </div>
       )}
-    </div>
+    </DashboardLayout>
   );
 }
