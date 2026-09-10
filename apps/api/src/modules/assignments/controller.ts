@@ -2,6 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import { AssignmentService } from './service';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
+import { Teacher } from '../../models/Teacher';
+import { Student } from '../../models/Student';
+
+class AppError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = 'AppError';
+    this.statusCode = statusCode;
+  }
+}
 
 // Validation Schemas
 const createAssignmentSchema = z.object({
@@ -25,6 +37,7 @@ const createAssignmentSchema = z.object({
 
 const submitAssignmentSchema = z.object({
   assignmentId: z.string().min(1),
+  studentId: z.string().optional(), // required only when admin/teacher submits on behalf
   content: z.string().optional(),
   attachments: z.array(z.object({
     name: z.string(),
@@ -52,11 +65,21 @@ export class AssignmentController {
       const authReq = req as AuthRequest;
       const validated = createAssignmentSchema.parse(req.body);
 
+      // Look up the Teacher document for this user.
+      const teacher = await Teacher.findOne({
+        userId: authReq.user.id,
+        tenantId: authReq.user.tenantId,
+        isDeleted: false,
+      });
+      if (!teacher) {
+        throw new AppError('Teacher profile not found for this user', 404);
+      }
+
       const assignment = await AssignmentService.createAssignment(
         authReq.user.tenantId,
         {
           ...validated,
-          teacherId: authReq.user.id,
+          teacherId: teacher._id.toString(),
           createdBy: authReq.user.id,
         }
       );
@@ -169,10 +192,26 @@ export class AssignmentController {
       const authReq = req as AuthRequest;
       const validated = submitAssignmentSchema.parse(req.body);
 
-      // If user is student, use their ID
-      const studentId = authReq.user.role === 'student' 
-        ? authReq.user.id 
-        : authReq.user.id;
+      // `studentId` in the request body.)
+      let studentId: string;
+      if (authReq.user.role === 'student') {
+        const student = await Student.findOne({
+          userId: authReq.user.id,
+          tenantId: authReq.user.tenantId,
+          isDeleted: false,
+        });
+        if (!student) {
+          throw new AppError('Student profile not found for this user', 404);
+        }
+        studentId = student._id.toString();
+      } else {
+        // Admin/teacher submitting on behalf — require explicit studentId
+        const bodyStudentId = (req.body as any).studentId;
+        if (!bodyStudentId) {
+          throw new AppError('studentId is required when submitting on behalf of a student', 400);
+        }
+        studentId = bodyStudentId;
+      }
 
       const submission = await AssignmentService.submitAssignment(
         authReq.user.tenantId,

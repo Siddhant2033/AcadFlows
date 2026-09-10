@@ -9,7 +9,7 @@ export interface ITimetable extends Document {
   isActive: boolean;
   startDate: Date;
   endDate: Date;
-  entries: ITimetableEntry[];
+  // Note: entries live in the separate TimetableEntry collection
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -176,7 +176,6 @@ const timetableSchema = new Schema<ITimetable>(
       type: Date,
       required: true,
     },
-    entries: [timetableEntrySchema],
     createdBy: {
       type: String,
       required: true,

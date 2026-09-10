@@ -44,9 +44,12 @@ export class AttendanceService {
       // Get all students in the section
       const students = await Student.find({
         tenantId,
-        section: data.sectionId,
         status: 'active',
         isDeleted: false,
+        $or: [
+          { sectionId: data.sectionId },
+          { section: data.sectionId }, // legacy fallback
+        ],
       });
 
       if (students.length === 0) {
@@ -54,9 +57,11 @@ export class AttendanceService {
       }
 
       // Create attendance records
+      const dateOnly = date.toISOString().split('T')[0];
       const attendanceRecords = data.records.map(record => ({
         tenantId,
         date: date,
+        dateOnly,
         type: 'student',
         entityId: record.studentId,
         sectionId: data.sectionId,
@@ -71,13 +76,14 @@ export class AttendanceService {
       // Check if all students are accounted for
       const studentIds = students.map(s => s._id.toString());
       const recordedIds = data.records.map(r => r.studentId);
-      
+
       // Mark absent students automatically
       for (const studentId of studentIds) {
         if (!recordedIds.includes(studentId)) {
           attendanceRecords.push({
             tenantId,
             date: date,
+            dateOnly,
             type: 'student',
             entityId: studentId,
             sectionId: data.sectionId,
@@ -109,6 +115,7 @@ export class AttendanceService {
         academicYearId: data.academicYearId,
         sectionId: data.sectionId,
         date: date,
+        dateOnly,
         type: 'student',
         totalPresent: stats.present,
         totalAbsent: stats.absent,
@@ -179,9 +186,11 @@ export class AttendanceService {
     }
 
     // Create attendance records
+    const dateOnly = date.toISOString().split('T')[0];
     const attendanceRecords = data.records.map(record => ({
       tenantId,
       date: date,
+      dateOnly,
       type: 'teacher',
       entityId: record.teacherId,
       academicYearId: data.academicYearId,
@@ -202,6 +211,7 @@ export class AttendanceService {
         attendanceRecords.push({
           tenantId,
           date: date,
+          dateOnly,
           type: 'teacher',
           entityId: teacherId,
           academicYearId: data.academicYearId,
@@ -230,6 +240,7 @@ export class AttendanceService {
       tenantId,
       academicYearId: data.academicYearId,
       date: date,
+      dateOnly,
       type: 'teacher',
       totalPresent: stats.present,
       totalAbsent: stats.absent,
@@ -412,7 +423,7 @@ export class AttendanceService {
     const late = records.filter(r => r.status === 'late').length;
     const halfDay = records.filter(r => r.status === 'half_day').length;
 
-    const percentage = total > 0 
+    const percentage = total > 0
       ? Math.round(((present + late + halfDay) / total) * 100)
       : 0;
 
@@ -457,10 +468,10 @@ export class AttendanceService {
     // Get all students in the section
     const students = await Student.find({
       tenantId,
-      section: sectionId,
       status: 'active',
       isDeleted: false,
-    }).select('_id firstName lastName rollNo');
+      $or: [{ sectionId }, { section: sectionId }],
+    }).select('_id firstName lastName rollNo sectionId section');
 
     // Get daily attendance for each student
     const attendanceData = await Attendance.find({
@@ -474,7 +485,7 @@ export class AttendanceService {
     for (const student of students) {
       const studentId = student._id.toString();
       const records = attendanceData.filter(a => a.entityId === studentId);
-      
+
       const present = records.filter(r => r.status === 'present').length;
       const absent = records.filter(r => r.status === 'absent').length;
       const late = records.filter(r => r.status === 'late').length;
@@ -531,7 +542,7 @@ export class AttendanceService {
       sectionId,
       type: 'student',
       status: 'absent',
-    }).populate('entityId', 'firstName lastName guardians');
+    });
 
     if (absentStudents.length === 0) return;
 
@@ -539,7 +550,7 @@ export class AttendanceService {
     // For MVP, log the notifications
     console.log(`📧 Sending attendance notifications for ${absentStudents.length} students`);
     console.log(`📅 Date: ${date.toISOString().split('T')[0]}`);
-    
+
     // Log absent students
     for (const record of absentStudents) {
       const student = await Student.findById(record.entityId);
@@ -656,7 +667,7 @@ export class AttendanceService {
       { present: 0, absent: 0, late: 0, halfDay: 0, total: 0, days: 0, percentage: 0 }
     );
 
-    const avgPercentage = monthStats.days > 0 
+    const avgPercentage = monthStats.days > 0
       ? Math.round(monthStats.percentage / monthStats.days)
       : 0;
 

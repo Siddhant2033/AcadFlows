@@ -446,6 +446,40 @@ discountSchema.index({ tenantId: 1, isActive: 1, startDate: 1 });
 feeReminderSchema.index({ tenantId: 1, invoiceId: 1 });
 feeReminderSchema.index({ tenantId: 1, status: 1, dueDate: 1 });
 
+// ─────────────────────────────────────────────────────────────
+// FIXED B13: Auto-compute totals on save so they never drift.
+// ─────────────────────────────────────────────────────────────
+
+feeStructureSchema.pre('save', function (next) {
+  if (this.items && this.items.length > 0) {
+    this.totalAmount = this.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+  }
+  next();
+});
+
+invoiceSchema.pre('save', function (next) {
+  // Recompute subtotal from items
+  if (this.items && this.items.length > 0) {
+    this.subtotal = this.items.reduce((sum, item) => {
+      const lineTotal = (item.amount || 0) * (item.quantity || 1);
+      item.total = lineTotal; // keep line total in sync
+      return sum + lineTotal;
+    }, 0);
+  } else {
+    this.subtotal = 0;
+  }
+
+  // Apply discount
+  const discount = this.discountAmount || 0;
+  this.total = Math.max(0, this.subtotal - discount);
+
+  // Recompute balance
+  const paid = this.paidAmount || 0;
+  this.balanceDue = Math.max(0, this.total - paid);
+
+  next();
+});
+
 export const FeeStructure = mongoose.model<IFeeStructure>('FeeStructure', feeStructureSchema);
 export const Invoice = mongoose.model<IInvoice>('Invoice', invoiceSchema);
 export const Payment = mongoose.model<IPayment>('Payment', paymentSchema);

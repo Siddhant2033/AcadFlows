@@ -6,7 +6,7 @@ import { AppError } from '../../middleware/error-handler';
 
 export class FeeService {
   // ============ Fee Structure ============
-  
+
   static async createFeeStructure(tenantId: string, data: any) {
     const items = data.items.map((item: any) => ({
       ...item,
@@ -114,7 +114,7 @@ export class FeeService {
       }));
 
       const subtotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
-      
+
       // Apply discount if provided
       let discountAmount = 0;
       let discountType: 'percentage' | 'fixed' | undefined;
@@ -135,7 +135,7 @@ export class FeeService {
         if (discount) {
           discountType = discount.type;
           discountCode = discount.code;
-          
+
           if (discount.type === 'percentage') {
             discountAmount = (subtotal * discount.value) / 100;
           } else {
@@ -245,8 +245,8 @@ export class FeeService {
 
     const invoice = await Invoice.findByIdAndUpdate(
       id,
-      { 
-        $set: { 
+      {
+        $set: {
           status,
           ...(status === 'paid' ? { paidAt: new Date() } : {}),
         },
@@ -300,31 +300,21 @@ export class FeeService {
         ...data,
       }], { session });
 
-      // Update invoice
-      const newPaidAmount = invoice.paidAmount + data.amount;
-      const newBalanceDue = invoice.total - newPaidAmount;
-      
-      let newStatus: string = invoice.status;
-      if (newBalanceDue <= 0) {
-        newStatus = 'paid';
-      } else if (newPaidAmount > 0) {
-        newStatus = 'partially_paid';
+      // Update invoice — use save() so the invoice pre-save hook
+      // recomputes subtotal/total/balanceDue consistently.
+      invoice.paidAmount = invoice.paidAmount + data.amount;
+      invoice.paymentMethod = data.method;
+      invoice.paymentReference = data.reference;
+
+      const newBalance = invoice.total - invoice.paidAmount;
+      if (newBalance <= 0) {
+        invoice.status = 'paid';
+        invoice.paidAt = new Date();
+      } else if (invoice.paidAmount > 0) {
+        invoice.status = 'partially_paid';
       }
 
-      await Invoice.findByIdAndUpdate(
-        invoice._id,
-        {
-          $set: {
-            paidAmount: newPaidAmount,
-            balanceDue: newBalanceDue,
-            status: newStatus,
-            paidAt: newBalanceDue <= 0 ? new Date() : invoice.paidAt,
-            paymentMethod: data.method,
-            paymentReference: data.reference,
-          },
-        },
-        { session }
-      );
+      await invoice.save({ session });
 
       await session.commitTransaction();
       session.endSession();
@@ -496,7 +486,7 @@ export class FeeService {
         grade: filters.gradeId,
         isDeleted: false,
       }).select('_id');
-      
+
       matchQuery.studentId = { $in: students.map(s => s._id) };
     }
 
@@ -617,11 +607,11 @@ export class FeeService {
     const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
 
     const paidInvoices = invoices.filter(inv => inv.status === 'paid').length;
-    const pendingInvoices = invoices.filter(inv => 
+    const pendingInvoices = invoices.filter(inv =>
       inv.status === 'sent' || inv.status === 'partially_paid'
     ).length;
-    const overdueInvoices = invoices.filter(inv => 
-      (inv.status === 'sent' || inv.status === 'partially_paid') && 
+    const overdueInvoices = invoices.filter(inv =>
+      (inv.status === 'sent' || inv.status === 'partially_paid') &&
       inv.dueDate < new Date()
     ).length;
 

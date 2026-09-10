@@ -65,7 +65,19 @@ export class TimetableService {
       throw new AppError('Timetable not found', 404);
     }
 
-    return timetable;
+    // Attach entries from the separate collection
+    const entries = await TimetableEntry.find({ timetableId: id })
+      .populate('subjectId', 'name code')
+      .populate('teacherId', 'firstName lastName')
+      .populate('sectionId', 'name')
+      .populate('gradeId', 'name')
+      .populate('roomId', 'name code')
+      .sort({ dayOfWeek: 1, startTime: 1 });
+
+    return {
+      ...timetable.toObject(),
+      entries,
+    };
   }
 
   static async updateTimetable(id: string, data: any) {
@@ -95,6 +107,7 @@ export class TimetableService {
     await TimetableEntry.deleteMany({ timetableId: id });
 
     const timetable = await Timetable.findByIdAndDelete(id);
+
     if (!timetable) {
       throw new AppError('Timetable not found', 404);
     }
@@ -129,15 +142,11 @@ export class TimetableService {
       throw new AppError(`Conflict detected: ${conflicts.join(', ')}`, 409);
     }
 
+    // FIXED B14: entries live only in TimetableEntry collection.
     const entry = await TimetableEntry.create({
       tenantId,
       timetableId,
       ...data,
-    });
-
-    // Add entry to timetable
-    await Timetable.findByIdAndUpdate(timetableId, {
-      $push: { entries: entry._id },
     });
 
     return entry;
@@ -187,12 +196,6 @@ export class TimetableService {
     if (!entry) {
       throw new AppError('Timetable entry not found', 404);
     }
-
-    // Remove entry from timetable
-    await Timetable.findByIdAndUpdate(entry.timetableId, {
-      $pull: { entries: entryId },
-    });
-
     return entry;
   }
 
@@ -236,8 +239,8 @@ export class TimetableService {
       }).populate('teacherId', 'firstName lastName');
 
       if (teacherConflicts.length > 0) {
-        const names = teacherConflicts.map((e: any) => 
-          e.teacherId?.firstName && e.teacherId?.lastName 
+        const names = teacherConflicts.map((e: any) =>
+          e.teacherId?.firstName && e.teacherId?.lastName
             ? `${e.teacherId.firstName} ${e.teacherId.lastName}`
             : 'Unknown Teacher'
         );

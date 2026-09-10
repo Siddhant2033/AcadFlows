@@ -8,39 +8,36 @@ import { Tenant } from '../../models/Tenant';
 import { AppError } from '../../middleware/error-handler';
 import { UserCreateInput, UserLoginInput, AuthTokens } from '@school-platform/shared';
 import crypto from 'crypto';
-
-// In production, store reset tokens in Redis or a separate collection
-// For MVP, we'll store in memory (will be lost on server restart)
-const resetTokens = new Map<string, { userId: string; expiresAt: Date }>();
+import { PasswordResetToken } from '../../models/PasswordResetToken';
 
 export class AuthService {
   static async register(input: UserCreateInput): Promise<{ user: any; tokens: AuthTokens }> {
-    console.log('🔍 Register service called for:', input.email);
-    
-    // Validate tenant ID format
     if (!mongoose.Types.ObjectId.isValid(input.tenantId)) {
-      console.error('❌ Invalid tenant ID format:', input.tenantId);
       throw new AppError('Invalid tenant ID format. Please use a valid 24-character hex string.', 400);
     }
-    
+
     // Check if tenant exists
     const tenant = await Tenant.findOne({ _id: input.tenantId, status: 'active' });
     if (!tenant) {
-      console.error('❌ Tenant not found:', input.tenantId);
       throw new AppError('Tenant not found or inactive', 400);
     }
-    
-    console.log('✅ Tenant found:', {
-      id: tenant._id,
-      name: tenant.name,
-      schoolCode: tenant.schoolCode,
-    });
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: input.email });
     if (existingUser) {
-      console.error('❌ User already exists:', input.email);
       throw new AppError('User already exists with this email', 409);
+    }
+
+    const adminExists = await User.exists({
+      tenantId: input.tenantId,
+      role: 'admin',
+      status: 'active',
+    });
+
+    let finalRole = input.role;
+    if (!adminExists) {
+      finalRole = 'admin';
+      console.log('🔐 No admin for tenant — forcing role to admin for', input.email);
     }
 
     // Create user
@@ -50,7 +47,7 @@ export class AuthService {
       passwordHash: input.password,
       firstName: input.firstName,
       lastName: input.lastName,
-      role: input.role,
+      role: finalRole,
     });
 
     console.log('✅ User created:', {
@@ -69,7 +66,7 @@ export class AuthService {
 
   static async login(input: UserLoginInput): Promise<{ user: any; tokens: AuthTokens }> {
     console.log('🔍 Login service called for:', input.email);
-    
+
     const user = await User.findOne({ email: input.email, status: 'active' });
     if (!user) {
       console.error('❌ User not found:', input.email);
@@ -96,17 +93,17 @@ export class AuthService {
 
   static async refreshToken(refreshToken: string): Promise<AuthTokens> {
     console.log('🔍 Refresh token service called');
-    
+
     try {
       const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret) as any;
-      
+
       console.log('✅ Refresh token decoded for user:', decoded.email);
-      
-      const user = await User.findOne({ 
-        _id: decoded.userId, 
-        status: 'active' 
+
+      const user = await User.findOne({
+        _id: decoded.userId,
+        status: 'active'
       });
-      
+
       if (!user) {
         console.error('❌ User not found for refresh token');
         throw new AppError('Invalid refresh token', 401);
@@ -142,62 +139,54 @@ export class AuthService {
   }
 
   static async forgotPassword(email: string): Promise<void> {
-    console.log('🔍 Forgot password service called for:', email);
-    
     const user = await User.findOne({ email, status: 'active' });
     if (!user) {
-      console.log('⚠️ User not found for forgot password:', email);
-      // Still return success to prevent email enumeration
+      // Silently succeed to prevent email enumeration
       return;
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    
-    // Store token with expiry (1 hour)
-    resetTokens.set(resetToken, {
+    const token = crypto.randomBytes(32).toString('hex');
+
+    // Invalidate any prior tokens for this user
+    await PasswordResetToken.deleteMany({ userId: user.id });
+
+    // FIXED B19: persist reset token in DB, 1-hour TTL
+    await PasswordResetToken.create({
       userId: user.id,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      token,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      used: false,
     });
 
     console.log('🔑 Reset token generated for:', email);
-    console.log('📧 Reset token (dev):', resetToken);
-
-    // In production, send email with reset link
-    // For MVP, we'll log the token and return success
-    console.log(`🔗 Reset link: http://localhost:5173/reset-password?token=${resetToken}`);
+    console.log('📧 Reset token (dev):', token);
+    console.log(`🔗 Reset link: http://localhost:5173/reset-password?token=${token}`);
   }
 
   static async resetPassword(token: string, newPassword: string): Promise<void> {
-    console.log('🔍 Reset password service called');
-    
-    const tokenData = resetTokens.get(token);
-    if (!tokenData) {
-      console.error('❌ Invalid or expired token');
+    const record = await PasswordResetToken.findOne({ token, used: false });
+
+    if (!record) {
       throw new AppError('Invalid or expired reset token', 400);
     }
 
-    if (tokenData.expiresAt < new Date()) {
-      console.error('❌ Token expired');
-      resetTokens.delete(token);
+    if (record.expiresAt < new Date()) {
+      await PasswordResetToken.deleteOne({ _id: record._id });
       throw new AppError('Reset token has expired', 400);
     }
 
-    const user = await User.findById(tokenData.userId);
+    const user = await User.findById(record.userId);
     if (!user) {
-      console.error('❌ User not found for reset token');
-      resetTokens.delete(token);
+      await PasswordResetToken.deleteOne({ _id: record._id });
       throw new AppError('User not found', 404);
     }
 
-    // Update password
     user.passwordHash = newPassword;
     await user.save();
 
-    console.log('✅ Password reset successfully for:', user.email);
-    
-    // Clean up token
-    resetTokens.delete(token);
+    // Mark as used so it can't be replayed
+    record.used = true;
+    await record.save();
   }
 
   static async changePassword(
@@ -206,7 +195,7 @@ export class AuthService {
     newPassword: string
   ): Promise<void> {
     console.log('🔍 Change password service called for user:', userId);
-    
+
     const user = await User.findById(userId);
     if (!user) {
       console.error('❌ User not found:', userId);
