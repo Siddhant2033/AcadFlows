@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../lib/api';
+import { Card, Button, Input, Select, Badge } from '../../components/ui';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 interface Invoice {
   _id: string;
@@ -21,14 +22,22 @@ interface Invoice {
   createdAt: string;
 }
 
+const statusVariant: Record<
+  string,
+  'default' | 'info' | 'success' | 'warning' | 'danger'
+> = {
+  draft: 'default',
+  sent: 'info',
+  paid: 'success',
+  partially_paid: 'warning',
+  overdue: 'danger',
+  cancelled: 'default',
+};
+
 export default function InvoicesPage() {
-  const { theme } = useTheme();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    status: '',
-    search: '',
-  });
+  const [filters, setFilters] = useState({ status: '', search: '' });
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -38,6 +47,7 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     fetchInvoices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, pagination.page]);
 
   const fetchInvoices = async () => {
@@ -62,81 +72,37 @@ export default function InvoicesPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const classes: Record<string, string> = {
-      draft: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
-      sent: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-      paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      partially_paid: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      overdue: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
-    };
-    return classes[status] || classes.draft;
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
+      <Card>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h2 className={`text-2xl font-bold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Invoices
-            </h2>
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              Manage all invoices and payments
-            </p>
+            <h2 className="text-2xl font-bold text-foreground">Invoices</h2>
+            <p className="text-sm text-muted">Manage all invoices and payments</p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              to="/fees/invoices/generate"
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              + Generate Invoice
-            </Link>
-          </div>
+          <Link to="/fees/invoices/generate">
+            <Button>+ Generate Invoice</Button>
+          </Link>
         </div>
-      </div>
+      </Card>
 
       {/* Filters */}
-      <div className={`rounded-lg shadow p-6 transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
+      <Card>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Search
-            </label>
-            <input
-              type="text"
+            <label className="block text-sm font-medium text-foreground mb-1.5">Search</label>
+            <Input
               value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              onChange={e => setFilters({ ...filters, search: e.target.value })}
               placeholder="Invoice #, Student name..."
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
             />
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-1 transition-colors duration-200 ${
-              theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-            }`}>
-              Status
-            </label>
-            <select
+            <label className="block text-sm font-medium text-foreground mb-1.5">Status</label>
+            <Select
               value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors duration-200 ${
-                theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-              }`}
+              onChange={e => setFilters({ ...filters, status: e.target.value })}
             >
               <option value="">All Status</option>
               <option value="draft">Draft</option>
@@ -145,143 +111,95 @@ export default function InvoicesPage() {
               <option value="partially_paid">Partially Paid</option>
               <option value="overdue">Overdue</option>
               <option value="cancelled">Cancelled</option>
-            </select>
+            </Select>
           </div>
           <div className="flex items-end">
-            <button
-              onClick={fetchInvoices}
-              className="w-full px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
-            >
+            <Button onClick={fetchInvoices} className="w-full">
               Apply Filters
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Invoices Table */}
-      <div className={`rounded-lg shadow overflow-hidden transition-colors duration-200 ${
-        theme ? 'bg-white' : 'dark:bg-[#1E293B]'
-      }`}>
+      {/* Table */}
+      <Card padding="none">
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
           </div>
         ) : invoices.length === 0 ? (
           <div className="text-center py-12">
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              No invoices found.
-            </p>
+            <p className="text-sm text-muted">No invoices found.</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className={`transition-colors duration-200 ${
-                  theme ? 'bg-gray-50' : 'dark:bg-[#0F172A]'
-                }`}>
+                <thead className="bg-elevated">
                   <tr>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Invoice #
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Student
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Amount
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Balance
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Status
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Due Date
-                    </th>
-                    <th className={`px-6 py-3 text-right text-xs font-medium uppercase tracking-wider transition-colors duration-200 ${
-                      theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                    }`}>
-                      Actions
-                    </th>
+                    {['Invoice #', 'Student', 'Amount', 'Balance', 'Status', 'Due Date', ''].map(
+                      (header, i) => (
+                        <th
+                          key={i}
+                          className={`px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted ${
+                            i === 6 ? 'text-right' : 'text-left'
+                          }`}
+                        >
+                          {header}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
-                <tbody className={`divide-y transition-colors duration-200 ${
-                  theme ? 'divide-gray-200' : 'dark:divide-[#334155]'
-                }`}>
-                  {invoices.map((invoice) => (
-                    <tr key={invoice._id} className={`transition-colors duration-200 ${
-                      theme ? 'hover:bg-gray-50' : 'dark:hover:bg-[#1E293B]/50'
-                    }`}>
+                <tbody className="divide-y divide-border">
+                  {invoices.map(invoice => (
+                    <tr key={invoice._id} className="hover:bg-elevated/50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-sm font-mono font-medium transition-colors duration-200 ${
-                          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                        }`}>
+                        <span className="text-sm font-mono font-medium text-foreground">
                           {invoice.invoiceNumber}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-sm transition-colors duration-200 ${
-                          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                        }`}>
+                        <span className="text-sm text-foreground">
                           {invoice.studentId?.firstName} {invoice.studentId?.lastName}
                         </span>
-                        <p className={`text-xs transition-colors duration-200 ${
-                          theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-                        }`}>
-                          Roll: {invoice.studentId?.rollNo}
-                        </p>
+                        <p className="text-xs text-muted">Roll: {invoice.studentId?.rollNo}</p>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-sm font-medium transition-colors duration-200 ${
-                          theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                        }`}>
-                          ${invoice.total.toFixed(2)}
+                        <span className="text-sm font-medium text-foreground">
+                          {formatCurrency(invoice.total)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-sm font-medium ${
-                          invoice.balanceDue > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
-                        }`}>
-                          ${invoice.balanceDue.toFixed(2)}
+                        <span
+                          className={`text-sm font-medium ${
+                            invoice.balanceDue > 0
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-green-600 dark:text-green-400'
+                          }`}
+                        >
+                          {formatCurrency(invoice.balanceDue)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(invoice.status)}`}>
+                        <Badge variant={statusVariant[invoice.status] || 'default'}>
                           {invoice.status.replace('_', ' ').toUpperCase()}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-sm transition-colors duration-200 ${
-                          theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                        }`}>
-                          {new Date(invoice.dueDate).toLocaleDateString()}
-                        </span>
+                        <span className="text-sm text-muted">{formatDate(invoice.dueDate)}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <Link
                           to={`/fees/invoices/${invoice._id}`}
-                          className="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300 text-sm font-medium mr-3"
+                          className="text-primary-600 hover:text-primary-700 dark:text-primary-400 text-sm font-medium mr-3"
                         >
                           View
                         </Link>
                         {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
                           <Link
                             to={`/fees/invoices/${invoice._id}/pay`}
-                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium"
+                            className="text-green-600 hover:text-green-700 dark:text-green-400 text-sm font-medium"
                           >
                             Pay
                           </Link>
@@ -293,52 +211,39 @@ export default function InvoicesPage() {
               </table>
             </div>
 
-            {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className={`px-6 py-4 border-t transition-colors duration-200 ${
-                theme ? 'border-gray-200' : 'dark:border-[#334155]'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <p className={`text-sm transition-colors duration-200 ${
-                    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    Showing {(pagination.page - 1) * pagination.limit + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} invoices
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                      disabled={pagination.page === 1}
-                      className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                        pagination.page === 1
-                          ? 'opacity-50 cursor-not-allowed'
-                          : theme ? 'hover:bg-gray-100' : 'dark:hover:bg-[#334155]'
-                      }`}
-                    >
-                      Previous
-                    </button>
-                    <span className={`px-3 py-1 text-sm transition-colors duration-200 ${
-                      theme ? 'text-gray-700' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      Page {pagination.page} of {pagination.totalPages}
-                    </span>
-                    <button
-                      onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                      disabled={pagination.page === pagination.totalPages}
-                      className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-                        pagination.page === pagination.totalPages
-                          ? 'opacity-50 cursor-not-allowed'
-                          : theme ? 'hover:bg-gray-100' : 'dark:hover:bg-[#334155]'
-                      }`}
-                    >
-                      Next
-                    </button>
-                  </div>
+              <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+                <p className="text-sm text-muted">
+                  Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
+                  {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
+                  {pagination.total} invoices
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                    disabled={pagination.page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="px-3 py-1 text-sm text-foreground self-center">
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                    disabled={pagination.page === pagination.totalPages}
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
             )}
           </>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
