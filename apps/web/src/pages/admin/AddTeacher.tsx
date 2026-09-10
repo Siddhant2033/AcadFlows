@@ -1,7 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../lib/api';
-import { Card, Button, Input, Label, Select, Textarea, PhoneInput } from '../../components/ui';
+import {
+  Card,
+  CardTitle,
+  CardDescription,
+  Button,
+  Input,
+  Label,
+  Select,
+  Textarea,
+  PhoneInput,
+  Field,
+  Badge,
+} from '../../components/ui';
+import { DashboardLayout, PageHeader } from '../../components/layout';
+import { formatCurrency } from '../../lib/format';
+import { cn } from '../../lib/cn';
+
+interface Qualification {
+  degree: string;
+  institution: string;
+  year: number;
+  specialization: string;
+  grade: string;
+}
+
+interface Experience {
+  institution: string;
+  position: string;
+  fromDate: string;
+  toDate: string;
+  isCurrent: boolean;
+  responsibilities: string;
+}
 
 interface TeacherFormData {
   firstName: string;
@@ -23,21 +55,8 @@ interface TeacherFormData {
     country: string;
     postalCode: string;
   };
-  qualifications: {
-    degree: string;
-    institution: string;
-    year: number;
-    specialization: string;
-    grade: string;
-  }[];
-  experience: {
-    institution: string;
-    position: string;
-    fromDate: string;
-    toDate: string;
-    isCurrent: boolean;
-    responsibilities: string;
-  }[];
+  qualifications: Qualification[];
+  experience: Experience[];
   subjects: string[];
   specialization: string[];
   joiningDate: string;
@@ -70,11 +89,17 @@ const defaultFormData: TeacherFormData = {
   dateOfBirth: '',
   gender: 'male',
   maritalStatus: 'single',
-  nationality: '',
+  nationality: 'Indian',
   religion: '',
   phone: '',
   alternativeEmail: '',
-  address: { street: '', city: '', state: '', country: 'India', postalCode: '' },
+  address: {
+    street: '',
+    city: '',
+    state: '',
+    country: 'India',
+    postalCode: '',
+  },
   qualifications: [
     { degree: '', institution: '', year: new Date().getFullYear(), specialization: '', grade: '' },
   ],
@@ -90,7 +115,7 @@ const defaultFormData: TeacherFormData = {
   ],
   subjects: [],
   specialization: [],
-  joiningDate: '',
+  joiningDate: new Date().toISOString().split('T')[0],
   employmentType: 'permanent',
   contractEndDate: '',
   salary: { amount: 0, currency: 'INR', frequency: 'monthly' },
@@ -138,13 +163,23 @@ export default function AddTeacherPage() {
         dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split('T')[0] : '',
         gender: data.gender || 'male',
         maritalStatus: data.maritalStatus || 'single',
-        nationality: data.nationality || '',
+        nationality: data.nationality || 'Indian',
         religion: data.religion || '',
         phone: data.phone || '',
         alternativeEmail: data.alternativeEmail || '',
         address: data.address || defaultFormData.address,
-        qualifications: data.qualifications || defaultFormData.qualifications,
-        experience: data.experience || defaultFormData.experience,
+        qualifications:
+          data.qualifications?.length > 0
+            ? data.qualifications
+            : defaultFormData.qualifications,
+        experience:
+          data.experience?.length > 0
+            ? data.experience.map((e: any) => ({
+                ...e,
+                fromDate: e.fromDate ? e.fromDate.split('T')[0] : '',
+                toDate: e.toDate ? e.toDate.split('T')[0] : '',
+              }))
+            : defaultFormData.experience,
         subjects: data.subjects || [],
         specialization: data.specialization || [],
         joiningDate: data.joiningDate ? data.joiningDate.split('T')[0] : '',
@@ -185,11 +220,13 @@ export default function AddTeacherPage() {
       ],
     }));
 
-  const removeQualification = (index: number) =>
+  const removeQualification = (index: number) => {
+    if (formData.qualifications.length <= 1) return;
     setFormData(prev => ({
       ...prev,
       qualifications: prev.qualifications.filter((_, i) => i !== index),
     }));
+  };
 
   const handleExperienceChange = (index: number, field: string, value: any) => {
     setFormData(prev => {
@@ -208,23 +245,49 @@ export default function AddTeacherPage() {
       ],
     }));
 
-  const removeExperience = (index: number) =>
+  const removeExperience = (index: number) => {
+    if (formData.experience.length <= 1) return;
     setFormData(prev => ({
       ...prev,
       experience: prev.experience.filter((_, i) => i !== index),
     }));
+  };
+
+  const toggleSubject = (subjectId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      subjects: prev.subjects.includes(subjectId)
+        ? prev.subjects.filter(s => s !== subjectId)
+        : [...prev.subjects, subjectId],
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError('');
 
+    // Frontend validation
+    if (!formData.phone || formData.phone.length !== 10) {
+      setError('Please enter a valid 10-digit phone number');
+      setSaving(false);
+      return;
+    }
+
+    if (formData.subjects.length === 0) {
+      setError('Please select at least one subject');
+      setSaving(false);
+      return;
+    }
+
     try {
       const payload = {
         ...formData,
         dateOfBirth: new Date(formData.dateOfBirth),
         joiningDate: new Date(formData.joiningDate),
-        contractEndDate: formData.contractEndDate ? new Date(formData.contractEndDate) : undefined,
+        contractEndDate: formData.contractEndDate
+          ? new Date(formData.contractEndDate)
+          : undefined,
         qualifications: formData.qualifications.map(q => ({
           ...q,
           year: parseInt(String(q.year), 10),
@@ -235,6 +298,8 @@ export default function AddTeacherPage() {
           toDate: exp.toDate ? new Date(exp.toDate) : undefined,
         })),
       };
+
+      if (!payload.password) delete (payload as any).password;
 
       if (isEditMode) await api.put(`/teachers/${id}`, payload);
       else await api.post('/teachers', payload);
@@ -248,483 +313,706 @@ export default function AddTeacherPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-border border-t-primary-500" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">
-          {isEditMode ? 'Edit Teacher' : 'Add New Teacher'}
-        </h1>
-        <Button variant="secondary" onClick={() => navigate('/teachers')}>
-          Cancel
-        </Button>
-      </div>
+    <DashboardLayout>
+      <PageHeader
+        title={isEditMode ? 'Edit Teacher' : 'Add New Teacher'}
+        description={
+          isEditMode
+            ? 'Update teacher information and employment details'
+            : 'Register a new teacher with full profile'
+        }
+        breadcrumb={[
+          { label: 'Dashboard', path: '/dashboard' },
+          { label: 'Teachers', path: '/teachers' },
+          { label: isEditMode ? 'Edit' : 'Add' },
+        ]}
+        actions={
+          <Button
+            variant="outline"
+            onClick={() => navigate('/teachers')}
+            leftIcon="←"
+          >
+            Back to Teachers
+          </Button>
+        }
+      />
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+        <div className="mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-sm animate-fade-down">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Personal Information */}
-        <Card>
-          <h3 className="text-lg font-semibold text-foreground mb-4">Personal Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label required>First Name</Label>
-              <Input
-                value={formData.firstName}
-                onChange={e => handleChange('firstName', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label>Middle Name</Label>
-              <Input
-                value={formData.middleName}
-                onChange={e => handleChange('middleName', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label required>Last Name</Label>
-              <Input
-                value={formData.lastName}
-                onChange={e => handleChange('lastName', e.target.value)}
-                required
-              />
-            </div>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* MAIN COLUMN */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Personal Information */}
+            <Card>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>Basic identity and contact details</CardDescription>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-            <div>
-              <Label required>Date of Birth</Label>
-              <Input
-                type="date"
-                value={formData.dateOfBirth}
-                onChange={e => handleChange('dateOfBirth', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label required>Gender</Label>
-              <Select
-                value={formData.gender}
-                onChange={e => handleChange('gender', e.target.value)}
-                required
-              >
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </Select>
-            </div>
-            <div>
-              <Label>Marital Status</Label>
-              <Select
-                value={formData.maritalStatus}
-                onChange={e => handleChange('maritalStatus', e.target.value)}
-              >
-                <option value="single">Single</option>
-                <option value="married">Married</option>
-                <option value="divorced">Divorced</option>
-                <option value="widowed">Widowed</option>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <Label>Nationality</Label>
-              <Input
-                value={formData.nationality}
-                onChange={e => handleChange('nationality', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Religion</Label>
-              <Input
-                value={formData.religion}
-                onChange={e => handleChange('religion', e.target.value)}
-              />
-            </div>
-          </div>
-        </Card>
-
-        {/* Contact */}
-        <Card>
-          <h3 className="text-lg font-semibold text-foreground mb-4">Contact Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label required>Email</Label>
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={e => handleChange('email', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label required>Phone</Label>
-              <PhoneInput
-                value={formData.phone}
-                onChange={v => handleChange('phone', v)}
-                required
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Alternative Email</Label>
-              <Input
-                type="email"
-                value={formData.alternativeEmail}
-                onChange={e => handleChange('alternativeEmail', e.target.value)}
-              />
-            </div>
-          </div>
-        </Card>
-
-        {/* Address */}
-        <Card>
-          <h3 className="text-lg font-semibold text-foreground mb-4">Address</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Label>Street</Label>
-              <Input
-                value={formData.address.street}
-                onChange={e => handleAddressChange('street', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label required>City</Label>
-              <Input
-                value={formData.address.city}
-                onChange={e => handleAddressChange('city', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label required>State</Label>
-              <Input
-                value={formData.address.state}
-                onChange={e => handleAddressChange('state', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label required>Postal Code</Label>
-              <Input
-                value={formData.address.postalCode}
-                onChange={e => handleAddressChange('postalCode', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label>Country</Label>
-              <Input
-                value={formData.address.country}
-                onChange={e => handleAddressChange('country', e.target.value)}
-              />
-            </div>
-          </div>
-        </Card>
-
-        {/* Employment */}
-        <Card>
-          <h3 className="text-lg font-semibold text-foreground mb-4">Employment Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label required>Joining Date</Label>
-              <Input
-                type="date"
-                value={formData.joiningDate}
-                onChange={e => handleChange('joiningDate', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label required>Employment Type</Label>
-              <Select
-                value={formData.employmentType}
-                onChange={e => handleChange('employmentType', e.target.value)}
-                required
-              >
-                <option value="permanent">Permanent</option>
-                <option value="contract">Contract</option>
-                <option value="temporary">Temporary</option>
-                <option value="probation">Probation</option>
-              </Select>
-            </div>
-            <div>
-              <Label>Contract End Date</Label>
-              <Input
-                type="date"
-                value={formData.contractEndDate}
-                onChange={e => handleChange('contractEndDate', e.target.value)}
-              />
-            </div>
-          </div>
-
-          {!isEditMode && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <Label>Password</Label>
-                <Input
-                  type="password"
-                  value={formData.password}
-                  onChange={e => handleChange('password', e.target.value)}
-                  placeholder="Leave blank to auto-generate"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+                <Field label="First Name" required>
+                  <Input
+                    value={formData.firstName}
+                    onChange={e => handleChange('firstName', e.target.value)}
+                    required
+                    placeholder="e.g., Priya"
+                  />
+                </Field>
+                <Field label="Middle Name">
+                  <Input
+                    value={formData.middleName}
+                    onChange={e => handleChange('middleName', e.target.value)}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="Last Name" required>
+                  <Input
+                    value={formData.lastName}
+                    onChange={e => handleChange('lastName', e.target.value)}
+                    required
+                    placeholder="e.g., Sharma"
+                  />
+                </Field>
               </div>
-            </div>
-          )}
-        </Card>
 
-        {/* Qualifications */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-foreground">Qualifications</h3>
-            <button
-              type="button"
-              onClick={addQualification}
-              className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
-            >
-              + Add Qualification
-            </button>
-          </div>
-
-          {formData.qualifications.map((qual, index) => (
-            <div key={index} className="p-4 rounded-lg bg-elevated mb-4">
-              <div className="flex justify-between items-start mb-3">
-                <h4 className="text-sm font-medium text-muted">Qualification {index + 1}</h4>
-                {formData.qualifications.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeQualification(index)}
-                    className="text-red-500 hover:text-red-700 text-sm"
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <Field label="Date of Birth" required>
+                  <Input
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={e => handleChange('dateOfBirth', e.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="Gender" required>
+                  <Select
+                    value={formData.gender}
+                    onChange={e => handleChange('gender', e.target.value)}
+                    required
                   >
-                    Remove
-                  </button>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </Select>
+                </Field>
+                <Field label="Marital Status">
+                  <Select
+                    value={formData.maritalStatus}
+                    onChange={e => handleChange('maritalStatus', e.target.value)}
+                  >
+                    <option value="single">Single</option>
+                    <option value="married">Married</option>
+                    <option value="divorced">Divorced</option>
+                    <option value="widowed">Widowed</option>
+                  </Select>
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <Field label="Phone" required>
+                  <PhoneInput
+                    value={formData.phone}
+                    onChange={v => handleChange('phone', v)}
+                    required
+                  />
+                </Field>
+                <Field label="Email" required>
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={e => handleChange('email', e.target.value)}
+                    required
+                    placeholder="priya.sharma@school.com"
+                  />
+                </Field>
+                <Field label="Alternative Email">
+                  <Input
+                    type="email"
+                    value={formData.alternativeEmail}
+                    onChange={e => handleChange('alternativeEmail', e.target.value)}
+                    placeholder="Optional"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <Field label="Nationality">
+                  <Input
+                    value={formData.nationality}
+                    onChange={e => handleChange('nationality', e.target.value)}
+                  />
+                </Field>
+                <Field label="Religion">
+                  <Input
+                    value={formData.religion}
+                    onChange={e => handleChange('religion', e.target.value)}
+                    placeholder="Optional"
+                  />
+                </Field>
+              </div>
+            </Card>
+
+            {/* Subjects Taught */}
+            <Card>
+              <CardTitle>Subjects Taught</CardTitle>
+              <CardDescription>
+                Select all subjects this teacher can teach (at least 1 required)
+              </CardDescription>
+
+              <div className="mt-5">
+                {subjects.length === 0 ? (
+                  <p className="text-sm text-muted text-center py-6">
+                    No subjects available. Create subjects first in Academics.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {subjects.map(subject => {
+                      const isSelected = formData.subjects.includes(subject._id);
+                      return (
+                        <button
+                          key={subject._id}
+                          type="button"
+                          onClick={() => toggleSubject(subject._id)}
+                          className={cn(
+                            'flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left transition-all duration-200',
+                            isSelected
+                              ? 'border-primary-500 bg-primary-500/10 text-primary-700 dark:text-primary-400'
+                              : 'border-border bg-surface text-foreground hover:border-primary-300 hover:bg-elevated',
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors',
+                              isSelected
+                                ? 'bg-primary-500 text-white'
+                                : 'border border-border',
+                            )}
+                          >
+                            {isSelected && (
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path
+                                  fillRule="evenodd"
+                                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {subject.name}
+                            </p>
+                            <p className="text-[10px] text-muted">{subject.code}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {formData.subjects.length > 0 && (
+                  <p className="mt-3 text-xs text-muted">
+                    {formData.subjects.length} subject
+                    {formData.subjects.length === 1 ? '' : 's'} selected
+                  </p>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label required>Degree</Label>
+            </Card>
+
+            {/* Qualifications */}
+            <Card>
+              <div className="flex items-center justify-between mb-1">
+                <CardTitle>Qualifications</CardTitle>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={addQualification}
+                  leftIcon="➕"
+                >
+                  Add
+                </Button>
+              </div>
+              <CardDescription>
+                Academic degrees and certifications
+              </CardDescription>
+
+              <div className="space-y-4 mt-5">
+                {formData.qualifications.map((qual, index) => (
+                  <div
+                    key={index}
+                    className="p-4 rounded-lg bg-elevated border border-border"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                        Qualification {index + 1}
+                      </p>
+                      {formData.qualifications.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeQualification(index)}
+                          className="text-xs text-danger hover:text-red-700 font-medium"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label="Degree" required>
+                        <Input
+                          value={qual.degree}
+                          onChange={e =>
+                            handleQualificationChange(index, 'degree', e.target.value)
+                          }
+                          required
+                          placeholder="e.g., M.Sc. Mathematics"
+                        />
+                      </Field>
+                      <Field label="Institution" required>
+                        <Input
+                          value={qual.institution}
+                          onChange={e =>
+                            handleQualificationChange(index, 'institution', e.target.value)
+                          }
+                          required
+                          placeholder="e.g., Delhi University"
+                        />
+                      </Field>
+                      <Field label="Year" required>
+                        <Input
+                          type="number"
+                          value={qual.year}
+                          onChange={e =>
+                            handleQualificationChange(
+                              index,
+                              'year',
+                              parseInt(e.target.value, 10),
+                            )
+                          }
+                          required
+                          min="1900"
+                          max={new Date().getFullYear()}
+                        />
+                      </Field>
+                      <Field label="Specialization">
+                        <Input
+                          value={qual.specialization}
+                          onChange={e =>
+                            handleQualificationChange(index, 'specialization', e.target.value)
+                          }
+                          placeholder="e.g., Pure Mathematics"
+                        />
+                      </Field>
+                      <Field label="Grade / CGPA">
+                        <Input
+                          value={qual.grade}
+                          onChange={e =>
+                            handleQualificationChange(index, 'grade', e.target.value)
+                          }
+                          placeholder="e.g., A / 8.5 CGPA"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Experience */}
+            <Card>
+              <div className="flex items-center justify-between mb-1">
+                <CardTitle>Work Experience</CardTitle>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={addExperience}
+                  leftIcon="➕"
+                >
+                  Add
+                </Button>
+              </div>
+              <CardDescription>
+                Previous teaching or professional experience
+              </CardDescription>
+
+              <div className="space-y-4 mt-5">
+                {formData.experience.map((exp, index) => (
+                  <div
+                    key={index}
+                    className="p-4 rounded-lg bg-elevated border border-border"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                        Experience {index + 1}
+                      </p>
+                      {formData.experience.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeExperience(index)}
+                          className="text-xs text-danger hover:text-red-700 font-medium"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Field label="Institution" required>
+                        <Input
+                          value={exp.institution}
+                          onChange={e =>
+                            handleExperienceChange(index, 'institution', e.target.value)
+                          }
+                          required
+                          placeholder="e.g., St. Xavier's School"
+                        />
+                      </Field>
+                      <Field label="Position" required>
+                        <Input
+                          value={exp.position}
+                          onChange={e =>
+                            handleExperienceChange(index, 'position', e.target.value)
+                          }
+                          required
+                          placeholder="e.g., Senior Teacher"
+                        />
+                      </Field>
+                      <Field label="From Date" required>
+                        <Input
+                          type="date"
+                          value={exp.fromDate}
+                          onChange={e =>
+                            handleExperienceChange(index, 'fromDate', e.target.value)
+                          }
+                          required
+                        />
+                      </Field>
+                      <Field label="To Date" hint={exp.isCurrent ? 'Currently here' : undefined}>
+                        <Input
+                          type="date"
+                          value={exp.toDate}
+                          onChange={e =>
+                            handleExperienceChange(index, 'toDate', e.target.value)
+                          }
+                          disabled={exp.isCurrent}
+                        />
+                      </Field>
+                      <div className="md:col-span-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={exp.isCurrent}
+                            onChange={e =>
+                              handleExperienceChange(index, 'isCurrent', e.target.checked)
+                            }
+                            className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-foreground">
+                            Currently working here
+                          </span>
+                        </label>
+                      </div>
+                      <div className="md:col-span-2">
+                        <Field label="Responsibilities">
+                          <Textarea
+                            value={exp.responsibilities}
+                            onChange={e =>
+                              handleExperienceChange(index, 'responsibilities', e.target.value)
+                            }
+                            rows={2}
+                            placeholder="Key responsibilities and achievements"
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Address */}
+            <Card>
+              <CardTitle>Address</CardTitle>
+              <CardDescription>Current residential address</CardDescription>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+                <div className="md:col-span-2">
+                  <Field label="Street">
+                    <Input
+                      value={formData.address.street}
+                      onChange={e => handleAddressChange('street', e.target.value)}
+                    />
+                  </Field>
+                </div>
+                <Field label="City" required>
                   <Input
-                    value={qual.degree}
-                    onChange={e => handleQualificationChange(index, 'degree', e.target.value)}
+                    value={formData.address.city}
+                    onChange={e => handleAddressChange('city', e.target.value)}
                     required
                   />
-                </div>
-                <div>
-                  <Label required>Institution</Label>
+                </Field>
+                <Field label="State" required>
                   <Input
-                    value={qual.institution}
-                    onChange={e => handleQualificationChange(index, 'institution', e.target.value)}
+                    value={formData.address.state}
+                    onChange={e => handleAddressChange('state', e.target.value)}
                     required
                   />
+                </Field>
+                <Field label="Postal Code" required>
+                  <Input
+                    value={formData.address.postalCode}
+                    onChange={e => handleAddressChange('postalCode', e.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="Country">
+                  <Input
+                    value={formData.address.country}
+                    onChange={e => handleAddressChange('country', e.target.value)}
+                  />
+                </Field>
+              </div>
+            </Card>
+          </div>
+
+          {/* SIDEBAR COLUMN */}
+          <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-24 lg:self-start">
+            {/* Account */}
+            <Card>
+              <CardTitle>Account</CardTitle>
+              <CardDescription>Login credentials</CardDescription>
+
+              {!isEditMode && (
+                <div className="mt-5">
+                  <Field label="Password" hint="Leave blank to auto-generate">
+                    <Input
+                      type="password"
+                      value={formData.password}
+                      onChange={e => handleChange('password', e.target.value)}
+                      placeholder="Min 8 characters"
+                    />
+                  </Field>
                 </div>
-                <div>
-                  <Label required>Year</Label>
+              )}
+              {isEditMode && (
+                <p className="text-xs text-muted mt-5">
+                  Password changes are done from the teacher's profile page.
+                </p>
+              )}
+            </Card>
+
+            {/* Employment */}
+            <Card>
+              <CardTitle>Employment</CardTitle>
+              <CardDescription>Contract and role details</CardDescription>
+
+              <div className="space-y-4 mt-5">
+                <Field label="Joining Date" required>
+                  <Input
+                    type="date"
+                    value={formData.joiningDate}
+                    onChange={e => handleChange('joiningDate', e.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="Employment Type" required>
+                  <Select
+                    value={formData.employmentType}
+                    onChange={e => handleChange('employmentType', e.target.value)}
+                    required
+                  >
+                    <option value="permanent">Permanent</option>
+                    <option value="contract">Contract</option>
+                    <option value="temporary">Temporary</option>
+                    <option value="probation">Probation</option>
+                  </Select>
+                </Field>
+                {(formData.employmentType === 'contract' ||
+                  formData.employmentType === 'probation') && (
+                  <Field label="Contract End Date" required>
+                    <Input
+                      type="date"
+                      value={formData.contractEndDate}
+                      onChange={e => handleChange('contractEndDate', e.target.value)}
+                      required
+                    />
+                  </Field>
+                )}
+              </div>
+            </Card>
+
+            {/* Salary */}
+            <Card>
+              <CardTitle>Salary</CardTitle>
+              <CardDescription>Optional</CardDescription>
+
+              <div className="space-y-4 mt-5">
+                <Field label="Monthly Salary (₹)">
                   <Input
                     type="number"
-                    value={qual.year}
-                    onChange={e => handleQualificationChange(index, 'year', parseInt(e.target.value, 10))}
-                    required
+                    value={formData.salary.amount}
+                    onChange={e =>
+                      handleChange('salary', {
+                        ...formData.salary,
+                        amount: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    min="0"
+                    step="1000"
+                    placeholder="e.g., 45000"
                   />
-                </div>
-                <div>
-                  <Label>Specialization</Label>
-                  <Input
-                    value={qual.specialization}
-                    onChange={e => handleQualificationChange(index, 'specialization', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Grade</Label>
-                  <Input
-                    value={qual.grade}
-                    onChange={e => handleQualificationChange(index, 'grade', e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </Card>
-
-        {/* Experience */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-foreground">Experience</h3>
-            <button
-              type="button"
-              onClick={addExperience}
-              className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
-            >
-              + Add Experience
-            </button>
-          </div>
-
-          {formData.experience.map((exp, index) => (
-            <div key={index} className="p-4 rounded-lg bg-elevated mb-4">
-              <div className="flex justify-between items-start mb-3">
-                <h4 className="text-sm font-medium text-muted">Experience {index + 1}</h4>
-                {formData.experience.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeExperience(index)}
-                    className="text-red-500 hover:text-red-700 text-sm"
-                  >
-                    Remove
-                  </button>
+                </Field>
+                {formData.salary.amount > 0 && (
+                  <p className="text-xs text-muted">
+                    Displayed as{' '}
+                    <span className="font-medium text-foreground">
+                      {formatCurrency(formData.salary.amount)}
+                    </span>{' '}
+                    per month
+                  </p>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label required>Institution</Label>
-                  <Input
-                    value={exp.institution}
-                    onChange={e => handleExperienceChange(index, 'institution', e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label required>Position</Label>
-                  <Input
-                    value={exp.position}
-                    onChange={e => handleExperienceChange(index, 'position', e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label required>From Date</Label>
-                  <Input
-                    type="date"
-                    value={exp.fromDate}
-                    onChange={e => handleExperienceChange(index, 'fromDate', e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label>To Date</Label>
-                  <Input
-                    type="date"
-                    value={exp.toDate}
-                    onChange={e => handleExperienceChange(index, 'toDate', e.target.value)}
-                    disabled={exp.isCurrent}
-                  />
-                </div>
-                <div className="md:col-span-2 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id={`current-${index}`}
-                    checked={exp.isCurrent}
-                    onChange={e => handleExperienceChange(index, 'isCurrent', e.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
-                  />
-                  <Label htmlFor={`current-${index}`}>Current Position</Label>
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Responsibilities</Label>
-                  <Textarea
-                    value={exp.responsibilities}
-                    onChange={e => handleExperienceChange(index, 'responsibilities', e.target.value)}
-                    rows={2}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </Card>
+            </Card>
 
-        {/* Subjects */}
-        <Card>
-          <h3 className="text-lg font-semibold text-foreground mb-4">Subjects</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-            {subjects.map(subject => (
-              <label key={subject._id} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.subjects.includes(subject._id)}
-                  onChange={e => {
-                    if (e.target.checked) {
-                      handleChange('subjects', [...formData.subjects, subject._id]);
-                    } else {
-                      handleChange(
-                        'subjects',
-                        formData.subjects.filter(id => id !== subject._id),
-                      );
+            {/* Bank Details */}
+            <Card>
+              <CardTitle>Bank Details</CardTitle>
+              <CardDescription>Optional</CardDescription>
+
+              <div className="space-y-4 mt-5">
+                <Field label="Bank Name">
+                  <Input
+                    value={formData.bankDetails.bankName}
+                    onChange={e =>
+                      handleChange('bankDetails', {
+                        ...formData.bankDetails,
+                        bankName: e.target.value,
+                      })
                     }
-                  }}
-                  className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-sm text-foreground">
-                  {subject.name} ({subject.code})
-                </span>
-              </label>
-            ))}
-          </div>
-        </Card>
+                    placeholder="e.g., HDFC Bank"
+                  />
+                </Field>
+                <Field label="Account Number">
+                  <Input
+                    value={formData.bankDetails.accountNumber}
+                    onChange={e =>
+                      handleChange('bankDetails', {
+                        ...formData.bankDetails,
+                        accountNumber: e.target.value,
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="IFSC Code">
+                  <Input
+                    value={formData.bankDetails.ifscCode}
+                    onChange={e =>
+                      handleChange('bankDetails', {
+                        ...formData.bankDetails,
+                        ifscCode: e.target.value.toUpperCase(),
+                      })
+                    }
+                    placeholder="e.g., HDFC0001234"
+                  />
+                </Field>
+                <Field label="Branch Name">
+                  <Input
+                    value={formData.bankDetails.branchName}
+                    onChange={e =>
+                      handleChange('bankDetails', {
+                        ...formData.bankDetails,
+                        branchName: e.target.value,
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </Card>
 
-        {/* Emergency Contact */}
-        <Card>
-          <h3 className="text-lg font-semibold text-foreground mb-4">Emergency Contact</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label required>Name</Label>
-              <Input
-                value={formData.emergencyContact.name}
-                onChange={e =>
-                  handleChange('emergencyContact', {
-                    ...formData.emergencyContact,
-                    name: e.target.value,
-                  })
-                }
-                required
-              />
-            </div>
-            <div>
-              <Label required>Phone</Label>
-              <PhoneInput
-                value={formData.emergencyContact.phone}
-                onChange={v =>
-                  handleChange('emergencyContact', {
-                    ...formData.emergencyContact,
-                    phone: v,
-                  })
-                }
-                required
-              />
-            </div>
-            <div>
-              <Label required>Relationship</Label>
-              <Input
-                value={formData.emergencyContact.relationship}
-                onChange={e =>
-                  handleChange('emergencyContact', {
-                    ...formData.emergencyContact,
-                    relationship: e.target.value,
-                  })
-                }
-                required
-              />
-            </div>
-          </div>
-        </Card>
+            {/* Emergency Contact */}
+            <Card>
+              <CardTitle>Emergency Contact</CardTitle>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-border">
-          <Button type="button" variant="secondary" onClick={() => navigate('/teachers')}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={saving}>
-            {saving ? 'Saving...' : isEditMode ? 'Update Teacher' : 'Add Teacher'}
-          </Button>
+              <div className="space-y-4 mt-5">
+                <Field label="Name" required>
+                  <Input
+                    value={formData.emergencyContact.name}
+                    onChange={e =>
+                      handleChange('emergencyContact', {
+                        ...formData.emergencyContact,
+                        name: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </Field>
+                <Field label="Phone" required>
+                  <PhoneInput
+                    value={formData.emergencyContact.phone}
+                    onChange={v =>
+                      handleChange('emergencyContact', {
+                        ...formData.emergencyContact,
+                        phone: v,
+                      })
+                    }
+                    required
+                  />
+                </Field>
+                <Field label="Relationship" required>
+                  <Input
+                    value={formData.emergencyContact.relationship}
+                    onChange={e =>
+                      handleChange('emergencyContact', {
+                        ...formData.emergencyContact,
+                        relationship: e.target.value,
+                      })
+                    }
+                    required
+                    placeholder="e.g., Spouse"
+                  />
+                </Field>
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        {/* Form Actions */}
+        <div className="sticky bottom-0 z-10 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 bg-surface/95 backdrop-blur border-t border-border">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate('/teachers')}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={saving}
+              leftIcon={isEditMode ? '💾' : '✅'}
+            >
+              {saving
+                ? 'Saving...'
+                : isEditMode
+                  ? 'Update Teacher'
+                  : 'Add Teacher'}
+            </Button>
+          </div>
         </div>
       </form>
-    </div>
+    </DashboardLayout>
   );
 }
