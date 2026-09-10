@@ -22,7 +22,8 @@ const getPrimaryBtnClass = () =>
 export default function SchoolRegistrationPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const { theme, mode } = useTheme();
+  const { mode } = useTheme();
+  const theme = mode === 'light';
 
   const [step, setStep] = useState<'school' | 'admin'>('school');
   const [isLoading, setIsLoading] = useState(false);
