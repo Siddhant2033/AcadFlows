@@ -1,10 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { StudentService } from './service';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
 import { AppError } from '../../middleware/error-handler';
 
-// Validation Schemas
+// ─────────────────────────────────────────────────────────────
+// Validation schemas
+// ─────────────────────────────────────────────────────────────
+
 const createStudentSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
@@ -15,18 +19,33 @@ const createStudentSchema = z.object({
   section: z.string().optional(),
   dateOfBirth: z.string().transform(str => new Date(str)),
   gender: z.enum(['male', 'female', 'other']),
-  bloodGroup: z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']).optional(),
+  bloodGroup: z
+    .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
+    .optional(),
   nationality: z.string().optional(),
   religion: z.string().optional(),
   motherTongue: z.string().optional(),
   phone: z.string().optional(),
-  guardians: z.array(z.object({
-    name: z.string().min(1),
-    phone: z.string().min(1),
-    email: z.string().email().optional(),
-    relationship: z.enum(['father', 'mother', 'guardian', 'grandfather', 'grandmother', 'uncle', 'aunt', 'other']),
-    occupation: z.string().optional(),
-  })).optional(),
+  guardians: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        phone: z.string().min(1),
+        email: z.string().email().optional(),
+        relationship: z.enum([
+          'father',
+          'mother',
+          'guardian',
+          'grandfather',
+          'grandmother',
+          'uncle',
+          'aunt',
+          'other',
+        ]),
+        occupation: z.string().optional(),
+      }),
+    )
+    .optional(),
   address: z.object({
     street: z.string().optional(),
     city: z.string().min(1),
@@ -39,22 +58,30 @@ const createStudentSchema = z.object({
     phone: z.string().min(1),
     relationship: z.string().min(1),
   }),
-  previousSchool: z.object({
-    name: z.string().optional(),
-    address: z.string().optional(),
-    year: z.string().optional(),
-    reason: z.string().optional(),
-  }).optional(),
-  medicalInfo: z.object({
-    allergies: z.array(z.string()).optional(),
-    medicalConditions: z.array(z.string()).optional(),
-    medications: z.array(z.string()).optional(),
-    emergencyNotes: z.string().optional(),
-  }).optional(),
-  enrollments: z.array(z.object({
-    academicYearId: z.string(),
-    sectionId: z.string(),
-  })).optional(),
+  previousSchool: z
+    .object({
+      name: z.string().optional(),
+      address: z.string().optional(),
+      year: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .optional(),
+  medicalInfo: z
+    .object({
+      allergies: z.array(z.string()).optional(),
+      medicalConditions: z.array(z.string()).optional(),
+      medications: z.array(z.string()).optional(),
+      emergencyNotes: z.string().optional(),
+    })
+    .optional(),
+  enrollments: z
+    .array(
+      z.object({
+        academicYearId: z.string(),
+        sectionId: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 const updateStudentSchema = createStudentSchema.partial();
@@ -67,28 +94,85 @@ const enrollStudentSchema = z.object({
 });
 
 const bulkImportSchema = z.object({
-  students: z.array(z.object({
-    firstName: z.string().min(1),
-    lastName: z.string().min(1),
-    middleName: z.string().optional(),
-    email: z.string().email(),
-    grade: z.string().min(1),
-    section: z.string().optional(),
-    dateOfBirth: z.string().optional(),
-    gender: z.string().optional(),
-    phone: z.string().optional(),
-    address: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    postalCode: z.string().optional(),
-    guardianName: z.string().optional(),
-    guardianPhone: z.string().optional(),
-    guardianRelationship: z.string().optional(),
-  })),
+  students: z.array(
+    z.object({
+      firstName: z.string().min(1),
+      lastName: z.string().min(1),
+      middleName: z.string().optional(),
+      email: z.string().email(),
+      grade: z.string().min(1),
+      section: z.string().optional(),
+      dateOfBirth: z.string().optional(),
+      gender: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      postalCode: z.string().optional(),
+      guardianName: z.string().optional(),
+      guardianPhone: z.string().optional(),
+      guardianRelationship: z.string().optional(),
+    }),
+  ),
 });
 
+const verifyRollNoSchema = z.object({
+  rollNo: z.string().min(1),
+  tenantId: z.string().min(1),
+});
+
+// ─────────────────────────────────────────────────────────────
+// Controller
+// ─────────────────────────────────────────────────────────────
+
 export class StudentController {
-  // Create student
+  /**
+   * Public — return minimal student info for a tenant.
+   * Used by guardian registration to list children without exposing full PII.
+   */
+  static async getStudentsByTenant(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { tenantId } = req.params;
+
+      if (!tenantId || !mongoose.Types.ObjectId.isValid(tenantId)) {
+        return res.status(400).json({ success: false, error: 'Invalid tenantId' });
+      }
+
+      const students = await StudentService.getPublicStudentList(tenantId);
+
+      res.json({
+        success: true,
+        data: students,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Public — verify a student roll number and return minimal info.
+   * Used during guardian registration.
+   */
+  static async verifyRollNo(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validated = verifyRollNoSchema.parse(req.body);
+
+      const result = await StudentService.verifyRollNo(
+        validated.tenantId,
+        validated.rollNo.trim().toUpperCase(),
+      );
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ─── Authenticated endpoints ───────────────────────────────
+
   static async createStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -110,7 +194,6 @@ export class StudentController {
     }
   }
 
-  // Get all students with filters
   static async getStudents(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -134,7 +217,6 @@ export class StudentController {
     }
   }
 
-  // Get student by ID
   static async getStudentById(req: Request, res: Response, next: NextFunction) {
     try {
       const { studentId } = req.params;
@@ -149,7 +231,6 @@ export class StudentController {
     }
   }
 
-  // Update student
   static async updateStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const { studentId } = req.params;
@@ -167,7 +248,6 @@ export class StudentController {
     }
   }
 
-  // Delete student (soft)
   static async deleteStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const { studentId } = req.params;
@@ -182,7 +262,6 @@ export class StudentController {
     }
   }
 
-  // Enroll student
   static async enrollStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const { studentId } = req.params;
@@ -200,7 +279,6 @@ export class StudentController {
     }
   }
 
-  // Withdraw student
   static async withdrawStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const { studentId } = req.params;
@@ -222,7 +300,6 @@ export class StudentController {
     }
   }
 
-  // Bulk import students
   static async bulkImport(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -230,7 +307,7 @@ export class StudentController {
 
       const result = await StudentService.bulkImportStudents(
         authReq.user.tenantId,
-        validated.students
+        validated.students,
       );
 
       res.json({
@@ -243,7 +320,6 @@ export class StudentController {
     }
   }
 
-  // Upload document
   static async uploadDocument(req: Request, res: Response, next: NextFunction) {
     try {
       const { studentId } = req.params;
@@ -254,7 +330,6 @@ export class StudentController {
         throw new AppError('No file uploaded', 400);
       }
 
-      // For MVP, store base64. In production, upload to R2/S3
       const url = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
 
       const document = await StudentService.uploadDocument(studentId, {
@@ -275,7 +350,6 @@ export class StudentController {
     }
   }
 
-  // Get student statistics
   static async getStats(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -290,7 +364,6 @@ export class StudentController {
     }
   }
 
-  // Search students
   static async searchStudents(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;

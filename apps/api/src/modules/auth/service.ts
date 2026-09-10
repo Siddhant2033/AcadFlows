@@ -1,33 +1,35 @@
 import jwt from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { config } from '../../config';
 import { User } from '../../models/User';
 import { Tenant } from '../../models/Tenant';
+import { PasswordResetToken } from '../../models/PasswordResetToken';
 import { AppError } from '../../middleware/error-handler';
 import { UserCreateInput, UserLoginInput, AuthTokens } from '@school-platform/shared';
-import crypto from 'crypto';
-import { PasswordResetToken } from '../../models/PasswordResetToken';
 
 export class AuthService {
-  static async register(input: UserCreateInput): Promise<{ user: any; tokens: AuthTokens }> {
+  static async register(
+    input: UserCreateInput,
+  ): Promise<{ user: any; tokens: AuthTokens }> {
     if (!mongoose.Types.ObjectId.isValid(input.tenantId)) {
-      throw new AppError('Invalid tenant ID format. Please use a valid 24-character hex string.', 400);
+      throw new AppError('Invalid tenant ID format.', 400);
     }
 
-    // Check if tenant exists
     const tenant = await Tenant.findOne({ _id: input.tenantId, status: 'active' });
     if (!tenant) {
       throw new AppError('Tenant not found or inactive', 400);
     }
 
-    // Check if user already exists
+    // Global unique email — one person = one account
     const existingUser = await User.findOne({ email: input.email });
     if (existingUser) {
       throw new AppError('User already exists with this email', 409);
     }
 
+    // FIXED B20: enforce admin-first rule.
+    // If no admin exists for this tenant yet, force the role to 'admin'.
     const adminExists = await User.exists({
       tenantId: input.tenantId,
       role: 'admin',
@@ -40,7 +42,6 @@ export class AuthService {
       console.log('🔐 No admin for tenant — forcing role to admin for', input.email);
     }
 
-    // Create user
     const user = await User.create({
       tenantId: input.tenantId,
       email: input.email,
@@ -57,6 +58,9 @@ export class AuthService {
       tenantId: user.tenantId,
     });
 
+    // Create role-specific profile document
+    await this.createRoleProfile(user, input);
+
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
@@ -64,25 +68,125 @@ export class AuthService {
     return { user: userObj, tokens };
   }
 
-  static async login(input: UserLoginInput): Promise<{ user: any; tokens: AuthTokens }> {
-    console.log('🔍 Login service called for:', input.email);
+  /**
+   * Create the Student/Teacher profile document matching the user's role.
+   * Failures are logged but do not abort registration — the user can
+   * complete their profile later without losing their account.
+   */
+  private static async createRoleProfile(user: any, input: UserCreateInput) {
+    try {
+      if (user.role === 'student') {
+        const { Student } = await import('../../models/Student');
+        const { generateAdmissionNo } = await import('../../utils/admission');
 
+        const admissionNo = await generateAdmissionNo(user.tenantId);
+
+        await Student.create({
+          tenantId: user.tenantId,
+          userId: user._id.toString(),
+          admissionNo,
+          rollNo: admissionNo,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          grade: (input as any).grade || 'Unassigned',
+          section: (input as any).section || '',
+          dateOfBirth: (input as any).dateOfBirth
+            ? new Date((input as any).dateOfBirth)
+            : new Date('2010-01-01'),
+          gender: (input as any).gender || 'other',
+          guardians: (input as any).parentName
+            ? [
+                {
+                  name: (input as any).parentName,
+                  phone: (input as any).parentPhone || '',
+                  email: (input as any).parentEmail || '',
+                  relationship: 'guardian',
+                  isVerified: false,
+                },
+              ]
+            : [],
+          address: {
+            city: 'N/A',
+            state: 'N/A',
+            country: 'India',
+            postalCode: '000000',
+          },
+          emergencyContact: {
+            name: (input as any).parentName || user.firstName,
+            phone: (input as any).parentPhone || '0000000000',
+            relationship: 'guardian',
+          },
+          status: 'active',
+          isDeleted: false,
+        });
+      }
+
+      if (user.role === 'teacher') {
+        const { Teacher } = await import('../../models/Teacher');
+        const { generateEmployeeId } = await import('../../utils/employee');
+
+        const employeeId = await generateEmployeeId(user.tenantId);
+
+        await Teacher.create({
+          tenantId: user.tenantId,
+          userId: user._id.toString(),
+          employeeId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          dateOfBirth: (input as any).dateOfBirth
+            ? new Date((input as any).dateOfBirth)
+            : new Date('1990-01-01'),
+          gender: (input as any).gender || 'other',
+          phone: (input as any).phone || '0000000000',
+          email: user.email,
+          address: {
+            city: 'N/A',
+            state: 'N/A',
+            country: 'India',
+            postalCode: '000000',
+          },
+          qualifications: [],
+          experience: [],
+          subjects: [],
+          assignedSections: [],
+          specialization: [],
+          joiningDate: (input as any).joiningDate
+            ? new Date((input as any).joiningDate)
+            : new Date(),
+          employmentType: 'permanent',
+          emergencyContact: {
+            name: user.firstName,
+            phone: '0000000000',
+            relationship: 'self',
+          },
+          status: 'active',
+          isDeleted: false,
+        });
+      }
+
+      // Guardians don't have their own profile document — they're linked
+      // to students via Student.guardians[].userId, which is set during
+      // the guardian registration flow (StepGuardianForm).
+    } catch (profileError) {
+      console.error('❌ Failed to create role profile:', profileError);
+    }
+  }
+
+  static async login(
+    input: UserLoginInput,
+  ): Promise<{ user: any; tokens: AuthTokens }> {
     const user = await User.findOne({ email: input.email, status: 'active' });
     if (!user) {
-      console.error('❌ User not found:', input.email);
       throw new AppError('Invalid email or password', 401);
     }
 
     const isPasswordValid = await user.comparePassword(input.password);
     if (!isPasswordValid) {
-      console.error('❌ Invalid password for:', input.email);
       throw new AppError('Invalid email or password', 401);
     }
 
     user.lastLoginAt = new Date();
     await user.save();
-
-    console.log('✅ Login successful for:', input.email);
 
     const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
 
@@ -92,27 +196,16 @@ export class AuthService {
   }
 
   static async refreshToken(refreshToken: string): Promise<AuthTokens> {
-    console.log('🔍 Refresh token service called');
-
     try {
       const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret) as any;
 
-      console.log('✅ Refresh token decoded for user:', decoded.email);
-
-      const user = await User.findOne({
-        _id: decoded.userId,
-        status: 'active'
-      });
-
+      const user = await User.findOne({ _id: decoded.userId, status: 'active' });
       if (!user) {
-        console.error('❌ User not found for refresh token');
         throw new AppError('Invalid refresh token', 401);
       }
 
-      console.log('✅ User found, generating new tokens');
       return this.generateTokens(user.id, user.tenantId, user.email, user.role);
-    } catch (error) {
-      console.error('❌ Refresh token error:', error);
+    } catch {
       throw new AppError('Invalid refresh token', 401);
     }
   }
@@ -121,7 +214,7 @@ export class AuthService {
     userId: string,
     tenantId: string,
     email: string,
-    role: string
+    role: string,
   ): AuthTokens {
     const payload = { userId, tenantId, email, role };
 
@@ -132,8 +225,6 @@ export class AuthService {
     const refreshToken = jwt.sign(payload, config.jwt.refreshSecret, {
       expiresIn: config.jwt.refreshExpiry as SignOptions['expiresIn'],
     });
-
-    console.log('🔑 Tokens generated for:', email);
 
     return { accessToken, refreshToken };
   }
@@ -147,10 +238,10 @@ export class AuthService {
 
     const token = crypto.randomBytes(32).toString('hex');
 
-    // Invalidate any prior tokens for this user
+    // Invalidate prior tokens
     await PasswordResetToken.deleteMany({ userId: user.id });
 
-    // FIXED B19: persist reset token in DB, 1-hour TTL
+    // Persist new token with 1-hour TTL
     await PasswordResetToken.create({
       userId: user.id,
       token,
@@ -184,7 +275,6 @@ export class AuthService {
     user.passwordHash = newPassword;
     await user.save();
 
-    // Mark as used so it can't be replayed
     record.used = true;
     await record.save();
   }
@@ -192,25 +282,19 @@ export class AuthService {
   static async changePassword(
     userId: string,
     currentPassword: string,
-    newPassword: string
+    newPassword: string,
   ): Promise<void> {
-    console.log('🔍 Change password service called for user:', userId);
-
     const user = await User.findById(userId);
     if (!user) {
-      console.error('❌ User not found:', userId);
       throw new AppError('User not found', 404);
     }
 
     const isPasswordValid = await user.comparePassword(currentPassword);
     if (!isPasswordValid) {
-      console.error('❌ Invalid current password for user:', userId);
       throw new AppError('Current password is incorrect', 401);
     }
 
     user.passwordHash = newPassword;
     await user.save();
-
-    console.log('✅ Password changed successfully for user:', userId);
   }
 }

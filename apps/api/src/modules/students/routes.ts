@@ -1,13 +1,23 @@
 import { Router } from 'express';
 import { StudentController } from './controller';
-import multer from 'multer';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
+import multer from 'multer';
 
 const router: Router = Router();
 
-router.use(ensureTenantMatch);
+// ─────────────────────────────────────────────────────────────
+// Public routes — used during guardian registration, before login.
+// Must be mounted BEFORE router.use(authenticate) and BEFORE the
+// wildcard /:studentId route.
+// ─────────────────────────────────────────────────────────────
 
-// Configure multer BEFORE using it
+router.get('/tenant/:tenantId', StudentController.getStudentsByTenant);
+router.post('/verify-rollno', StudentController.verifyRollNo);
+
+// ─────────────────────────────────────────────────────────────
+// Protected routes
+// ─────────────────────────────────────────────────────────────
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
@@ -21,8 +31,8 @@ const upload = multer({
   },
 });
 
-// Protected routes - require authentication
 router.use(authenticate);
+router.use(ensureTenantMatch);
 
 // Student CRUD
 router.get('/', StudentController.getStudents);
@@ -37,12 +47,12 @@ router.delete('/:studentId', requireRole('admin'), StudentController.deleteStude
 router.post('/:studentId/enroll', requireRole('admin'), StudentController.enrollStudent);
 router.post('/:studentId/withdraw', requireRole('admin'), StudentController.withdrawStudent);
 
-// Documents - FIX: Move upload.single BEFORE the route handler
+// Documents
 router.post(
   '/:studentId/documents',
   requireRole('admin'),
   upload.single('document'),
-  StudentController.uploadDocument
+  StudentController.uploadDocument,
 );
 
 // Bulk import
