@@ -79,7 +79,7 @@ export default function DashboardPage() {
     if (isLoading || tenantLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
           <p className="mt-4 text-muted">Loading your dashboard...</p>
         </div>
       );
@@ -88,16 +88,17 @@ export default function DashboardPage() {
     if (error) {
       return (
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 dark:bg-red-900/20 dark:border-red-800">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="h-6 w-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error Loading Dashboard</h3>
+          <div className="flex items-start gap-3">
+            <svg className="h-6 w-6 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                Error Loading Dashboard
+              </h3>
               <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
               <button
+                type="button"
                 onClick={() => window.location.reload()}
                 className="mt-3 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300 font-medium"
               >
@@ -145,8 +146,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className={`min-h-screen bg-background transition-colors duration-200 ${mode === 'light' ? 'bg-gray-50' : 'dark:bg-[#0B0F17]'
-      }`}>
+    <div className={`min-h-screen bg-background}`}>
       {/* Navbar */}
       <nav className="sticky top-0 z-50 border-b border-border bg-surface/95 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

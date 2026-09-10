@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
+import { cn } from '../lib/cn';
+import { formatTimeAgo } from '../lib/format';
 
 interface Notification {
   _id: string;
@@ -22,8 +23,11 @@ interface NotificationCenterProps {
   onNotificationRead?: () => void;
 }
 
-export default function NotificationCenter({ onClose, isOpen = true, onNotificationRead }: NotificationCenterProps) {
-  const { theme } = useTheme();
+export default function NotificationCenter({
+  onClose,
+  isOpen = true,
+  onNotificationRead,
+}: NotificationCenterProps) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,11 +47,8 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
     try {
       const response = await api.get(`/communication/notifications?page=${page}&limit=20`);
       const data = response.data.data;
-      if (page === 1) {
-        setNotifications(data.items);
-      } else {
-        setNotifications(prev => [...prev, ...data.items]);
-      }
+      if (page === 1) setNotifications(data.items);
+      else setNotifications(prev => [...prev, ...data.items]);
       setHasMore(data.items.length === 20);
       setUnreadCount(data.unreadCount);
     } catch (error) {
@@ -69,11 +70,9 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
   const markAsRead = async (id: string) => {
     try {
       await api.put(`/communication/notifications/${id}/read`);
-      setNotifications(prev =>
-        prev.map(n => n._id === id ? { ...n, read: true } : n)
-      );
+      setNotifications(prev => prev.map(n => (n._id === id ? { ...n, read: true } : n)));
       setUnreadCount(prev => Math.max(0, prev - 1));
-      if (onNotificationRead) onNotificationRead();
+      onNotificationRead?.();
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
     }
@@ -82,11 +81,9 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
   const markAllAsRead = async () => {
     try {
       await api.put('/communication/notifications/read-all');
-      setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
-      );
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
-      if (onNotificationRead) onNotificationRead();
+      onNotificationRead?.();
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -104,16 +101,8 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
     }
   };
 
-  const getIcon = (type: string) => {
-    const icons: Record<string, string> = {
-      info: 'ℹ️',
-      success: '✅',
-      warning: '⚠️',
-      error: '❌',
-      system: '🔔',
-    };
-    return icons[type] || '📢';
-  };
+  const getIcon = (type: string) =>
+    ({ info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', system: '🔔' }[type] || '📢');
 
   const getTypeColor = (type: string) => {
     const colors: Record<string, string> = {
@@ -123,25 +112,17 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
       error: 'text-red-600 dark:text-red-400',
       system: 'text-purple-600 dark:text-purple-400',
     };
-    return colors[type] || 'text-gray-600 dark:text-gray-400';
+    return colors[type] || 'text-muted';
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className={`absolute right-0 mt-2 w-96 max-h-[500px] rounded-lg shadow-xl border overflow-hidden transition-colors duration-200 z-50 ${
-      theme ? 'bg-white border-gray-200' : 'dark:bg-[#1E293B] dark:border-[#334155]'
-    }`}>
+    <div className="absolute right-0 mt-2 w-96 max-h-[500px] rounded-lg shadow-xl border border-border bg-surface overflow-hidden z-50">
       {/* Header */}
-      <div className={`p-4 border-b flex justify-between items-center transition-colors duration-200 ${
-        theme ? 'border-gray-200' : 'dark:border-[#334155]'
-      }`}>
+      <div className="p-4 border-b border-border flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <h3 className={`font-semibold transition-colors duration-200 ${
-            theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-          }`}>
-            Notifications
-          </h3>
+          <h3 className="font-semibold text-foreground">Notifications</h3>
           {unreadCount > 0 && (
             <span className="px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
               {unreadCount}
@@ -151,18 +132,19 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
             <button
+              type="button"
               onClick={markAllAsRead}
-              className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+              className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400"
             >
               Mark all read
             </button>
           )}
           {onClose && (
             <button
+              type="button"
               onClick={onClose}
-              className={`text-sm transition-colors duration-200 ${
-                theme ? 'text-gray-500 hover:text-gray-700' : 'dark:text-[#94A3B8] dark:hover:text-[#F1F5F9]'
-              }`}
+              className="text-sm text-muted hover:text-foreground transition-colors"
+              aria-label="Close notifications"
             >
               ✕
             </button>
@@ -170,84 +152,67 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
         </div>
       </div>
 
-      {/* Notifications List */}
+      {/* List */}
       <div className="overflow-y-auto max-h-[400px]">
         {loading && page === 1 ? (
           <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
           </div>
         ) : notifications.length === 0 ? (
           <div className="text-center py-8">
-            <p className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              No notifications
-            </p>
+            <p className="text-sm text-muted">No notifications</p>
           </div>
         ) : (
-          notifications.map((notification) => (
+          notifications.map(notification => (
             <div
               key={notification._id}
-              className={`p-4 border-b transition-colors duration-200 ${
-                !notification.read 
-                  ? theme ? 'bg-blue-50' : 'dark:bg-blue-900/10'
-                  : ''
-              } ${theme ? 'border-gray-100 hover:bg-gray-50' : 'dark:border-[#334155] dark:hover:bg-[#1E293B]/50'}`}
+              className={cn(
+                'p-4 border-b border-border transition-colors',
+                !notification.read && 'bg-blue-50 dark:bg-blue-900/10',
+                'hover:bg-elevated',
+              )}
             >
               <div className="flex items-start gap-3">
-                <div className={`text-xl ${getTypeColor(notification.type)}`}>
+                <div className={cn('text-xl', getTypeColor(notification.type))}>
                   {getIcon(notification.type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className={`text-sm font-medium transition-colors duration-200 ${
-                      theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-                    }`}>
-                      {notification.title}
-                    </p>
+                    <p className="text-sm font-medium text-foreground">{notification.title}</p>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {!notification.read && (
-                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                      )}
+                      {!notification.read && <span className="w-2 h-2 bg-blue-500 rounded-full" />}
                       <button
+                        type="button"
                         onClick={() => deleteNotification(notification._id)}
-                        className={`text-xs transition-colors duration-200 ${
-                          theme ? 'text-gray-400 hover:text-red-600' : 'dark:text-[#64748B] dark:hover:text-red-400'
-                        }`}
+                        className="text-xs text-muted hover:text-red-600 dark:hover:text-red-400"
+                        aria-label="Delete notification"
                       >
                         ×
                       </button>
                     </div>
                   </div>
-                  <p className={`text-sm mt-1 transition-colors duration-200 ${
-                    theme ? 'text-gray-600' : 'dark:text-[#94A3B8]'
-                  }`}>
-                    {notification.message}
-                  </p>
+                  <p className="text-sm mt-1 text-muted">{notification.message}</p>
                   <div className="flex items-center gap-3 mt-2">
-                    <span className={`text-xs transition-colors duration-200 ${
-                      theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                    }`}>
-                      {new Date(notification.createdAt).toLocaleString()}
+                    <span className="text-xs text-muted">
+                      {formatTimeAgo(notification.createdAt)}
                     </span>
                     {notification.link && (
                       <Link
                         to={notification.link}
                         onClick={() => {
-                          if (!notification.read) {
-                            markAsRead(notification._id);
-                          }
-                          if (onClose) onClose();
+                          if (!notification.read) markAsRead(notification._id);
+                          onClose?.();
                         }}
-                        className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                        className="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
                       >
                         {notification.linkText || 'View →'}
                       </Link>
                     )}
                     {!notification.read && !notification.link && (
                       <button
+                        type="button"
                         onClick={() => markAsRead(notification._id)}
-                        className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                        className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400"
                       >
                         Mark as read
                       </button>
@@ -262,15 +227,12 @@ export default function NotificationCenter({ onClose, isOpen = true, onNotificat
 
       {/* Load More */}
       {hasMore && notifications.length > 0 && (
-        <div className={`p-3 text-center border-t transition-colors duration-200 ${
-          theme ? 'border-gray-200' : 'dark:border-[#334155]'
-        }`}>
+        <div className="p-3 text-center border-t border-border">
           <button
+            type="button"
             onClick={() => setPage(p => p + 1)}
             disabled={loading}
-            className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-primary-600 hover:text-primary-700' : 'dark:text-primary-400 dark:hover:text-primary-300'
-            }`}
+            className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 disabled:opacity-50"
           >
             {loading ? 'Loading...' : 'Load more'}
           </button>
