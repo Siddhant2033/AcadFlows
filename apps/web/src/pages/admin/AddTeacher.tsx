@@ -12,10 +12,10 @@ import {
   Textarea,
   PhoneInput,
   Field,
-  Badge,
 } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
 import { formatCurrency } from '../../lib/format';
+import { getErrorMessage } from '../../lib/errors';
 import { cn } from '../../lib/cn';
 
 interface Qualification {
@@ -101,7 +101,13 @@ const defaultFormData: TeacherFormData = {
     postalCode: '',
   },
   qualifications: [
-    { degree: '', institution: '', year: new Date().getFullYear(), specialization: '', grade: '' },
+    {
+      degree: '',
+      institution: '',
+      year: new Date().getFullYear(),
+      specialization: '',
+      grade: '',
+    },
   ],
   experience: [
     {
@@ -130,7 +136,9 @@ export default function AddTeacherPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState<TeacherFormData>(defaultFormData);
-  const [subjects, setSubjects] = useState<{ _id: string; name: string; code: string }[]>([]);
+  const [subjects, setSubjects] = useState<{ _id: string; name: string; code: string }[]>(
+    [],
+  );
 
   const isEditMode = !!id;
 
@@ -184,14 +192,16 @@ export default function AddTeacherPage() {
         specialization: data.specialization || [],
         joiningDate: data.joiningDate ? data.joiningDate.split('T')[0] : '',
         employmentType: data.employmentType || 'permanent',
-        contractEndDate: data.contractEndDate ? data.contractEndDate.split('T')[0] : '',
+        contractEndDate: data.contractEndDate
+          ? data.contractEndDate.split('T')[0]
+          : '',
         salary: data.salary || defaultFormData.salary,
         bankDetails: data.bankDetails || defaultFormData.bankDetails,
         emergencyContact: data.emergencyContact || defaultFormData.emergencyContact,
       });
     } catch (err) {
       console.error('Failed to fetch teacher:', err);
-      setError('Failed to load teacher data');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -216,7 +226,13 @@ export default function AddTeacherPage() {
       ...prev,
       qualifications: [
         ...prev.qualifications,
-        { degree: '', institution: '', year: new Date().getFullYear(), specialization: '', grade: '' },
+        {
+          degree: '',
+          institution: '',
+          year: new Date().getFullYear(),
+          specialization: '',
+          grade: '',
+        },
       ],
     }));
 
@@ -241,7 +257,14 @@ export default function AddTeacherPage() {
       ...prev,
       experience: [
         ...prev.experience,
-        { institution: '', position: '', fromDate: '', toDate: '', isCurrent: false, responsibilities: '' },
+        {
+          institution: '',
+          position: '',
+          fromDate: '',
+          toDate: '',
+          isCurrent: false,
+          responsibilities: '',
+        },
       ],
     }));
 
@@ -280,32 +303,106 @@ export default function AddTeacherPage() {
       return;
     }
 
+    if (!formData.dateOfBirth) {
+      setError('Date of birth is required');
+      setSaving(false);
+      return;
+    }
+
+    if (!formData.joiningDate) {
+      setError('Joining date is required');
+      setSaving(false);
+      return;
+    }
+
     try {
-      const payload = {
-        ...formData,
+      const payload: any = {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
         dateOfBirth: new Date(formData.dateOfBirth),
+        gender: formData.gender,
+        phone: formData.phone,
+        address: formData.address,
+        subjects: formData.subjects,
         joiningDate: new Date(formData.joiningDate),
-        contractEndDate: formData.contractEndDate
-          ? new Date(formData.contractEndDate)
-          : undefined,
-        qualifications: formData.qualifications.map(q => ({
-          ...q,
-          year: parseInt(String(q.year), 10),
-        })),
-        experience: formData.experience.map(exp => ({
-          ...exp,
-          fromDate: new Date(exp.fromDate),
-          toDate: exp.toDate ? new Date(exp.toDate) : undefined,
-        })),
+        employmentType: formData.employmentType,
+        emergencyContact: formData.emergencyContact,
       };
 
-      if (!payload.password) delete (payload as any).password;
+      // Only include fields with values
+      if (formData.middleName?.trim()) payload.middleName = formData.middleName.trim();
+      if (formData.password?.trim()) payload.password = formData.password;
+      if (formData.maritalStatus) payload.maritalStatus = formData.maritalStatus;
+      if (formData.nationality?.trim()) payload.nationality = formData.nationality.trim();
+      if (formData.religion?.trim()) payload.religion = formData.religion.trim();
+      if (formData.alternativeEmail?.trim())
+        payload.alternativeEmail = formData.alternativeEmail.trim();
+      if (formData.specialization?.length > 0)
+        payload.specialization = formData.specialization;
 
-      if (isEditMode) await api.put(`/teachers/${id}`, payload);
-      else await api.post('/teachers', payload);
+      // Contract end date only when relevant
+      if (
+        (formData.employmentType === 'contract' ||
+          formData.employmentType === 'probation') &&
+        formData.contractEndDate
+      ) {
+        payload.contractEndDate = new Date(formData.contractEndDate);
+      }
+
+      // Salary: only send if amount is > 0
+      if (formData.salary?.amount && formData.salary.amount > 0) {
+        payload.salary = formData.salary;
+      }
+
+      // Bank details: only send if at least one field is filled
+      const bd = formData.bankDetails;
+      if (bd && (bd.bankName?.trim() || bd.accountNumber?.trim() || bd.ifscCode?.trim() || bd.branchName?.trim())) {
+        payload.bankDetails = {
+          bankName: bd.bankName?.trim() || '',
+          accountNumber: bd.accountNumber?.trim() || '',
+          ifscCode: bd.ifscCode?.trim() || '',
+          branchName: bd.branchName?.trim() || '',
+        };
+      }
+
+      // Qualifications: only include filled-in ones
+      const validQuals = formData.qualifications.filter(
+        q => q.degree?.trim() && q.institution?.trim(),
+      );
+      if (validQuals.length > 0) {
+        payload.qualifications = validQuals.map(q => ({
+          degree: q.degree.trim(),
+          institution: q.institution.trim(),
+          year: parseInt(String(q.year), 10) || new Date().getFullYear(),
+          specialization: q.specialization?.trim() || '',
+          grade: q.grade?.trim() || '',
+        }));
+      }
+
+      // Experience: only include filled-in ones
+      const validExp = formData.experience.filter(
+        e => e.institution?.trim() && e.position?.trim() && e.fromDate,
+      );
+      if (validExp.length > 0) {
+        payload.experience = validExp.map(exp => ({
+          institution: exp.institution.trim(),
+          position: exp.position.trim(),
+          fromDate: new Date(exp.fromDate),
+          toDate: exp.toDate ? new Date(exp.toDate) : undefined,
+          isCurrent: exp.isCurrent || false,
+          responsibilities: exp.responsibilities?.trim() || '',
+        }));
+      }
+
+      if (isEditMode) {
+        await api.put(`/teachers/${id}`, payload);
+      } else {
+        await api.post('/teachers', payload);
+      }
       navigate('/teachers');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save teacher');
+      setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -511,9 +608,7 @@ export default function AddTeacherPage() {
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {subject.name}
-                            </p>
+                            <p className="text-sm font-medium truncate">{subject.name}</p>
                             <p className="text-[10px] text-muted">{subject.code}</p>
                           </div>
                         </button>
@@ -545,9 +640,7 @@ export default function AddTeacherPage() {
                   Add
                 </Button>
               </div>
-              <CardDescription>
-                Academic degrees and certifications
-              </CardDescription>
+              <CardDescription>Academic degrees and certifications</CardDescription>
 
               <div className="space-y-4 mt-5">
                 {formData.qualifications.map((qual, index) => (
@@ -699,7 +792,10 @@ export default function AddTeacherPage() {
                           required
                         />
                       </Field>
-                      <Field label="To Date" hint={exp.isCurrent ? 'Currently here' : undefined}>
+                      <Field
+                        label="To Date"
+                        hint={exp.isCurrent ? 'Currently here' : undefined}
+                      >
                         <Input
                           type="date"
                           value={exp.toDate}

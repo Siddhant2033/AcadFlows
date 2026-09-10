@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
+import { ZodError } from 'zod';
 
 export class AppError extends Error {
   statusCode: number;
@@ -19,25 +20,60 @@ interface MongoDuplicateKeyError extends Error {
   keyValue?: Record<string, unknown>;
 }
 
+/**
+ * Turn a Zod error into a single human-readable message.
+ * Never leaks raw Zod structure to clients.
+ */
+function formatZodError(error: ZodError): string {
+  const issues = error.issues;
+
+  if (issues.length === 1) {
+    return issues[0].message;
+  }
+
+  const messages = issues.slice(0, 3).map(issue => {
+    const path = issue.path.join('.');
+    return path ? `${path}: ${issue.message}` : issue.message;
+  });
+
+  const extra = issues.length > 3 ? ` (and ${issues.length - 3} more)` : '';
+  return messages.join('; ') + extra;
+}
+
 export function errorHandler(
-  err: Error | AppError | mongoose.Error,
+  err: Error | AppError | mongoose.Error | ZodError,
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   console.error('Error:', err);
 
+  // ── Zod validation errors ──
+  if (err instanceof ZodError) {
+    return res.status(400).json({
+      success: false,
+      error: formatZodError(err),
+      details: err.issues.map(issue => ({
+        field: issue.path.join('.'),
+        message: issue.message,
+      })),
+    });
+  }
+
   // ── Mongoose validation errors ──
   if (err instanceof mongoose.Error.ValidationError) {
     const errors = Object.values(err.errors).map(e => e.message);
     return res.status(400).json({
       success: false,
-      error: 'Validation Error',
-      details: errors,
+      error: errors.length === 1 ? errors[0] : errors.join('; '),
+      details: Object.entries(err.errors).map(([field, e]) => ({
+        field,
+        message: e.message,
+      })),
     });
   }
 
-  // ── Mongoose cast errors (e.g. bad ObjectId) ──
+  // ── Mongoose cast errors (bad ObjectId) ──
   if (err instanceof mongoose.Error.CastError) {
     return res.status(400).json({
       success: false,
@@ -45,9 +81,7 @@ export function errorHandler(
     });
   }
 
-  // ── Duplicate key error (MongoServerError with code 11000) ──
-  // FIXED B10: The old check used `instanceof mongoose.Error`, which never
-  // matched because MongoServerError is not a subclass of mongoose.Error.
+  // ── Duplicate key ──
   const mongoErr = err as MongoDuplicateKeyError;
   if (mongoErr.code === 11000) {
     const field = Object.keys(mongoErr.keyPattern || {})[0] || 'field';
@@ -70,6 +104,9 @@ export function errorHandler(
   // ── Unknown errors ──
   return res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    error:
+      process.env.NODE_ENV === 'development'
+        ? err.message
+        : 'Internal server error',
   });
 }

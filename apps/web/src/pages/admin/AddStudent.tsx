@@ -14,6 +14,7 @@ import {
   Field,
 } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
+import { getErrorMessage } from '../../lib/errors';
 import { cn } from '../../lib/cn';
 
 interface StudentFormData {
@@ -90,10 +91,17 @@ const defaultFormData: StudentFormData = {
     country: 'India',
     postalCode: '',
   },
-  guardians: [{ name: '', phone: '', email: '', relationship: 'guardian', occupation: '' }],
+  guardians: [
+    { name: '', phone: '', email: '', relationship: 'guardian', occupation: '' },
+  ],
   emergencyContact: { name: '', phone: '', relationship: '' },
   previousSchool: { name: '', address: '', year: '', reason: '' },
-  medicalInfo: { allergies: [], medicalConditions: [], medications: [], emergencyNotes: '' },
+  medicalInfo: {
+    allergies: [],
+    medicalConditions: [],
+    medications: [],
+    emergencyNotes: '',
+  },
 };
 
 export default function AddStudentPage() {
@@ -140,8 +148,6 @@ export default function AddStudentPage() {
     try {
       const response = await api.get(`/students/${id}`);
       const data = response.data.data;
-
-      // Match existing gradeId by name
       const matchingGrade = grades.find(g => g.name === data.grade);
 
       setFormData({
@@ -178,7 +184,7 @@ export default function AddStudentPage() {
       });
     } catch (err) {
       console.error('Failed to fetch student:', err);
-      setError('Failed to load student data');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -220,28 +226,70 @@ export default function AddStudentPage() {
     setSaving(true);
     setError('');
 
-    // Frontend validation
     if (!formData.sectionId && !isEditMode) {
       setError('Please select a section — required for attendance tracking');
       setSaving(false);
       return;
     }
 
+    if (!formData.dateOfBirth) {
+      setError('Date of birth is required');
+      setSaving(false);
+      return;
+    }
+
     try {
       const payload: any = {
-        ...formData,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        grade: formData.grade,
         dateOfBirth: new Date(formData.dateOfBirth),
+        gender: formData.gender,
+        address: formData.address,
+        emergencyContact: formData.emergencyContact,
       };
 
-      // Remove empty optional fields
-      if (!payload.password) delete payload.password;
-      if (!payload.gradeId) delete payload.gradeId;
+      // Only include optional fields when they have values
+      if (formData.middleName?.trim()) payload.middleName = formData.middleName.trim();
+      if (formData.password?.trim()) payload.password = formData.password;
+      if (formData.section) payload.section = formData.section;
+      if (formData.sectionId) payload.sectionId = formData.sectionId;
+      if (formData.bloodGroup) payload.bloodGroup = formData.bloodGroup;
+      if (formData.nationality?.trim())
+        payload.nationality = formData.nationality.trim();
+      if (formData.religion?.trim()) payload.religion = formData.religion.trim();
+      if (formData.motherTongue?.trim())
+        payload.motherTongue = formData.motherTongue.trim();
+      if (formData.phone?.trim()) payload.phone = formData.phone.trim();
+
+      // Guardians: only include those with at least a name
+      const validGuardians = formData.guardians.filter(g => g.name?.trim() && g.phone?.trim());
+      if (validGuardians.length > 0) {
+        payload.guardians = validGuardians;
+      }
+
+      // Previous school: only if a name is provided
+      if (formData.previousSchool.name?.trim()) {
+        payload.previousSchool = formData.previousSchool;
+      }
+
+      // Medical info: only if any field is filled
+      const mi = formData.medicalInfo;
+      if (
+        mi.allergies?.length > 0 ||
+        mi.medicalConditions?.length > 0 ||
+        mi.medications?.length > 0 ||
+        mi.emergencyNotes?.trim()
+      ) {
+        payload.medicalInfo = mi;
+      }
 
       if (isEditMode) await api.put(`/students/${id}`, payload);
       else await api.post('/students', payload);
       navigate('/students');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save student');
+      setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -367,7 +415,6 @@ export default function AddStudentPage() {
                   <Input
                     value={formData.nationality}
                     onChange={e => handleChange('nationality', e.target.value)}
-                    placeholder="e.g., Indian"
                   />
                 </Field>
                 <Field label="Religion">
@@ -612,10 +659,7 @@ export default function AddStudentPage() {
               </CardDescription>
 
               <div className="space-y-4 mt-5">
-                <Field
-                  label="Allergies"
-                  hint="Separate multiple entries with commas"
-                >
+                <Field label="Allergies" hint="Separate multiple entries with commas">
                   <Input
                     value={formData.medicalInfo.allergies.join(', ')}
                     onChange={e =>
@@ -695,10 +739,7 @@ export default function AddStudentPage() {
                   />
                 </Field>
                 {!isEditMode && (
-                  <Field
-                    label="Password"
-                    hint="Leave blank to auto-generate"
-                  >
+                  <Field label="Password" hint="Leave blank to auto-generate">
                     <Input
                       type="password"
                       value={formData.password}

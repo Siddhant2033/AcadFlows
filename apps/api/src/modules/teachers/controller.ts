@@ -3,88 +3,145 @@ import { TeacherService, LeaveService } from './service';
 import { Teacher } from '../../models/Teacher';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
-import { AppError } from '../../middleware/error-handler';
 
-const createTeacherSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  middleName: z.string().optional(),
-  email: z.string().email(),
-  password: z.string().min(8).optional(),
-  dateOfBirth: z.string().transform(str => new Date(str)),
-  gender: z.enum(['male', 'female', 'other']),
-  maritalStatus: z.enum(['single', 'married', 'divorced', 'widowed']).optional(),
-  nationality: z.string().optional(),
-  religion: z.string().optional(),
-  phone: z.string().min(1),
-  alternativeEmail: z.string().email().optional(),
-  address: z.object({
-    street: z.string().optional(),
-    city: z.string().min(1),
-    state: z.string().min(1),
-    country: z.string().default('India'),
-    postalCode: z.string().min(1),
-  }),
-  qualifications: z
-    .array(
-      z.object({
-        degree: z.string().min(1),
-        institution: z.string().min(1),
-        year: z.number().min(1900),
-        specialization: z.string().optional(),
-        grade: z.string().optional(),
-      }),
-    )
-    .optional(),
-  experience: z
-    .array(
-      z.object({
-        institution: z.string().min(1),
-        position: z.string().min(1),
-        fromDate: z.string().transform(str => new Date(str)),
-        toDate: z.string().transform(str => new Date(str)).optional(),
-        isCurrent: z.boolean().default(false),
-        responsibilities: z.string().optional(),
-      }),
-    )
-    .optional(),
-  subjects: z.array(z.string()).optional(),
-  specialization: z.array(z.string()).optional(),
-  joiningDate: z.string().transform(str => new Date(str)),
-  employmentType: z
-    .enum(['permanent', 'contract', 'temporary', 'probation'])
-    .default('permanent'),
-  contractEndDate: z.string().transform(str => new Date(str)).optional(),
-  salary: z
-    .object({
-      amount: z.number().min(0),
-      currency: z.string().default('INR'),
-      frequency: z.enum(['monthly', 'weekly', 'hourly']).default('monthly'),
-    })
-    .optional(),
-  bankDetails: z
-    .object({
-      bankName: z.string().min(1),
-      accountNumber: z.string().min(1),
-      ifscCode: z.string().min(1),
-      branchName: z.string().min(1),
-    })
-    .optional(),
-  emergencyContact: z.object({
-    name: z.string().min(1),
-    phone: z.string().min(1),
-    relationship: z.string().min(1),
-  }),
+// ─────────────────────────────────────────────────────────────
+// Reusable sub-schemas — nested fields always optional with defaults
+// ─────────────────────────────────────────────────────────────
+
+const addressSchema = z.object({
+  street: z.string().optional().default(''),
+  city: z.string().min(1, 'City is required'),
+  state: z.string().min(1, 'State is required'),
+  country: z.string().optional().default('India'),
+  postalCode: z.string().min(1, 'Postal code is required'),
 });
 
-const updateTeacherSchema = createTeacherSchema.partial();
+const qualificationSchema = z.object({
+  degree: z.string().min(1, 'Degree is required'),
+  institution: z.string().min(1, 'Institution is required'),
+  year: z.coerce.number().min(1900, 'Year must be after 1900'),
+  specialization: z.string().optional().default(''),
+  grade: z.string().optional().default(''),
+});
+
+const experienceSchema = z.object({
+  institution: z.string().min(1, 'Institution is required'),
+  position: z.string().min(1, 'Position is required'),
+  fromDate: z.coerce.date(),
+  toDate: z.coerce.date().optional(),
+  isCurrent: z.boolean().optional().default(false),
+  responsibilities: z.string().optional().default(''),
+});
+
+const emergencyContactSchema = z.object({
+  name: z.string().min(1, 'Emergency contact name is required'),
+  phone: z.string().min(1, 'Emergency contact phone is required'),
+  relationship: z.string().min(1, 'Relationship is required'),
+});
+
+// Optional email — empty string becomes undefined, otherwise validated
+const optionalEmail = z
+  .union([z.string(), z.undefined(), z.null()])
+  .optional()
+  .transform(v => {
+    if (v === undefined || v === null) return undefined;
+    const trimmed = String(v).trim();
+    return trimmed === '' ? undefined : trimmed;
+  })
+  .refine(
+    v => v === undefined || /^\S+@\S+\.\S+$/.test(v),
+    { message: 'Invalid email address' },
+  );
+
+const optionalString = z
+  .union([z.string(), z.undefined(), z.null()])
+  .optional()
+  .transform(v => {
+    if (v === undefined || v === null) return undefined;
+    const trimmed = String(v).trim();
+    return trimmed === '' ? undefined : trimmed;
+  });
+
+// ─────────────────────────────────────────────────────────────
+// Teacher schema — every optional nested field is truly optional
+// ─────────────────────────────────────────────────────────────
+
+export const createTeacherSchema = z
+  .object({
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
+    middleName: optionalString,
+    email: z.string().email('Invalid email address'),
+    password: z
+      .union([z.string(), z.undefined(), z.null()])
+      .optional()
+      .transform(v => {
+        if (v === undefined || v === null) return undefined;
+        const s = String(v);
+        return s === '' ? undefined : s;
+      })
+      .refine(
+        v => v === undefined || v.length >= 8,
+        { message: 'Password must be at least 8 characters' },
+      ),
+
+    dateOfBirth: z.coerce.date(),
+    gender: z.enum(['male', 'female', 'other']),
+    maritalStatus: z
+      .enum(['single', 'married', 'divorced', 'widowed'])
+      .optional(),
+    nationality: optionalString,
+    religion: optionalString,
+
+    phone: z.string().min(1, 'Phone number is required'),
+    alternativeEmail: optionalEmail,
+
+    address: addressSchema,
+
+    qualifications: z.array(qualificationSchema).optional().default([]),
+    experience: z.array(experienceSchema).optional().default([]),
+    subjects: z.array(z.string()).optional().default([]),
+    specialization: z.array(z.string()).optional().default([]),
+
+    joiningDate: z.coerce.date(),
+    employmentType: z
+      .enum(['permanent', 'contract', 'temporary', 'probation'])
+      .optional()
+      .default('permanent'),
+    contractEndDate: z.coerce.date().optional(),
+
+    salary: z
+      .object({
+        amount: z.coerce.number().min(0).optional().default(0),
+        currency: z.string().optional().default('INR'),
+        frequency: z
+          .enum(['monthly', 'weekly', 'hourly'])
+          .optional()
+          .default('monthly'),
+      })
+      .optional(),
+
+    bankDetails: z
+      .object({
+        bankName: z.string().optional().default(''),
+        accountNumber: z.string().optional().default(''),
+        ifscCode: z.string().optional().default(''),
+        branchName: z.string().optional().default(''),
+      })
+      .optional(),
+
+    emergencyContact: emergencyContactSchema,
+  })
+  .strict();
+
+export const updateTeacherSchema = createTeacherSchema.partial();
 
 const createLeaveSchema = z.object({
   type: z.enum(['annual', 'sick', 'casual', 'other']),
-  startDate: z.string().transform(str => new Date(str)),
-  endDate: z.string().transform(str => new Date(str)),
-  reason: z.string().min(1),
-  isHalfDay: z.boolean().default(false),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  reason: z.string().min(1, 'Reason is required'),
+  isHalfDay: z.boolean().optional().default(false),
   attachment: z.string().optional(),
 });
 
@@ -93,15 +150,14 @@ const updateLeaveStatusSchema = z.object({
   rejectionReason: z.string().optional(),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Controller
+// ─────────────────────────────────────────────────────────────
+
 export class TeacherController {
-  /**
-   * Returns the teacher profile for the currently authenticated user.
-   * Used by the frontend to know which section this teacher is class teacher of.
-   */
   static async getCurrentTeacher(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-
       const teacher = await Teacher.findOne({
         userId: authReq.user.id,
         tenantId: authReq.user.tenantId,
@@ -115,10 +171,7 @@ export class TeacherController {
         });
       }
 
-      res.json({
-        success: true,
-        data: teacher,
-      });
+      res.json({ success: true, data: teacher });
     } catch (error) {
       next(error);
     }
@@ -158,10 +211,7 @@ export class TeacherController {
         limit: limit ? parseInt(limit as string) : 20,
       });
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -171,11 +221,7 @@ export class TeacherController {
     try {
       const { teacherId } = req.params;
       const teacher = await TeacherService.getTeacherById(teacherId);
-
-      res.json({
-        success: true,
-        data: teacher,
-      });
+      res.json({ success: true, data: teacher });
     } catch (error) {
       next(error);
     }
@@ -202,11 +248,7 @@ export class TeacherController {
     try {
       const { teacherId } = req.params;
       await TeacherService.deleteTeacher(teacherId);
-
-      res.json({
-        success: true,
-        message: 'Teacher deleted successfully!',
-      });
+      res.json({ success: true, message: 'Teacher deleted successfully!' });
     } catch (error) {
       next(error);
     }
@@ -216,14 +258,12 @@ export class TeacherController {
     try {
       const { teacherId } = req.params;
       const { subjectId, sectionId, academicYearId, isPrimary } = req.body;
-
       const teacher = await TeacherService.assignSubject(teacherId, {
         subjectId,
         sectionId,
         academicYearId,
         isPrimary,
       });
-
       res.json({
         success: true,
         data: teacher,
@@ -237,8 +277,11 @@ export class TeacherController {
   static async removeSubject(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId, subjectId, sectionId } = req.params;
-      const teacher = await TeacherService.removeSubject(teacherId, subjectId, sectionId);
-
+      const teacher = await TeacherService.removeSubject(
+        teacherId,
+        subjectId,
+        sectionId,
+      );
       res.json({
         success: true,
         data: teacher,
@@ -253,16 +296,11 @@ export class TeacherController {
     try {
       const { teacherId } = req.params;
       const { date } = req.query;
-
       const schedule = await TeacherService.getTeacherSchedule(
         teacherId,
         date ? new Date(date as string) : undefined,
       );
-
-      res.json({
-        success: true,
-        data: schedule,
-      });
+      res.json({ success: true, data: schedule });
     } catch (error) {
       next(error);
     }
@@ -272,17 +310,13 @@ export class TeacherController {
     try {
       const authReq = req as AuthRequest;
       const stats = await TeacherService.getTeacherStats(authReq.user.tenantId);
-
-      res.json({
-        success: true,
-        data: stats,
-      });
+      res.json({ success: true, data: stats });
     } catch (error) {
       next(error);
     }
   }
 
-  // ─────────────── Leave Management ───────────────
+  // ───── Leave ─────
 
   static async createLeave(req: Request, res: Response, next: NextFunction) {
     try {
@@ -314,7 +348,8 @@ export class TeacherController {
   static async getLeaves(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-      const { teacherId, status, type, startDate, endDate, page, limit } = req.query;
+      const { teacherId, status, type, startDate, endDate, page, limit } =
+        req.query;
 
       const result = await LeaveService.getLeaves(authReq.user.tenantId, {
         teacherId: teacherId as string,
@@ -326,10 +361,7 @@ export class TeacherController {
         limit: limit ? parseInt(limit as string) : 20,
       });
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -339,11 +371,7 @@ export class TeacherController {
     try {
       const { leaveId } = req.params;
       const leave = await LeaveService.getLeaveById(leaveId);
-
-      res.json({
-        success: true,
-        data: leave,
-      });
+      res.json({ success: true, data: leave });
     } catch (error) {
       next(error);
     }
@@ -376,11 +404,7 @@ export class TeacherController {
     try {
       const { teacherId } = req.params;
       const balance = await LeaveService.getLeaveBalance(teacherId);
-
-      res.json({
-        success: true,
-        data: balance,
-      });
+      res.json({ success: true, data: balance });
     } catch (error) {
       next(error);
     }
@@ -390,11 +414,7 @@ export class TeacherController {
     try {
       const { leaveId } = req.params;
       await LeaveService.deleteLeave(leaveId);
-
-      res.json({
-        success: true,
-        message: 'Leave request deleted successfully!',
-      });
+      res.json({ success: true, message: 'Leave request deleted successfully!' });
     } catch (error) {
       next(error);
     }

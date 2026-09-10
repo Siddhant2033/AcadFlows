@@ -1,55 +1,80 @@
 import { Request, Response, NextFunction } from 'express';
-import { 
-  AcademicYearService, 
-  GradeService, 
-  SectionService, 
+import {
+  AcademicYearService,
+  GradeService,
+  SectionService,
   SubjectService,
   TeacherSubjectService,
-  ScheduleService
+  ScheduleService,
 } from './service';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
 
-// Validation Schemas
+// ─────────────────────────────────────────────────────────────
+// Reusable helpers for optional strings
+// ─────────────────────────────────────────────────────────────
+
+const optionalString = z
+  .union([z.string(), z.undefined(), z.null()])
+  .optional()
+  .transform(v => {
+    if (v === undefined || v === null) return undefined;
+    const trimmed = String(v).trim();
+    return trimmed === '' ? undefined : trimmed;
+  });
+
+const optionalStringArray = z
+  .union([z.array(z.string()), z.undefined(), z.null()])
+  .optional()
+  .transform(v => {
+    if (!v || !Array.isArray(v)) return undefined;
+    const filtered = v.filter(s => s && String(s).trim() !== '');
+    return filtered.length === 0 ? undefined : filtered;
+  });
+
+// ─────────────────────────────────────────────────────────────
+// Schemas
+// ─────────────────────────────────────────────────────────────
+
 const academicYearSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().min(1),
-  startDate: z.string().transform(str => new Date(str)),
-  endDate: z.string().transform(str => new Date(str)),
-  description: z.string().optional(),
+  name: z.string().min(1, 'Academic year name is required'),
+  code: z.string().min(1, 'Code is required'),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  description: optionalString,
 });
 
 const gradeSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().min(1),
-  sequence: z.number().min(0),
-  description: z.string().optional(),
+  name: z.string().min(1, 'Grade name is required'),
+  code: z.string().min(1, 'Grade code is required'),
+  sequence: z.coerce.number().min(0),
+  description: optionalString,
 });
 
 const sectionSchema = z.object({
-  gradeId: z.string().min(1),
-  name: z.string().min(1),
-  code: z.string().min(1),
-  capacity: z.number().min(1).default(30),
-  teacherId: z.string().optional(),
-  roomNumber: z.string().optional(),
+  gradeId: z.string().min(1, 'Grade is required'),
+  name: z.string().min(1, 'Section name is required'),
+  code: z.string().min(1, 'Section code is required'),
+  capacity: z.coerce.number().min(1, 'Capacity must be at least 1').default(30),
+  classTeacherId: optionalString,
+  roomNumber: optionalString,
 });
 
 const subjectSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().min(1),
-  description: z.string().optional(),
-  gradeId: z.string().optional(),
-  credits: z.number().min(0).default(1),
-  isElective: z.boolean().default(false),
+  name: z.string().min(1, 'Subject name is required'),
+  code: z.string().min(1, 'Subject code is required'),
+  description: optionalString,
+  gradeId: optionalString,
+  credits: z.coerce.number().min(0).default(1),
+  isElective: z.boolean().optional().default(false),
 });
 
 const teacherSubjectSchema = z.object({
-  teacherId: z.string().min(1),
-  subjectId: z.string().min(1),
-  gradeId: z.string().optional(),
-  sectionId: z.string().optional(),
-  academicYearId: z.string().min(1),
+  teacherId: z.string().min(1, 'Teacher is required'),
+  subjectId: z.string().min(1, 'Subject is required'),
+  gradeId: optionalString,
+  sectionId: optionalString,
+  academicYearId: z.string().min(1, 'Academic year is required'),
 });
 
 const scheduleSchema = z.object({
@@ -58,13 +83,24 @@ const scheduleSchema = z.object({
   sectionId: z.string().min(1),
   subjectId: z.string().min(1),
   teacherId: z.string().min(1),
-  dayOfWeek: z.enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']),
-  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
-  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
-  roomNumber: z.string().optional(),
+  dayOfWeek: z.enum([
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ]),
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format'),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format'),
+  roomNumber: optionalString,
 });
 
+// ─────────────────────────────────────────────────────────────
 // Academic Year Controller
+// ─────────────────────────────────────────────────────────────
+
 export class AcademicYearController {
   static async create(req: Request, res: Response, next: NextFunction) {
     try {
@@ -88,10 +124,7 @@ export class AcademicYearController {
     try {
       const authReq = req as AuthRequest;
       const academicYears = await AcademicYearService.getAll(authReq.user.tenantId);
-      res.json({
-        success: true,
-        data: academicYears,
-      });
+      res.json({ success: true, data: academicYears });
     } catch (error) {
       next(error);
     }
@@ -100,10 +133,7 @@ export class AcademicYearController {
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const academicYear = await AcademicYearService.getById(req.params.id);
-      res.json({
-        success: true,
-        data: academicYear,
-      });
+      res.json({ success: true, data: academicYear });
     } catch (error) {
       next(error);
     }
@@ -126,10 +156,7 @@ export class AcademicYearController {
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
       await AcademicYearService.delete(req.params.id);
-      res.json({
-        success: true,
-        message: 'Academic year deleted successfully',
-      });
+      res.json({ success: true, message: 'Academic year deleted successfully' });
     } catch (error) {
       next(error);
     }
@@ -149,7 +176,10 @@ export class AcademicYearController {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
 // Grade Controller
+// ─────────────────────────────────────────────────────────────
+
 export class GradeController {
   static async create(req: Request, res: Response, next: NextFunction) {
     try {
@@ -173,10 +203,7 @@ export class GradeController {
     try {
       const authReq = req as AuthRequest;
       const grades = await GradeService.getAll(authReq.user.tenantId);
-      res.json({
-        success: true,
-        data: grades,
-      });
+      res.json({ success: true, data: grades });
     } catch (error) {
       next(error);
     }
@@ -185,10 +212,7 @@ export class GradeController {
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const grade = await GradeService.getById(req.params.id);
-      res.json({
-        success: true,
-        data: grade,
-      });
+      res.json({ success: true, data: grade });
     } catch (error) {
       next(error);
     }
@@ -211,17 +235,17 @@ export class GradeController {
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
       await GradeService.delete(req.params.id);
-      res.json({
-        success: true,
-        message: 'Grade deleted successfully',
-      });
+      res.json({ success: true, message: 'Grade deleted successfully' });
     } catch (error) {
       next(error);
     }
   }
 }
 
+// ─────────────────────────────────────────────────────────────
 // Section Controller
+// ─────────────────────────────────────────────────────────────
+
 export class SectionController {
   static async create(req: Request, res: Response, next: NextFunction) {
     try {
@@ -247,12 +271,9 @@ export class SectionController {
       const { gradeId } = req.query;
       const sections = await SectionService.getAll(
         authReq.user.tenantId,
-        gradeId as string
+        gradeId as string,
       );
-      res.json({
-        success: true,
-        data: sections,
-      });
+      res.json({ success: true, data: sections });
     } catch (error) {
       next(error);
     }
@@ -261,10 +282,7 @@ export class SectionController {
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const section = await SectionService.getById(req.params.id);
-      res.json({
-        success: true,
-        data: section,
-      });
+      res.json({ success: true, data: section });
     } catch (error) {
       next(error);
     }
@@ -287,17 +305,17 @@ export class SectionController {
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
       await SectionService.delete(req.params.id);
-      res.json({
-        success: true,
-        message: 'Section deleted successfully',
-      });
+      res.json({ success: true, message: 'Section deleted successfully' });
     } catch (error) {
       next(error);
     }
   }
 }
 
+// ─────────────────────────────────────────────────────────────
 // Subject Controller
+// ─────────────────────────────────────────────────────────────
+
 export class SubjectController {
   static async create(req: Request, res: Response, next: NextFunction) {
     try {
@@ -323,12 +341,9 @@ export class SubjectController {
       const { gradeId } = req.query;
       const subjects = await SubjectService.getAll(
         authReq.user.tenantId,
-        gradeId as string
+        gradeId as string,
       );
-      res.json({
-        success: true,
-        data: subjects,
-      });
+      res.json({ success: true, data: subjects });
     } catch (error) {
       next(error);
     }
@@ -337,10 +352,7 @@ export class SubjectController {
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const subject = await SubjectService.getById(req.params.id);
-      res.json({
-        success: true,
-        data: subject,
-      });
+      res.json({ success: true, data: subject });
     } catch (error) {
       next(error);
     }
@@ -363,17 +375,17 @@ export class SubjectController {
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
       await SubjectService.delete(req.params.id);
-      res.json({
-        success: true,
-        message: 'Subject deleted successfully',
-      });
+      res.json({ success: true, message: 'Subject deleted successfully' });
     } catch (error) {
       next(error);
     }
   }
 }
 
+// ─────────────────────────────────────────────────────────────
 // Teacher Subject Controller
+// ─────────────────────────────────────────────────────────────
+
 export class TeacherSubjectController {
   static async assign(req: Request, res: Response, next: NextFunction) {
     try {
@@ -400,12 +412,9 @@ export class TeacherSubjectController {
       const assignments = await TeacherSubjectService.getAll(
         authReq.user.tenantId,
         teacherId as string,
-        subjectId as string
+        subjectId as string,
       );
-      res.json({
-        success: true,
-        data: assignments,
-      });
+      res.json({ success: true, data: assignments });
     } catch (error) {
       next(error);
     }
@@ -414,10 +423,7 @@ export class TeacherSubjectController {
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const assignment = await TeacherSubjectService.getById(req.params.id);
-      res.json({
-        success: true,
-        data: assignment,
-      });
+      res.json({ success: true, data: assignment });
     } catch (error) {
       next(error);
     }
@@ -441,19 +447,19 @@ export class TeacherSubjectController {
       const { teacherId } = req.params;
       const assignments = await TeacherSubjectService.getByTeacher(
         teacherId,
-        authReq.user.tenantId
+        authReq.user.tenantId,
       );
-      res.json({
-        success: true,
-        data: assignments,
-      });
+      res.json({ success: true, data: assignments });
     } catch (error) {
       next(error);
     }
   }
 }
 
+// ─────────────────────────────────────────────────────────────
 // Schedule Controller
+// ─────────────────────────────────────────────────────────────
+
 export class ScheduleController {
   static async create(req: Request, res: Response, next: NextFunction) {
     try {
@@ -480,12 +486,9 @@ export class ScheduleController {
       const schedules = await ScheduleService.getAll(
         authReq.user.tenantId,
         sectionId as string,
-        teacherId as string
+        teacherId as string,
       );
-      res.json({
-        success: true,
-        data: schedules,
-      });
+      res.json({ success: true, data: schedules });
     } catch (error) {
       next(error);
     }
@@ -494,10 +497,7 @@ export class ScheduleController {
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const schedule = await ScheduleService.getById(req.params.id);
-      res.json({
-        success: true,
-        data: schedule,
-      });
+      res.json({ success: true, data: schedule });
     } catch (error) {
       next(error);
     }
@@ -529,18 +529,19 @@ export class ScheduleController {
     }
   }
 
-  static async getTimetableBySection(req: Request, res: Response, next: NextFunction) {
+  static async getTimetableBySection(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
     try {
       const authReq = req as AuthRequest;
       const { sectionId } = req.params;
       const timetable = await ScheduleService.getTimetableBySection(
         sectionId,
-        authReq.user.tenantId
+        authReq.user.tenantId,
       );
-      res.json({
-        success: true,
-        data: timetable,
-      });
+      res.json({ success: true, data: timetable });
     } catch (error) {
       next(error);
     }
