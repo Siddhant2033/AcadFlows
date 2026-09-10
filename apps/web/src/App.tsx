@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { TenantProvider } from './contexts/TenantContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -15,6 +15,14 @@ import ResetPasswordPage from './pages/ResetPassword';
 import ProfilePage from './pages/Profile';
 import NotFoundPage from './pages/NotFound';
 
+// Academic
+import AcademicYearsPage from './pages/admin/academic/AcademicYears';
+import GradesPage from './pages/admin/academic/Grades';
+import SectionsPage from './pages/admin/academic/Sections';
+import SubjectsPage from './pages/admin/academic/Subjects';
+import TeacherAssignmentsPage from './pages/admin/academic/TeacherAssignments';
+
+// Admin
 import StudentsPage from './pages/admin/Students';
 import AddStudentPage from './pages/admin/AddStudent';
 import StudentDetailPage from './pages/admin/StudentDetail';
@@ -89,7 +97,49 @@ function App() {
               }
             />
 
-            {/* Students */}
+            {/* ────────────── Academic (admin only) ────────────── */}
+            <Route
+              path="/academic/years"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AcademicYearsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/academic/grades"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <GradesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/academic/sections"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <SectionsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/academic/subjects"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <SubjectsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/academic/assignments"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <TeacherAssignmentsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ────────────── Students (admin only) ────────────── */}
             <Route
               path="/students"
               element={
@@ -131,7 +181,7 @@ function App() {
               }
             />
 
-            {/* Teachers */}
+            {/* ────────────── Teachers (admin only) ────────────── */}
             <Route
               path="/teachers"
               element={
@@ -165,11 +215,11 @@ function App() {
               }
             />
 
-            {/* Attendance */}
+            {/* ────────────── Attendance (admin + teacher) ────────────── */}
             <Route
               path="/attendance/mark"
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <MarkAttendancePage />
                 </ProtectedRoute>
               }
@@ -177,13 +227,13 @@ function App() {
             <Route
               path="/attendance/reports"
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <AttendanceReportsPage />
                 </ProtectedRoute>
               }
             />
 
-            {/* Fees */}
+            {/* ────────────── Fees (admin only) ────────────── */}
             <Route
               path="/fees/structures"
               element={
@@ -225,11 +275,11 @@ function App() {
               }
             />
 
-            {/* Assignments */}
+            {/* ────────────── Assignments ────────────── */}
             <Route
               path="/assignments"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
                   <AssignmentsPage />
                 </ProtectedRoute>
               }
@@ -237,7 +287,7 @@ function App() {
             <Route
               path="/assignments/create"
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <CreateAssignmentPage />
                 </ProtectedRoute>
               }
@@ -245,7 +295,7 @@ function App() {
             <Route
               path="/assignments/:id/edit"
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <CreateAssignmentPage />
                 </ProtectedRoute>
               }
@@ -253,7 +303,7 @@ function App() {
             <Route
               path="/assignments/:id/submissions"
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <AssignmentSubmissionsPage />
                 </ProtectedRoute>
               }
@@ -261,13 +311,13 @@ function App() {
             <Route
               path="/assignments/:id"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}>
                   <AssignmentSubmissionsPage />
                 </ProtectedRoute>
               }
             />
 
-            {/* Gradebook */}
+            {/* Gradebook (student only) */}
             <Route
               path="/gradebook"
               element={
@@ -281,7 +331,7 @@ function App() {
             <Route
               path="/report-cards"
               element={
-                <ProtectedRoute requiredRole="admin">
+                <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <ReportCardsPage />
                 </ProtectedRoute>
               }
@@ -339,7 +389,7 @@ function App() {
               }
             />
 
-            {/* 404 — must be last */}
+            {/* 404 */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </TenantProvider>

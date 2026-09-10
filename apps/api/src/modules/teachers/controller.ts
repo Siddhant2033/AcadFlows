@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { TeacherService, LeaveService } from './service';
+import { Teacher } from '../../models/Teacher';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
 import { AppError } from '../../middleware/error-handler';
 
-// Teacher Validation Schemas
 const createTeacherSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
@@ -25,37 +25,51 @@ const createTeacherSchema = z.object({
     country: z.string().default('India'),
     postalCode: z.string().min(1),
   }),
-  qualifications: z.array(z.object({
-    degree: z.string().min(1),
-    institution: z.string().min(1),
-    year: z.number().min(1900),
-    specialization: z.string().optional(),
-    grade: z.string().optional(),
-  })).optional(),
-  experience: z.array(z.object({
-    institution: z.string().min(1),
-    position: z.string().min(1),
-    fromDate: z.string().transform(str => new Date(str)),
-    toDate: z.string().transform(str => new Date(str)).optional(),
-    isCurrent: z.boolean().default(false),
-    responsibilities: z.string().optional(),
-  })).optional(),
+  qualifications: z
+    .array(
+      z.object({
+        degree: z.string().min(1),
+        institution: z.string().min(1),
+        year: z.number().min(1900),
+        specialization: z.string().optional(),
+        grade: z.string().optional(),
+      }),
+    )
+    .optional(),
+  experience: z
+    .array(
+      z.object({
+        institution: z.string().min(1),
+        position: z.string().min(1),
+        fromDate: z.string().transform(str => new Date(str)),
+        toDate: z.string().transform(str => new Date(str)).optional(),
+        isCurrent: z.boolean().default(false),
+        responsibilities: z.string().optional(),
+      }),
+    )
+    .optional(),
   subjects: z.array(z.string()).optional(),
   specialization: z.array(z.string()).optional(),
   joiningDate: z.string().transform(str => new Date(str)),
-  employmentType: z.enum(['permanent', 'contract', 'temporary', 'probation']).default('permanent'),
+  employmentType: z
+    .enum(['permanent', 'contract', 'temporary', 'probation'])
+    .default('permanent'),
   contractEndDate: z.string().transform(str => new Date(str)).optional(),
-  salary: z.object({
-    amount: z.number().min(0),
-    currency: z.string().default('USD'),
-    frequency: z.enum(['monthly', 'weekly', 'hourly']).default('monthly'),
-  }).optional(),
-  bankDetails: z.object({
-    bankName: z.string().min(1),
-    accountNumber: z.string().min(1),
-    ifscCode: z.string().min(1),
-    branchName: z.string().min(1),
-  }).optional(),
+  salary: z
+    .object({
+      amount: z.number().min(0),
+      currency: z.string().default('INR'),
+      frequency: z.enum(['monthly', 'weekly', 'hourly']).default('monthly'),
+    })
+    .optional(),
+  bankDetails: z
+    .object({
+      bankName: z.string().min(1),
+      accountNumber: z.string().min(1),
+      ifscCode: z.string().min(1),
+      branchName: z.string().min(1),
+    })
+    .optional(),
   emergencyContact: z.object({
     name: z.string().min(1),
     phone: z.string().min(1),
@@ -65,7 +79,6 @@ const createTeacherSchema = z.object({
 
 const updateTeacherSchema = createTeacherSchema.partial();
 
-// Leave Validation Schemas
 const createLeaveSchema = z.object({
   type: z.enum(['annual', 'sick', 'casual', 'other']),
   startDate: z.string().transform(str => new Date(str)),
@@ -81,7 +94,36 @@ const updateLeaveStatusSchema = z.object({
 });
 
 export class TeacherController {
-  // Create teacher
+  /**
+   * Returns the teacher profile for the currently authenticated user.
+   * Used by the frontend to know which section this teacher is class teacher of.
+   */
+  static async getCurrentTeacher(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authReq = req as AuthRequest;
+
+      const teacher = await Teacher.findOne({
+        userId: authReq.user.id,
+        tenantId: authReq.user.tenantId,
+        isDeleted: false,
+      }).populate('userId', 'email phone profilePicture');
+
+      if (!teacher) {
+        return res.status(404).json({
+          success: false,
+          error: 'Teacher profile not found for this user',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: teacher,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async createTeacher(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -102,7 +144,6 @@ export class TeacherController {
     }
   }
 
-  // Get all teachers
   static async getTeachers(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -126,7 +167,6 @@ export class TeacherController {
     }
   }
 
-  // Get teacher by ID
   static async getTeacherById(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId } = req.params;
@@ -141,7 +181,6 @@ export class TeacherController {
     }
   }
 
-  // Update teacher
   static async updateTeacher(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId } = req.params;
@@ -159,7 +198,6 @@ export class TeacherController {
     }
   }
 
-  // Delete teacher
   static async deleteTeacher(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId } = req.params;
@@ -174,7 +212,6 @@ export class TeacherController {
     }
   }
 
-  // Assign subject
   static async assignSubject(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId } = req.params;
@@ -197,7 +234,6 @@ export class TeacherController {
     }
   }
 
-  // Remove subject
   static async removeSubject(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId, subjectId, sectionId } = req.params;
@@ -213,7 +249,6 @@ export class TeacherController {
     }
   }
 
-  // Get teacher schedule
   static async getSchedule(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId } = req.params;
@@ -221,7 +256,7 @@ export class TeacherController {
 
       const schedule = await TeacherService.getTeacherSchedule(
         teacherId,
-        date ? new Date(date as string) : undefined
+        date ? new Date(date as string) : undefined,
       );
 
       res.json({
@@ -233,7 +268,6 @@ export class TeacherController {
     }
   }
 
-  // Get teacher statistics
   static async getStats(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -248,9 +282,8 @@ export class TeacherController {
     }
   }
 
-  // ============ Leave Management ============
+  // ─────────────── Leave Management ───────────────
 
-  // Create leave request
   static async createLeave(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -261,9 +294,11 @@ export class TeacherController {
         ...validated,
         tenantId: authReq.user.tenantId,
         teacherId,
-        totalDays: Math.ceil(
-          (validated.endDate.getTime() - validated.startDate.getTime()) / (1000 * 60 * 60 * 24)
-        ) + 1,
+        totalDays:
+          Math.ceil(
+            (validated.endDate.getTime() - validated.startDate.getTime()) /
+              (1000 * 60 * 60 * 24),
+          ) + 1,
       });
 
       res.status(201).json({
@@ -276,7 +311,6 @@ export class TeacherController {
     }
   }
 
-  // Get all leave requests
   static async getLeaves(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -301,7 +335,6 @@ export class TeacherController {
     }
   }
 
-  // Get leave by ID
   static async getLeaveById(req: Request, res: Response, next: NextFunction) {
     try {
       const { leaveId } = req.params;
@@ -316,7 +349,6 @@ export class TeacherController {
     }
   }
 
-  // Update leave status
   static async updateLeaveStatus(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
@@ -327,7 +359,7 @@ export class TeacherController {
         leaveId,
         validated.status,
         authReq.user.id,
-        validated.rejectionReason
+        validated.rejectionReason,
       );
 
       res.json({
@@ -340,7 +372,6 @@ export class TeacherController {
     }
   }
 
-  // Get leave balance
   static async getLeaveBalance(req: Request, res: Response, next: NextFunction) {
     try {
       const { teacherId } = req.params;
@@ -355,7 +386,6 @@ export class TeacherController {
     }
   }
 
-  // Delete leave
   static async deleteLeave(req: Request, res: Response, next: NextFunction) {
     try {
       const { leaveId } = req.params;

@@ -233,7 +233,10 @@ export class SubjectService {
 export class TeacherSubjectService {
   static async assign(data: any) {
     const teacherSubject = await TeacherSubject.create(data);
-    return teacherSubject;
+    return await TeacherSubject.findById(teacherSubject._id)
+      .populate('teacherId', 'firstName lastName employeeId')
+      .populate('subjectId', 'name code')
+      .populate('sectionId', 'name');
   }
 
   static async getAll(tenantId: string, teacherId?: string, subjectId?: string) {

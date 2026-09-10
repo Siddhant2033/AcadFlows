@@ -1,27 +1,50 @@
 import { Router } from 'express';
 import { AttendanceController } from './controller';
-import { authenticate, requireRole } from '../../middleware/auth';
+import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
+import { requireClassTeacherOrAdmin } from '../../middleware/class-teacher';
 
 const router: Router = Router();
 
-// All routes require authentication
 router.use(authenticate);
+router.use(ensureTenantMatch);
 
-// Mark attendance
-router.post('/students', requireRole('admin', 'teacher'), AttendanceController.markStudentAttendance);
-router.post('/teachers', requireRole('admin'), AttendanceController.markTeacherAttendance);
+// ─────────────── Mark attendance ───────────────
+// Class teacher of that section OR admin
+router.post(
+  '/students',
+  requireRole('admin', 'teacher'),
+  requireClassTeacherOrAdmin(),
+  AttendanceController.markStudentAttendance,
+);
 
-// Get attendance
+// Admin-only: teachers attendance
+router.post(
+  '/teachers',
+  requireRole('admin'),
+  AttendanceController.markTeacherAttendance,
+);
+
+// ─────────────── Get attendance ───────────────
 router.get('/students/:studentId', AttendanceController.getStudentAttendance);
-router.get('/teachers/:teacherId', requireRole('admin'), AttendanceController.getTeacherAttendance);
+router.get(
+  '/teachers/:teacherId',
+  requireRole('admin'),
+  AttendanceController.getTeacherAttendance,
+);
 
-// Reports
-router.get('/sections/:sectionId/report', requireRole('admin', 'teacher'), AttendanceController.getSectionReport);
+// ─────────────── Reports ───────────────
+// Class teacher of that section OR admin
+router.get(
+  '/sections/:sectionId/report',
+  requireRole('admin', 'teacher'),
+  requireClassTeacherOrAdmin(),
+  AttendanceController.getSectionReport,
+);
 
-// Holiday
+// ─────────────── Holiday ───────────────
 router.post('/holiday', requireRole('admin'), AttendanceController.markHoliday);
 
-// Stats
+// ─────────────── Stats ───────────────
 router.get('/stats', AttendanceController.getStats);
 
 export default router;

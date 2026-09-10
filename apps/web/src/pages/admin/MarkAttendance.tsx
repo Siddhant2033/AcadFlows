@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
 import { Card, Button, Select } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
@@ -25,6 +26,7 @@ interface Section {
   _id: string;
   name: string;
   gradeId: string;
+  classTeacherId?: string;
 }
 
 interface AcademicYear {
@@ -35,6 +37,7 @@ interface AcademicYear {
 
 export default function MarkAttendancePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -48,6 +51,10 @@ export default function MarkAttendancePage() {
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+  const [myTeacherId, setMyTeacherId] = useState<string | null>(null);
+  const [mySectionId, setMySectionId] = useState<string | null>(null);
+
+  const isTeacher = user?.role === 'teacher';
 
   const statusOptions = [
     { value: 'present', label: 'Present', icon: '✅', color: 'bg-green-500' },
@@ -59,6 +66,8 @@ export default function MarkAttendancePage() {
   useEffect(() => {
     fetchAcademicYears();
     fetchSections();
+    if (isTeacher) fetchMyTeacherProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -67,6 +76,15 @@ export default function MarkAttendancePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [academicYearId, sectionId, date]);
+
+  const fetchMyTeacherProfile = async () => {
+    try {
+      const res = await api.get('/teachers/me');
+      setMyTeacherId(res.data.data._id);
+    } catch (err) {
+      console.error('Failed to load teacher profile:', err);
+    }
+  };
 
   const fetchAcademicYears = async () => {
     try {
@@ -87,6 +105,17 @@ export default function MarkAttendancePage() {
       console.error('Failed to fetch sections:', error);
     }
   };
+
+  // Once we know the teacher's ID and have sections, auto-select their class
+  useEffect(() => {
+    if (isTeacher && myTeacherId && sections.length > 0) {
+      const ownSection = sections.find(s => s.classTeacherId === myTeacherId);
+      if (ownSection) {
+        setSectionId(ownSection._id);
+        setMySectionId(ownSection._id);
+      }
+    }
+  }, [isTeacher, myTeacherId, sections]);
 
   const fetchStudents = async () => {
     setIsLoadingStudents(true);
@@ -183,11 +212,20 @@ export default function MarkAttendancePage() {
   const getStatusCount = (status: string) =>
     Object.values(attendance).filter(r => r.status === status).length;
 
+  // Teacher sees only their own section, admin sees all
+  const visibleSections = isTeacher
+    ? sections.filter(s => s._id === mySectionId)
+    : sections;
+
   return (
     <DashboardLayout>
       <PageHeader
         title="Mark Attendance"
-        description="Daily attendance for students"
+        description={
+          isTeacher
+            ? 'Mark attendance for your class section'
+            : 'Daily attendance for students'
+        }
         breadcrumb={[
           { label: 'Dashboard', path: '/dashboard' },
           { label: 'Attendance', path: '/attendance/reports' },
@@ -204,7 +242,13 @@ export default function MarkAttendancePage() {
         }
       />
 
-      {/* Filters */}
+      {isTeacher && !mySectionId && (
+        <div className="mb-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-400 text-sm">
+          ⚠️ You are not assigned as a class teacher for any section yet. Ask your
+          administrator to assign you as a class teacher.
+        </div>
+      )}
+
       <Card className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -227,14 +271,23 @@ export default function MarkAttendancePage() {
             <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
               Section *
             </label>
-            <Select value={sectionId} onChange={e => setSectionId(e.target.value)}>
+            <Select
+              value={sectionId}
+              onChange={e => !isTeacher && setSectionId(e.target.value)}
+              disabled={isTeacher}
+            >
               <option value="">Select Section</option>
-              {sections.map(section => (
+              {visibleSections.map(section => (
                 <option key={section._id} value={section._id}>
                   {section.name}
                 </option>
               ))}
             </Select>
+            {isTeacher && mySectionId && (
+              <p className="mt-1.5 text-xs text-muted">
+                You are the class teacher of this section
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-muted uppercase tracking-wider mb-1.5">
@@ -253,7 +306,6 @@ export default function MarkAttendancePage() {
         </div>
       </Card>
 
-      {/* Alerts */}
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-sm animate-fade-down">
           {error}
@@ -265,7 +317,6 @@ export default function MarkAttendancePage() {
         </div>
       )}
 
-      {/* Quick actions */}
       {students.length > 0 && (
         <Card className="mb-6">
           <div className="flex flex-wrap items-center gap-3">
@@ -298,7 +349,6 @@ export default function MarkAttendancePage() {
         </Card>
       )}
 
-      {/* Attendance Table */}
       <Card padding="none" className="overflow-hidden">
         {isLoadingStudents ? (
           <div className="flex justify-center items-center h-64">
@@ -308,7 +358,9 @@ export default function MarkAttendancePage() {
           <div className="text-center py-16">
             <p className="text-5xl mb-3">📋</p>
             <p className="text-sm text-muted">
-              No students found. Select a section with students.
+              {!sectionId
+                ? 'Select a section to load students'
+                : 'No students found in this section'}
             </p>
           </div>
         ) : (
@@ -329,7 +381,10 @@ export default function MarkAttendancePage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {students.map(student => (
-                    <tr key={student._id} className="hover:bg-elevated/50 transition-colors">
+                    <tr
+                      key={student._id}
+                      className="hover:bg-elevated/50 transition-colors"
+                    >
                       <td className="px-6 py-3 whitespace-nowrap">
                         <span className="text-sm font-mono font-medium text-foreground">
                           {student.rollNo}

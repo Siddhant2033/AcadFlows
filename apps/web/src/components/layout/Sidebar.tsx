@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/cn';
 
@@ -19,7 +19,22 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Overview',
     items: [
-      { label: 'Dashboard', icon: '📊', path: '/dashboard', roles: ['admin', 'teacher', 'student', 'guardian'] },
+      {
+        label: 'Dashboard',
+        icon: '📊',
+        path: '/dashboard',
+        roles: ['admin', 'teacher', 'student', 'guardian'],
+      },
+    ],
+  },
+  {
+    label: 'Academics',
+    items: [
+      { label: 'Academic Years', icon: '🗓️', path: '/academic/years', roles: ['admin'] },
+      { label: 'Grades', icon: '🎓', path: '/academic/grades', roles: ['admin'] },
+      { label: 'Classes & Sections', icon: '🏫', path: '/academic/sections', roles: ['admin'] },
+      { label: 'Subjects', icon: '📚', path: '/academic/subjects', roles: ['admin'] },
+      { label: 'Teacher Assignments', icon: '👥', path: '/academic/assignments', roles: ['admin'] },
     ],
   },
   {
@@ -30,13 +45,18 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: 'Academics',
+    label: 'Attendance',
     items: [
-      { label: 'Attendance', icon: '✅', path: '/attendance/mark', roles: ['admin', 'teacher'] },
+      { label: 'Mark Attendance', icon: '✅', path: '/attendance/mark', roles: ['admin', 'teacher'] },
       { label: 'Reports', icon: '📈', path: '/attendance/reports', roles: ['admin', 'teacher'] },
+    ],
+  },
+  {
+    label: 'Grading',
+    items: [
       { label: 'Assignments', icon: '📝', path: '/assignments', roles: ['admin', 'teacher', 'student'] },
-      { label: 'Gradebook', icon: '📚', path: '/gradebook', roles: ['student'] },
-      { label: 'Report Cards', icon: '🎓', path: '/report-cards', roles: ['admin', 'teacher'] },
+      { label: 'Gradebook', icon: '📖', path: '/gradebook', roles: ['student'] },
+      { label: 'Report Cards', icon: '🎯', path: '/report-cards', roles: ['admin', 'teacher'] },
       { label: 'Timetable', icon: '📅', path: '/timetable', roles: ['admin', 'teacher', 'student', 'guardian'] },
     ],
   },
@@ -68,7 +88,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div
           className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden animate-fade-in"
@@ -77,16 +96,13 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={cn(
           'fixed left-0 top-16 bottom-0 z-40 w-64',
           'bg-surface border-r border-border',
           'transition-transform duration-300 ease-out',
           'overflow-y-auto',
-          // Desktop: always visible
           'md:translate-x-0',
-          // Mobile: slide in/out
           open ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         )}
         aria-label="Main navigation"
@@ -107,7 +123,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                       key={item.path}
                       to={item.path}
                       onClick={() => {
-                        // Close mobile drawer on navigate
                         if (window.innerWidth < 768) onClose();
                       }}
                       className={({ isActive }) =>
@@ -146,7 +161,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           })}
         </nav>
 
-        {/* Bottom CTA */}
         <div className="p-3 mt-4 border-t border-border">
           <div className="px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
