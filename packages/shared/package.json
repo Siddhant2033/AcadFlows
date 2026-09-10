@@ -7,9 +7,14 @@
   "types": "./dist/esm/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/esm/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     }
   },
   "scripts": {
@@ -17,6 +22,6 @@
     "dev": "tsc -p tsconfig.json --watch"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "5.9.3"
   }
 }
