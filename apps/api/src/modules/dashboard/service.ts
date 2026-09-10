@@ -311,9 +311,8 @@ export class DashboardService {
       activities.push({
         id: `invoice_${invoice._id}`,
         icon: statusIcon,
-        message: `Invoice ${invoice.invoiceNumber} ${
-          invoice.status === 'paid' ? 'paid' : 'generated'
-        } - ₹${invoice.total}`,
+        message: `Invoice ${invoice.invoiceNumber} ${invoice.status === 'paid' ? 'paid' : 'generated'
+          } - ₹${invoice.total}`,
         timestamp: this.getTimeAgo(invoice.createdAt),
         type: 'invoice',
       });
@@ -366,9 +365,9 @@ export class DashboardService {
       quickActions: [
         { label: 'Add Student', icon: '➕', path: '/students/add', color: 'blue' },
         { label: 'Add Teacher', icon: '👨‍🏫', path: '/teachers/add', color: 'green' },
-        { label: 'Create Class', icon: '📚', path: '/academic/sections/add', color: 'purple' },
+        { label: 'Mark Attendance', icon: '✅', path: '/attendance/mark', color: 'purple' },
         { label: 'Manage Fees', icon: '💰', path: '/fees/invoices', color: 'orange' },
-        { label: 'Generate Reports', icon: '📊', path: '/reports', color: 'red' },
+        { label: 'Attendance Reports', icon: '📊', path: '/attendance/reports', color: 'red' },
         { label: 'Send Announcement', icon: '📢', path: '/announcements', color: 'teal' },
       ],
       quickStats: {

@@ -24,11 +24,11 @@ export default function GuardianDashboard({ data, tenant, user }: GuardianDashbo
       value:
         children.length > 0
           ? `${Math.round(
-              children.reduce(
-                (sum, c) => sum + parseInt(c.attendance?.replace('%', '') || '0', 10),
-                0,
-              ) / children.length,
-            )}%`
+            children.reduce(
+              (sum, c) => sum + parseInt(c.attendance?.replace('%', '') || '0', 10),
+              0,
+            ) / children.length,
+          )}%`
           : '0%',
       icon: '📊',
     },
@@ -61,9 +61,8 @@ export default function GuardianDashboard({ data, tenant, user }: GuardianDashbo
         </h2>
         <p className="mt-1 text-muted">
           {children.length > 0
-            ? `${children.length} ${children.length === 1 ? 'child' : 'children'} at ${
-                tenant?.name || 'your school'
-              }`
+            ? `${children.length} ${children.length === 1 ? 'child' : 'children'} at ${tenant?.name || 'your school'
+            }`
             : `Welcome to ${tenant?.name || 'your school'}`}
         </p>
       </Card>
@@ -166,7 +165,7 @@ export default function GuardianDashboard({ data, tenant, user }: GuardianDashbo
             )}
           </div>
           <Link
-            to="/fees"
+            to="/fees/invoices"
             className="block text-center mt-4 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
           >
             View All Invoices →
@@ -180,6 +179,7 @@ export default function GuardianDashboard({ data, tenant, user }: GuardianDashbo
           { to: '/fees', icon: '💰', title: 'Fee Status', subtitle: 'View payments' },
           { to: '/attendance', icon: '📊', title: 'Attendance', subtitle: 'View reports' },
           { to: '/announcements', icon: '📢', title: 'Announcements', subtitle: 'School updates' },
+          { to: '/fees/invoices', icon: '💰', title: 'Fee Status', subtitle: 'View payments' },
         ].map(action => (
           <Link
             key={action.to}

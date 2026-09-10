@@ -335,13 +335,15 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
         <div className="space-y-6">
           {/* Calendar */}
           <Card>
-            <CardTitle className="mb-4">📅 Calendar</CardTitle>
-            <p className="text-sm text-center py-4 text-muted">No events scheduled</p>
+            <CardTitle className="mb-4">📅 Schedule</CardTitle>
+            <p className="text-sm text-center py-4 text-muted">
+              View school timetable and upcoming classes
+            </p>
             <Link
-              to="/calendar"
+              to="/timetable"
               className="block text-center mt-4 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
             >
-              View Full Calendar →
+              View Timetable →
             </Link>
           </Card>
 
