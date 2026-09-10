@@ -172,7 +172,7 @@ export default function SchoolRegistrationPage() {
             <span className={`font-semibold tracking-tight transition-colors duration-200 ${
               theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
             }`}>
-              School<span className="text-primary-600">Hub</span>
+              Acad<span className="text-primary-600">Flows</span>
             </span>
           </Link>
           <div className="flex items-center gap-4">

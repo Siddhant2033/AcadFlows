@@ -613,7 +613,7 @@ export default function RegisterPage() {
               <span className="text-lg">🏫</span>
             </div>
             <span className="font-semibold text-foreground tracking-tight">
-              School<span className="text-primary-600">Hub</span>
+              Acad<span className="text-primary-600">Flows</span>
             </span>
           </Link>
           <div className="flex items-center gap-3">

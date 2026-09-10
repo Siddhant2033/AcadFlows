@@ -1,4 +1,4 @@
-# School Platform — MVP Blueprint (MERN + TypeScript)
+# AcadFlows — MVP Blueprint (MERN + TypeScript)
 
 **Scope:** Multi-tenant school management MVP. Core + Academics + Fees/Payments.
 **Stack:** MongoDB, Express, React, Node — all TypeScript.
@@ -36,7 +36,7 @@ No payment gateway is activated in the MVP. Fee/payment data structures are buil
 ## 3. Repository Structure
 
 ```
-school-platform/
+acadflows/
 ├── apps/
 │   ├── web/                 # React + TS frontend
 │   │   ├── src/

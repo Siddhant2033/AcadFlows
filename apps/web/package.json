@@ -1,5 +1,5 @@
 {
-  "name": "@school-platform/web",
+  "name": "@acadflows/web",
   "version": "0.0.1",
   "type": "module",
   "private": true,
@@ -11,7 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@school-platform/shared": "workspace:*",
+    "@acadflows/shared": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.1",

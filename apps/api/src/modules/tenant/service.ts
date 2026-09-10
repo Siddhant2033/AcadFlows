@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { Tenant } from '../../models/Tenant';
 import { AppError } from '../../middleware/error-handler';
-import { Tenant as TenantType } from '@school-platform/shared';
+import { Tenant as TenantType } from '@acadflows/shared';
 import { 
   generateUniqueSchoolCode, 
   validateSchoolCode, 

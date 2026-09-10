@@ -1,5 +1,5 @@
 import React from 'react';
-import { INDIA } from '@school-platform/shared';
+import { INDIA } from '@acadflows/shared';
 import { cn } from '../../lib/cn';
 
 interface PhoneInputProps {

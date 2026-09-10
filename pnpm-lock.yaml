@@ -17,7 +17,7 @@ importers:
 
   apps/api:
     dependencies:
-      '@school-platform/shared':
+      '@acadflows/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       bcryptjs:
@@ -93,12 +93,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@acadflows/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@hookform/resolvers':
         specifier: ^3.3.2
         version: 3.10.0(react-hook-form@7.87.0(react@18.3.1))
-      '@school-platform/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       axios:
         specifier: ^1.6.3
         version: 1.20.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)

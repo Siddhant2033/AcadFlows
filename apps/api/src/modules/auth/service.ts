@@ -7,7 +7,7 @@ import { User } from '../../models/User';
 import { Tenant } from '../../models/Tenant';
 import { PasswordResetToken } from '../../models/PasswordResetToken';
 import { AppError } from '../../middleware/error-handler';
-import { UserCreateInput, UserLoginInput, AuthTokens } from '@school-platform/shared';
+import { UserCreateInput, UserLoginInput, AuthTokens } from '@acadflows/shared';
 
 export class AuthService {
   static async register(

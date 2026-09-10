@@ -1,5 +1,5 @@
 {
-  "name": "@school-platform/api",
+  "name": "@acadflows/api",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -8,12 +8,10 @@
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
-    "seed:india": "tsx src/scripts/seed-india-data.ts",
-    "seed:tenant": "tsx src/scripts/create-default-tenant.ts",
-    "seed:schools": "tsx src/scripts/seed-school.ts"
+    "seed:sunrise": "tsx src/scripts/seed-sunrise-test.ts"
   },
   "dependencies": {
-    "@school-platform/shared": "workspace:*",
+    "@acadflows/shared": "workspace:*",
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "helmet": "^7.1.0",

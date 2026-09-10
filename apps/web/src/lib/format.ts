@@ -1,5 +1,5 @@
 // apps/web/src/lib/format.ts
-import { INDIA } from '@school-platform/shared';
+import { INDIA } from '@acadflows/shared';
 
 /* ─────────────────────────── Currency ─────────────────────────── */
 

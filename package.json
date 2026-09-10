@@ -1,16 +1,16 @@
 {
-  "name": "school-platform",
+  "name": "acadflows",
   "version": "0.0.1",
   "private": true,
   "scripts": {
     "dev": "pnpm run --parallel dev",
-    "dev:web": "pnpm run --filter @school-platform/web dev",
-    "dev:api": "pnpm run --filter @school-platform/api dev",
-    "dev:shared": "pnpm run --filter @school-platform/shared dev",
+    "dev:web": "pnpm run --filter @acadflows/web dev",
+    "dev:api": "pnpm run --filter @acadflows/api dev",
+    "dev:shared": "pnpm run --filter @acadflows/shared dev",
     "build": "pnpm run --parallel build",
-    "build:web": "pnpm run --filter @school-platform/web build",
-    "build:api": "pnpm run --filter @school-platform/api build",
-    "build:shared": "pnpm run --filter @school-platform/shared build",
+    "build:web": "pnpm run --filter @acadflows/web build",
+    "build:api": "pnpm run --filter @acadflows/api build",
+    "build:shared": "pnpm run --filter @acadflows/shared build",
     "lint": "pnpm run --parallel lint",
     "type-check": "pnpm run --parallel type-check"
   },

@@ -1,4 +1,4 @@
-# 🏫 School Platform MVP - Complete Documentation
+# 🏫 AcadFlows - Complete Documentation
 
 > A production-ready Multi-Tenant School Management System built with MERN Stack
 
@@ -29,7 +29,7 @@
 
 ## 🎯 Overview
 
-**School Platform** is a complete, production-ready multi-tenant school management system built as an MVP to validate the product concept. The platform allows schools to manage students, teachers, attendance, fees, assignments, timetables, and communication in one centralized system.
+**AcadFlows** is a complete, production-ready multi-tenant school management system built as an MVP to validate the product concept. The platform allows schools to manage students, teachers, attendance, fees, assignments, timetables, and communication in one centralized system.
 
 ### Key Features
 
@@ -104,7 +104,7 @@
 ## 📁 Project Structure
 
 ```text
-school-platform/
+acadflows/
 ├── apps/
 │   ├── api/                      # Backend (Express + TypeScript)
 │   │   ├── src/
@@ -163,8 +163,8 @@ school-platform/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/school-platform.git
-cd school-platform
+git clone https://github.com/yourusername/AcadFlows.git
+cd AcadFlows
 
 # 2. Install pnpm (if not installed)
 npm install -g pnpm
@@ -173,7 +173,7 @@ npm install -g pnpm
 pnpm install
 
 # 4. Build shared types
-pnpm build --filter @school-platform/shared
+pnpm build --filter @acadflows/shared
 
 # 5. Set up environment variables
 cp apps/api/.env.example apps/api/.env
@@ -208,7 +208,7 @@ NODE_ENV=development
 PORT=5000
 
 # MongoDB
-MONGODB_URI=mongodb://localhost:27017/school-platform
+MONGODB_URI=mongodb://localhost:27017/acadflows
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key
@@ -343,7 +343,7 @@ AB12-CD34-EF
 # render.yaml
 services:
   - type: web
-    name: school-platform-api
+    name: acadflows-api
     env: node
     buildCommand: pnpm install && pnpm build:api
     startCommand: pnpm start:api
@@ -440,7 +440,7 @@ This project is proprietary and confidential.
 
 ## 🎉 Summary
 
-**School Platform** is a complete, production-ready school management system with:
+**AcadFlows** is a complete, production-ready school management system with:
 
 ✅ 15+ Core Features
 ✅ Multi-tenant Architecture
