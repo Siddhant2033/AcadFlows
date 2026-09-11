@@ -1,10 +1,36 @@
 import { Router } from 'express';
 import { FeeController } from './controller';
+import { FeeReportsController } from './reports.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
 
+router.use(authenticate);
 router.use(ensureTenantMatch);
+
+// ─────────────────────────────────────────────────────────────
+// Reports — must be mounted BEFORE /invoices/:id and /structures/:id
+// so that "reports" isn't parsed as an ID.
+// ─────────────────────────────────────────────────────────────
+router.get(
+  '/reports/collection',
+  requireRole('admin'),
+  FeeReportsController.getCollection,
+);
+router.get(
+  '/reports/defaulters',
+  requireRole('admin'),
+  FeeReportsController.getDefaulters,
+);
+router.get(
+  '/reports/daybook',
+  requireRole('admin'),
+  FeeReportsController.getDaybook,
+);
+router.get(
+  '/reports/students/:studentId/fees',
+  FeeReportsController.getStudentFeeHistory,
+);
 
 // ============ Fee Structures ============
 router.get('/structures', FeeController.getFeeStructures);
@@ -31,7 +57,7 @@ router.get('/discounts/validate/:code', FeeController.validateDiscount);
 router.put('/discounts/:id', requireRole('admin'), FeeController.updateDiscount);
 router.delete('/discounts/:id', requireRole('admin'), FeeController.deleteDiscount);
 
-// ============ Reports ============
+// ============ Reports (legacy) ============
 router.get('/reports', requireRole('admin'), FeeController.getFeeReport);
 
 // ============ Student Summary ============

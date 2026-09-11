@@ -49,6 +49,8 @@ import TimetableViewPage from './pages/TimetableView';
 import InvoiceDetailPage from './pages/admin/InvoiceDetail';
 import RecordPaymentPage from './pages/admin/RecordPayment';
 import DiscountsPage from './pages/admin/Discounts';
+import FeeReportsPage from './pages/admin/FeeReports';
+import StudentFeeHistoryPage from './pages/admin/StudentFeeHistory';
 
 function App() {
   return (
@@ -430,6 +432,22 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <DiscountsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/reports"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <FeeReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/students/:studentId/fees"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <StudentFeeHistoryPage />
                 </ProtectedRoute>
               }
             />
