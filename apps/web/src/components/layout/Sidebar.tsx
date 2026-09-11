@@ -43,6 +43,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { label: 'Students', icon: '👨‍🎓', path: '/students', roles: ['admin'] },
       { label: 'Teachers', icon: '👨‍🏫', path: '/teachers', roles: ['admin'] },
       { label: 'Reports', icon: '📈', path: '/attendance/reports', roles: ['admin', 'teacher'] },
+      { label: 'Bulk Promote', icon: '⬆️', path: '/students/bulk-promote', roles: ['admin'] },
     ],
   },
   {
@@ -76,6 +77,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { label: 'Invoices', icon: '💰', path: '/fees/invoices', roles: ['admin'] },
       { label: 'Discounts', icon: '🎟️', path: '/fees/discounts', roles: ['admin'] },
       { label: 'Reports', icon: '📊', path: '/fees/reports', roles: ['admin'] },
+      { label: 'Bulk Invoices', icon: '📦', path: '/fees/invoices/bulk-generate', roles: ['admin'] },
     ],
   },
   {
@@ -89,6 +91,8 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Documents',
     items: [
       { label: 'ID Cards', icon: '🪪', path: '/documents/id-cards', roles: ['admin'] },
+      { label: 'Certificates', icon: '📜', path: '/documents/certificates', roles: ['admin'] },
+      { label: 'Audit Log', icon: '📋', path: '/documents/audit-log', roles: ['admin'] },
     ],
   },
   {

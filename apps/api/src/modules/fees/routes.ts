@@ -2,12 +2,25 @@ import { Router } from 'express';
 import { FeeController } from './controller';
 import { FeeReportsController } from './reports.controller';
 import { FeeExportController } from './export.controller';
+import { FeeBulkController } from './bulk.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
 
 router.use(authenticate);
 router.use(ensureTenantMatch);
+
+// ── Bulk operations (must come before /invoices/:id) ──
+router.post(
+  '/invoices/bulk-generate',
+  requireRole('admin'),
+  FeeBulkController.bulkGenerateInvoices,
+);
+router.post(
+  '/reminders/bulk-send',
+  requireRole('admin'),
+  FeeBulkController.bulkSendReminders,
+);
 
 // ── Reports ──
 router.get(
@@ -30,7 +43,7 @@ router.get(
   FeeReportsController.getStudentFeeHistory,
 );
 
-// ── Exports (mounted BEFORE /invoices/:id) ──
+// ── Exports ──
 router.get(
   '/invoices/export',
   requireRole('admin'),
@@ -67,7 +80,7 @@ router.get('/discounts/validate/:code', FeeController.validateDiscount);
 router.put('/discounts/:id', requireRole('admin'), FeeController.updateDiscount);
 router.delete('/discounts/:id', requireRole('admin'), FeeController.deleteDiscount);
 
-// ── Legacy ──
+// ── Legacy + Reports ──
 router.get('/reports', requireRole('admin'), FeeController.getFeeReport);
 router.get('/students/:studentId/summary', FeeController.getStudentFeeSummary);
 router.post('/reminders', requireRole('admin'), FeeController.sendReminders);

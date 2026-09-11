@@ -56,6 +56,10 @@ import TeacherAttendancePage from './pages/admin/TeacherAttendance';
 import LowAttendancePage from './pages/admin/LowAttendance';
 import SettingsPage from './pages/admin/Settings';
 import IdCardsPage from './pages/admin/IdCards';
+import CertificatesPage from './pages/admin/Certificates';
+import AuditLogPage from './pages/admin/AuditLog';
+import BulkPromotePage from './pages/admin/BulkPromote';
+import BulkGenerateInvoicesPage from './pages/admin/BulkGenerateInvoices';
 
 function App() {
   return (
@@ -497,6 +501,43 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <IdCardsPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Documents — Certificates */}
+            <Route
+              path="/documents/certificates"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <CertificatesPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Documents — Audit Log */}
+            <Route
+              path="/documents/audit-log"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AuditLogPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Bulk Operations */}
+            <Route
+              path="/students/bulk-promote"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <BulkPromotePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/invoices/bulk-generate"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <BulkGenerateInvoicesPage />
                 </ProtectedRoute>
               }
             />

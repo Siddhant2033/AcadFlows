@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { StudentController } from './controller';
 import { StudentExportController } from './export.controller';
+import { StudentBulkController } from './bulk.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 import multer from 'multer';
 
 const router: Router = Router();
 
-// Public routes
+// Public
 router.get('/tenant/:tenantId', StudentController.getStudentsByTenant);
 router.post('/verify-rollno', StudentController.verifyRollNo);
 
@@ -23,13 +24,24 @@ const upload = multer({
 router.use(authenticate);
 router.use(ensureTenantMatch);
 
-// Current user's student profile
 router.get('/me', StudentController.getCurrentStudent);
 
-// ⚠️ Export MUST come before /:studentId
+// ── Bulk operations (must come before /:studentId) ──
+router.post(
+  '/bulk-promote',
+  requireRole('admin'),
+  StudentBulkController.bulkPromote,
+);
+router.post(
+  '/bulk-transfer',
+  requireRole('admin'),
+  StudentBulkController.bulkTransfer,
+);
+
+// Exports
 router.get('/export', requireRole('admin'), StudentExportController.export);
 
-// Student CRUD
+// CRUD
 router.get('/', StudentController.getStudents);
 router.get('/search', StudentController.searchStudents);
 router.get('/stats', StudentController.getStats);
@@ -38,11 +50,9 @@ router.get('/:studentId', StudentController.getStudentById);
 router.put('/:studentId', requireRole('admin'), StudentController.updateStudent);
 router.delete('/:studentId', requireRole('admin'), StudentController.deleteStudent);
 
-// Enrollment
 router.post('/:studentId/enroll', requireRole('admin'), StudentController.enrollStudent);
 router.post('/:studentId/withdraw', requireRole('admin'), StudentController.withdrawStudent);
 
-// Documents
 router.post(
   '/:studentId/documents',
   requireRole('admin'),
@@ -50,7 +60,6 @@ router.post(
   StudentController.uploadDocument,
 );
 
-// Bulk import
 router.post('/bulk-import', requireRole('admin'), StudentController.bulkImport);
 
 export default router;

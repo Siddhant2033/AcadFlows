@@ -21,6 +21,7 @@ import assignmentRoutes from './modules/assignments/routes';
 import communicationRoutes from './modules/communication/routes';
 import timetableRoutes from './modules/timetable/routes';
 import documentsRoutes from './modules/documents/routes';
+import { auditLog } from './middleware/audit-log';
 
 const app: Express = express();
 
@@ -67,6 +68,7 @@ app.use(cookieParser());
 // Tenant context (cached) — runs for every request
 // ─────────────────────────────────────────────────────────────
 app.use(tenantContext);
+app.use(auditLog);
 
 // ─────────────────────────────────────────────────────────────
 // Health check
