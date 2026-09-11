@@ -1,86 +1,66 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { getTenantSlugFromURL, getTenantInfo, getCurrentTenant } from '../lib/tenant';
-import type { TenantInfo } from '../lib/tenant';
 
-interface TenantContextType {
-  tenant: TenantInfo | null;
-  tenantSlug: string | null;
-  isLoading: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
+type ThemeMode = 'light' | 'dark';
+
+interface ThemeContextType {
+  /** Current mode as a string */
+  mode: ThemeMode;
+  /** Convenience boolean — true in dark mode */
+  isDark: boolean;
+  /** Toggle between light/dark */
+  toggleTheme: () => void;
+  /** Set explicitly */
+  setTheme: (mode: ThemeMode) => void;
 }
 
-const TenantContext = createContext<TenantContextType | undefined>(undefined);
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function TenantProvider({ children }: { children: ReactNode }) {
-  const [tenant, setTenant] = useState<TenantInfo | null>(null);
-  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [mode, setMode] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'light';
 
-  const fetchTenant = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
+    const saved = localStorage.getItem('theme-mode') as ThemeMode | null;
+    if (saved === 'light' || saved === 'dark') return saved;
 
-      // 1. Try to get tenant from URL (query param or subdomain)
-      const slug = getTenantSlugFromURL();
-      setTenantSlug(slug);
-
-      if (slug) {
-        const info = await getTenantInfo(slug);
-        if (info) {
-          setTenant(info);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // 2. Only attempt /tenants/current if the user has a session.
-      //    Otherwise it 404s on every public page load, which is noise.
-      const hasToken = !!localStorage.getItem('accessToken');
-      if (!hasToken) {
-        setIsLoading(false);
-        return;
-      }
-
-      const info = await getCurrentTenant();
-      if (info) {
-        setTenant(info);
-      }
-    } catch (err) {
-      // Silent — expected on public pages
-      console.debug('Tenant context resolution skipped:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  });
 
   useEffect(() => {
-    fetchTenant();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const root = document.documentElement;
+    root.classList.toggle('dark', mode === 'dark');
+    root.setAttribute('data-theme', mode);
+
+    localStorage.setItem('theme-mode', mode);
+
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', mode === 'dark' ? '#0B0F17' : '#F8FAFC');
+    }
+  }, [mode]);
+
+  const toggleTheme = () => setMode(p => (p === 'light' ? 'dark' : 'light'));
+
+  const value: ThemeContextType = {
+    mode,
+    isDark: mode === 'dark',
+    toggleTheme,
+    setTheme: setMode,
+  };
 
   return (
-    <TenantContext.Provider
-      value={{
-        tenant,
-        tenantSlug,
-        isLoading,
-        error,
-        refetch: fetchTenant,
-      }}
-    >
+    <ThemeContext.Provider value={value}>
       {children}
-    </TenantContext.Provider>
+    </ThemeContext.Provider>
   );
 }
 
-export function useTenant() {
-  const context = useContext(TenantContext);
-  if (context === undefined) {
-    throw new Error('useTenant must be used within a TenantProvider');
+export function useTheme() {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) {
+    throw new Error('useTheme must be used within ThemeProvider');
   }
-  return context;
+  return ctx;
 }

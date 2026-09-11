@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { getTenantSlugFromURL, getTenantInfo, getCurrentTenant } from '../lib/tenant';
 import type { TenantInfo } from '../lib/tenant';
-import api from '../lib/api';
 
 interface TenantContextType {
   tenant: TenantInfo | null;
@@ -38,16 +37,21 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 2. Fallback to the backend's tenant context (cookie / header)
-      //    This may return 404 on public pages — that's fine.
+      // 2. Only attempt /tenants/current if the user has a session.
+      //    Otherwise it 404s on every public page load, which is noise.
+      const hasToken = !!localStorage.getItem('accessToken');
+      if (!hasToken) {
+        setIsLoading(false);
+        return;
+      }
+
       const info = await getCurrentTenant();
       if (info) {
         setTenant(info);
       }
-      // If null, tenant stays null — public pages work without it.
     } catch (err) {
-      // Only log unexpected errors, not the common 404s
-      console.warn('Tenant context error:', err);
+      // Silent — expected on public pages
+      console.debug('Tenant context resolution skipped:', err);
     } finally {
       setIsLoading(false);
     }

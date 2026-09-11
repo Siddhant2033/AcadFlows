@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { TenantProvider } from './contexts/TenantContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Pages
@@ -62,7 +63,8 @@ import BulkGenerateInvoicesPage from './pages/admin/BulkGenerateInvoices';
 
 function App() {
   return (
-    <AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
         <TenantProvider>
           <Routes>
             {/* Landing */}
@@ -503,48 +505,49 @@ function App() {
               }
             />
             {/* Documents — Certificates */}
-            <Route
-              path="/documents/certificates"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <CertificatesPage />
-                </ProtectedRoute>
-              }
-            />
+<Route
+  path="/documents/certificates"
+  element={
+    <ProtectedRoute requiredRole="admin">
+      <CertificatesPage />
+    </ProtectedRoute>
+  }
+/>
 
-            {/* Documents — Audit Log */}
-            <Route
-              path="/documents/audit-log"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <AuditLogPage />
-                </ProtectedRoute>
-              }
-            />
+{/* Documents — Audit Log */}
+<Route
+  path="/documents/audit-log"
+  element={
+    <ProtectedRoute requiredRole="admin">
+      <AuditLogPage />
+    </ProtectedRoute>
+  }
+/>
 
-            {/* Bulk Operations */}
-            <Route
-              path="/students/bulk-promote"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <BulkPromotePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/fees/invoices/bulk-generate"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <BulkGenerateInvoicesPage />
-                </ProtectedRoute>
-              }
-            />
+{/* Bulk Operations */}
+<Route
+  path="/students/bulk-promote"
+  element={
+    <ProtectedRoute requiredRole="admin">
+      <BulkPromotePage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/fees/invoices/bulk-generate"
+  element={
+    <ProtectedRoute requiredRole="admin">
+      <BulkGenerateInvoicesPage />
+    </ProtectedRoute>
+  }
+/>
 
             {/* 404 */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </TenantProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
