@@ -65,6 +65,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { label: 'Fee Structures', icon: '🏷️', path: '/fees/structures', roles: ['admin'] },
       { label: 'Invoices', icon: '💰', path: '/fees/invoices', roles: ['admin'] },
+      { label: 'Discounts', icon: '🎟️', path: '/fees/discounts', roles: ['admin'] },
     ],
   },
   {

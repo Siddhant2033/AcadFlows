@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../lib/api';
 import {
@@ -16,6 +16,7 @@ import { DashboardLayout, PageHeader } from '../../components/layout';
 import { formatCurrency } from '../../lib/format';
 import { getErrorMessage } from '../../lib/errors';
 import { cn } from '../../lib/cn';
+import TempPasswordModal from '../../components/TempPasswordModal';
 
 interface Qualification {
   degree: string;
@@ -120,7 +121,7 @@ const defaultFormData: TeacherFormData = {
   ],
   subjects: [],
   specialization: [],
-  joiningDate: new Date().toISOString().split('T')[0],
+  joiningDate: new Date().toISOString().split('T')[0] ?? '',
   employmentType: 'permanent',
   contractEndDate: '',
   salary: { amount: 0, currency: 'INR', frequency: 'monthly' },
@@ -139,23 +140,26 @@ export default function AddTeacherPage() {
     { _id: string; name: string; code: string }[]
   >([]);
 
+  // Shown once after create if backend auto-generated the password
+  const [tempPasswordInfo, setTempPasswordInfo] = useState<{
+    email: string;
+    password: string;
+    name: string;
+  } | null>(null);
+
   const isEditMode = !!id;
 
   // ─── Load reference data FIRST, then teacher (if editing) ─────
-  // This fixes the race condition where fetchTeacher ran before
-  // fetchSubjects finished, leaving subject selections unpopulated.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       setLoading(true);
       try {
-        // 1. Fetch subjects list first
         const subjectsRes = await api.get('/academic/subjects');
         if (cancelled) return;
         setSubjects(subjectsRes.data.data || []);
 
-        // 2. If editing, fetch teacher AFTER subjects are loaded
         if (isEditMode) {
           const teacherRes = await api.get(`/teachers/${id}`);
           if (cancelled) return;
@@ -404,15 +408,31 @@ export default function AddTeacherPage() {
         }));
       }
 
+      // ── EDIT MODE ──
       if (isEditMode) {
         await api.put(`/teachers/${id}`, payload);
-      } else {
-        await api.post('/teachers', payload);
+        navigate('/teachers');
+        return;
       }
+
+      // ── CREATE MODE ──
+      const res = await api.post('/teachers', payload);
+
+      const tempPassword = res.data?.meta?.tempPassword;
+
+      if (tempPassword) {
+        setTempPasswordInfo({
+          email: formData.email.trim(),
+          password: tempPassword,
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+        });
+        setSaving(false);
+        return;
+      }
+
       navigate('/teachers');
-    } catch (err: any) {
+    } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
       setSaving(false);
     }
   };
@@ -923,12 +943,15 @@ export default function AddTeacherPage() {
 
               {!isEditMode && (
                 <div className="mt-5">
-                  <Field label="Password" hint="Leave blank to auto-generate">
+                  <Field
+                    label="Password"
+                    hint="Leave blank — a temporary password will be shown after creating"
+                  >
                     <Input
                       type="password"
                       value={formData.password}
                       onChange={e => handleChange('password', e.target.value)}
-                      placeholder="Min 8 characters"
+                      placeholder="Leave blank to auto-generate"
                     />
                   </Field>
                 </div>
@@ -1140,6 +1163,20 @@ export default function AddTeacherPage() {
           </div>
         </div>
       </form>
+
+      {/* Temp Password Modal — shown once after create if password was auto-generated */}
+      {tempPasswordInfo && (
+        <TempPasswordModal
+          userName={tempPasswordInfo.name}
+          email={tempPasswordInfo.email}
+          password={tempPasswordInfo.password}
+          role="teacher"
+          onClose={() => {
+            setTempPasswordInfo(null);
+            navigate('/teachers');
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

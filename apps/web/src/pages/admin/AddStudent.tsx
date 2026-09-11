@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../lib/api';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
 import { getErrorMessage } from '../../lib/errors';
+import TempPasswordModal from '../../components/TempPasswordModal';
 
 interface StudentFormData {
   firstName: string;
@@ -114,6 +115,13 @@ export default function AddStudentPage() {
     { _id: string; name: string; gradeId: string }[]
   >([]);
 
+  // Shown once after create if backend auto-generated the password
+  const [tempPasswordInfo, setTempPasswordInfo] = useState<{
+    email: string;
+    password: string;
+    name: string;
+  } | null>(null);
+
   const isEditMode = !!id;
 
   // ─── Load reference data FIRST, then student (if editing) ─────
@@ -123,7 +131,6 @@ export default function AddStudentPage() {
     (async () => {
       setLoading(true);
       try {
-        // 1. Fetch grades + sections in parallel
         const [gradesRes, sectionsRes] = await Promise.all([
           api.get('/academic/grades'),
           api.get('/academic/sections'),
@@ -137,8 +144,6 @@ export default function AddStudentPage() {
         setGrades(gradesData);
         setSections(sectionsData);
 
-        // 2. If editing, fetch the student AFTER grades are loaded so we
-        //    can match the grade name to a grade ID for the dropdown.
         if (isEditMode) {
           const studentRes = await api.get(`/students/${id}`);
           if (cancelled) return;
@@ -292,12 +297,32 @@ export default function AddStudentPage() {
         payload.medicalInfo = mi;
       }
 
-      if (isEditMode) await api.put(`/students/${id}`, payload);
-      else await api.post('/students', payload);
+      // ── EDIT MODE ──
+      if (isEditMode) {
+        await api.put(`/students/${id}`, payload);
+        navigate('/students');
+        return;
+      }
+
+      // ── CREATE MODE ──
+      const res = await api.post('/students', payload);
+
+      // Backend returns `meta.tempPassword` when it auto-generated a password
+      const tempPassword = res.data?.meta?.tempPassword;
+
+      if (tempPassword) {
+        setTempPasswordInfo({
+          email: formData.email.trim(),
+          password: tempPassword,
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+        });
+        setSaving(false);
+        return;
+      }
+
       navigate('/students');
-    } catch (err: any) {
+    } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
       setSaving(false);
     }
   };
@@ -746,12 +771,15 @@ export default function AddStudentPage() {
                   />
                 </Field>
                 {!isEditMode && (
-                  <Field label="Password" hint="Leave blank to auto-generate">
+                  <Field
+                    label="Password"
+                    hint="Leave blank — a temporary password will be shown after creating"
+                  >
                     <Input
                       type="password"
                       value={formData.password}
                       onChange={e => handleChange('password', e.target.value)}
-                      placeholder="Min 8 characters"
+                      placeholder="Leave blank to auto-generate"
                     />
                   </Field>
                 )}
@@ -875,6 +903,20 @@ export default function AddStudentPage() {
           </div>
         </div>
       </form>
+
+      {/* Temp Password Modal — shown once after create if password was auto-generated */}
+      {tempPasswordInfo && (
+        <TempPasswordModal
+          userName={tempPasswordInfo.name}
+          email={tempPasswordInfo.email}
+          password={tempPasswordInfo.password}
+          role="student"
+          onClose={() => {
+            setTempPasswordInfo(null);
+            navigate('/students');
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

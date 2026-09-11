@@ -8,6 +8,7 @@ import { Tenant } from '../../models/Tenant';
 import { PasswordResetToken } from '../../models/PasswordResetToken';
 import { AppError } from '../../middleware/error-handler';
 import { UserCreateInput, UserLoginInput, AuthTokens } from '@acadflows/shared';
+import { sendPasswordResetEmail } from '../../services/email.service';
 
 export class AuthService {
   static async register(
@@ -91,18 +92,18 @@ export class AuthService {
         const address =
           input.address && (input.address.city || input.address.state)
             ? {
-                street: input.address.street || '',
-                city: input.address.city || '',
-                state: input.address.state || '',
-                country: input.address.country || 'India',
-                postalCode: input.address.postalCode || '',
-              }
+              street: input.address.street || '',
+              city: input.address.city || '',
+              state: input.address.state || '',
+              country: input.address.country || 'India',
+              postalCode: input.address.postalCode || '',
+            }
             : {
-                city: 'N/A',
-                state: 'N/A',
-                country: 'India',
-                postalCode: '000000',
-              };
+              city: 'N/A',
+              state: 'N/A',
+              country: 'India',
+              postalCode: '000000',
+            };
 
         // Auto-enroll in the current academic year if a section was selected
         const enrollments: any[] = [];
@@ -139,14 +140,14 @@ export class AuthService {
           gender: input.gender || 'other',
           guardians: input.parentName
             ? [
-                {
-                  name: input.parentName,
-                  phone: input.parentPhone || '',
-                  email: input.parentEmail || '',
-                  relationship: 'guardian',
-                  isVerified: false,
-                },
-              ]
+              {
+                name: input.parentName,
+                phone: input.parentPhone || '',
+                email: input.parentEmail || '',
+                relationship: 'guardian',
+                isVerified: false,
+              },
+            ]
             : [],
           address,
           emergencyContact: {
@@ -171,28 +172,28 @@ export class AuthService {
         const address =
           input.address && (input.address.city || input.address.state)
             ? {
-                street: input.address.street || '',
-                city: input.address.city || '',
-                state: input.address.state || '',
-                country: input.address.country || 'India',
-                postalCode: input.address.postalCode || '',
-              }
+              street: input.address.street || '',
+              city: input.address.city || '',
+              state: input.address.state || '',
+              country: input.address.country || 'India',
+              postalCode: input.address.postalCode || '',
+            }
             : {
-                city: 'N/A',
-                state: 'N/A',
-                country: 'India',
-                postalCode: '000000',
-              };
+              city: 'N/A',
+              state: 'N/A',
+              country: 'India',
+              postalCode: '000000',
+            };
 
         // Map the simple string fields into structured arrays
         const qualifications: any[] = input.qualification
           ? [
-              {
-                degree: input.qualification,
-                institution: 'N/A',
-                year: new Date().getFullYear(),
-              },
-            ]
+            {
+              degree: input.qualification,
+              institution: 'N/A',
+              year: new Date().getFullYear(),
+            },
+          ]
           : [];
 
         const experience: any[] = [];
@@ -365,12 +366,14 @@ export class AuthService {
 
   static async forgotPassword(email: string): Promise<void> {
     const user = await User.findOne({ email, status: 'active' });
-    if (!user) return;
+    if (!user) return; // Silent — don't leak user existence
 
     const token = crypto.randomBytes(32).toString('hex');
 
+    // Clean up any existing reset tokens for this user
     await PasswordResetToken.deleteMany({ userId: user.id });
 
+    // Create new token with 1-hour TTL
     await PasswordResetToken.create({
       userId: user.id,
       token,
@@ -378,9 +381,19 @@ export class AuthService {
       used: false,
     });
 
-    console.log('🔑 Reset token generated for:', email);
-    console.log('📧 Reset token (dev):', token);
-    console.log(`🔗 Reset link: http://localhost:5173/reset-password?token=${token}`);
+    // Build the reset URL. Prefer FRONTEND_URL from env.
+    const frontendUrl =
+      process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+    // Send the email (falls back to console.log if no API key is set)
+    await sendPasswordResetEmail(
+      email,
+      resetLink,
+      `${user.firstName} ${user.lastName}`.trim(),
+    );
+
+    console.log(`🔑 Password reset requested for ${email}`);
   }
 
   static async resetPassword(token: string, newPassword: string): Promise<void> {

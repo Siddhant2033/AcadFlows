@@ -46,6 +46,9 @@ import MessagesPage from './pages/Messages';
 import TimetablesPage from './pages/admin/Timetables';
 import CreateTimetablePage from './pages/admin/CreateTimetable';
 import TimetableViewPage from './pages/TimetableView';
+import InvoiceDetailPage from './pages/admin/InvoiceDetail';
+import RecordPaymentPage from './pages/admin/RecordPayment';
+import DiscountsPage from './pages/admin/Discounts';
 
 function App() {
   return (
@@ -385,6 +388,48 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <CreateTimetablePage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Invoices */}
+            <Route
+              path="/fees/invoices"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <InvoicesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/invoices/generate"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <GenerateInvoicePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/invoices/:id"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <InvoiceDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/invoices/:id/pay"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <RecordPaymentPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/discounts"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <DiscountsPage />
                 </ProtectedRoute>
               }
             />
