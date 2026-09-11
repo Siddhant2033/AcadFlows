@@ -21,7 +21,7 @@ router.post('/verify-rollno', StudentController.verifyRollNo);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -33,6 +33,9 @@ const upload = multer({
 
 router.use(authenticate);
 router.use(ensureTenantMatch);
+
+// Current user's student profile — must come BEFORE /:studentId
+router.get('/me', StudentController.getCurrentStudent);
 
 // Student CRUD
 router.get('/', StudentController.getStudents);

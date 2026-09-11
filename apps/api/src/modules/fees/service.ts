@@ -3,6 +3,17 @@ import { FeeStructure, Invoice, Payment, Discount, FeeReminder } from '../../mod
 import { Student } from '../../models/Student';
 import { User } from '../../models/User';
 import { AppError } from '../../middleware/error-handler';
+import { attachRefs } from '../../utils/attach-refs';
+
+const invoiceRefs = {
+  studentId: { model: Student, fields: 'firstName lastName rollNo grade section admissionNo' },
+  createdBy: { model: User, fields: 'firstName lastName email' },
+};
+
+const paymentRefs = {
+  studentId: { model: Student, fields: 'firstName lastName rollNo' },
+  invoiceId: { model: Invoice, fields: 'invoiceNumber total' },
+};
 
 export class FeeService {
   // ============ Fee Structure ============
@@ -63,7 +74,7 @@ export class FeeService {
     const structure = await FeeStructure.findByIdAndUpdate(
       id,
       { $set: data },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!structure) {
@@ -93,7 +104,6 @@ export class FeeService {
     session.startTransaction();
 
     try {
-      // Validate student
       const student = await Student.findOne({
         _id: data.studentId,
         tenantId,
@@ -104,10 +114,8 @@ export class FeeService {
         throw new AppError('Student not found', 404);
       }
 
-      // Generate invoice number
       const invoiceNumber = await this.generateInvoiceNumber(tenantId);
 
-      // Calculate totals
       const items = data.items.map((item: any) => ({
         ...item,
         total: item.amount * (item.quantity || 1),
@@ -115,7 +123,6 @@ export class FeeService {
 
       const subtotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
 
-      // Apply discount if provided
       let discountAmount = 0;
       let discountType: 'percentage' | 'fixed' | undefined;
       let discountCode: string | undefined;
@@ -142,7 +149,6 @@ export class FeeService {
             discountAmount = discount.value;
           }
 
-          // Increment usage count
           discount.usedCount += 1;
           await discount.save({ session });
         }
@@ -150,22 +156,27 @@ export class FeeService {
 
       const total = subtotal - discountAmount;
 
-      const invoice = await Invoice.create([{
-        tenantId,
-        ...data,
-        invoiceNumber,
-        items,
-        subtotal,
-        discountAmount,
-        discountType,
-        discountCode,
-        total,
-        paidAmount: 0,
-        balanceDue: total,
-        status: 'draft',
-        issuedDate: new Date(),
-        createdBy: data.createdBy,
-      }], { session });
+      const invoice = await Invoice.create(
+        [
+          {
+            tenantId,
+            ...data,
+            invoiceNumber,
+            items,
+            subtotal,
+            discountAmount,
+            discountType,
+            discountCode,
+            total,
+            paidAmount: 0,
+            balanceDue: total,
+            status: 'draft',
+            issuedDate: new Date(),
+            createdBy: data.createdBy,
+          },
+        ],
+        { session },
+      );
 
       await session.commitTransaction();
       session.endSession();
@@ -183,38 +194,61 @@ export class FeeService {
     filters: {
       studentId?: string;
       status?: string;
+      search?: string;
       startDate?: Date;
       endDate?: Date;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId };
 
     if (filters.studentId) query.studentId = filters.studentId;
     if (filters.status) query.status = filters.status;
+
     if (filters.startDate || filters.endDate) {
       query.createdAt = {};
       if (filters.startDate) query.createdAt.$gte = filters.startDate;
       if (filters.endDate) query.createdAt.$lte = filters.endDate;
     }
 
+    // If search, first find matching students to filter by studentIds
+    if (filters.search) {
+      const students = await Student.find({
+        tenantId,
+        $or: [
+          { firstName: { $regex: filters.search, $options: 'i' } },
+          { lastName: { $regex: filters.search, $options: 'i' } },
+          { rollNo: { $regex: filters.search, $options: 'i' } },
+          { admissionNo: { $regex: filters.search, $options: 'i' } },
+        ],
+      }).select('_id').lean();
+
+      const ids = students.map(s => s._id.toString());
+
+      query.$or = [
+        { invoiceNumber: { $regex: filters.search, $options: 'i' } },
+        { studentId: { $in: ids } },
+      ];
+    }
+
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [invoices, total] = await Promise.all([
+    const [rawInvoices, total] = await Promise.all([
       Invoice.find(query)
-        .populate('studentId', 'firstName lastName rollNo grade section')
-        .populate('createdBy', 'firstName lastName email')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Invoice.countDocuments(query),
     ]);
 
+    const items = await attachRefs(rawInvoices, invoiceRefs);
+
     return {
-      items: invoices,
+      items,
       total,
       page,
       limit,
@@ -227,14 +261,12 @@ export class FeeService {
       throw new AppError('Invalid invoice ID', 400);
     }
 
-    const invoice = await Invoice.findById(id)
-      .populate('studentId', 'firstName lastName rollNo grade section')
-      .populate('createdBy', 'firstName lastName email');
-
-    if (!invoice) {
+    const raw = await Invoice.findById(id).lean();
+    if (!raw) {
       throw new AppError('Invoice not found', 404);
     }
 
+    const [invoice] = await attachRefs([raw], invoiceRefs);
     return invoice;
   }
 
@@ -251,7 +283,7 @@ export class FeeService {
           ...(status === 'paid' ? { paidAt: new Date() } : {}),
         },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!invoice) {
@@ -268,7 +300,6 @@ export class FeeService {
     session.startTransaction();
 
     try {
-      // Validate invoice
       const invoice = await Invoice.findOne({
         _id: data.invoiceId,
         tenantId,
@@ -282,26 +313,31 @@ export class FeeService {
         throw new AppError('Invoice is already fully paid', 409);
       }
 
-      // Validate payment amount
       if (data.amount > invoice.balanceDue) {
         throw new AppError(`Payment amount exceeds balance due (${invoice.balanceDue})`, 400);
       }
 
-      // Generate receipt number
       const receiptNumber = await this.generateReceiptNumber(tenantId);
 
-      // Create payment
-      const payment = await Payment.create([{
-        tenantId,
-        studentId: invoice.studentId,
-        receiptNumber,
-        paymentDate: new Date(),
-        createdBy: data.createdBy,
-        ...data,
-      }], { session });
+      const payment = await Payment.create(
+        [
+          {
+            tenantId,
+            studentId: invoice.studentId,
+            receiptNumber,
+            paymentDate: new Date(),
+            createdBy: data.createdBy,
+            invoiceId: data.invoiceId,
+            amount: data.amount,
+            method: data.method,
+            reference: data.reference,
+            notes: data.notes,
+            status: 'completed',
+          },
+        ],
+        { session },
+      );
 
-      // Update invoice — use save() so the invoice pre-save hook
-      // recomputes subtotal/total/balanceDue consistently.
       invoice.paidAmount = invoice.paidAmount + data.amount;
       invoice.paymentMethod = data.method;
       invoice.paymentReference = data.reference;
@@ -336,7 +372,7 @@ export class FeeService {
       endDate?: Date;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId };
 
@@ -352,18 +388,19 @@ export class FeeService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [payments, total] = await Promise.all([
+    const [rawPayments, total] = await Promise.all([
       Payment.find(query)
-        .populate('studentId', 'firstName lastName rollNo')
-        .populate('invoiceId', 'invoiceNumber total')
         .sort({ paymentDate: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Payment.countDocuments(query),
     ]);
 
+    const items = await attachRefs(rawPayments, paymentRefs);
+
     return {
-      items: payments,
+      items,
       total,
       page,
       limit,
@@ -376,14 +413,12 @@ export class FeeService {
       throw new AppError('Invalid payment ID', 400);
     }
 
-    const payment = await Payment.findById(id)
-      .populate('studentId', 'firstName lastName rollNo')
-      .populate('invoiceId', 'invoiceNumber total items');
-
-    if (!payment) {
+    const raw = await Payment.findById(id).lean();
+    if (!raw) {
       throw new AppError('Payment not found', 404);
     }
 
+    const [payment] = await attachRefs([raw], paymentRefs);
     return payment;
   }
 
@@ -441,7 +476,7 @@ export class FeeService {
     const discount = await Discount.findByIdAndUpdate(
       id,
       { $set: data },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!discount) {
@@ -469,31 +504,22 @@ export class FeeService {
   static async getFeeReport(
     tenantId: string,
     academicYearId: string,
-    filters?: {
-      gradeId?: string;
-      sectionId?: string;
-    }
+    filters?: { gradeId?: string; sectionId?: string },
   ) {
-    const matchQuery: any = {
-      tenantId,
-      academicYearId,
-    };
+    const matchQuery: any = { tenantId, academicYearId };
 
     if (filters?.gradeId) {
-      // Get students in this grade
       const students = await Student.find({
         tenantId,
         grade: filters.gradeId,
         isDeleted: false,
       }).select('_id');
 
-      matchQuery.studentId = { $in: students.map(s => s._id) };
+      matchQuery.studentId = { $in: students.map(s => s._id.toString()) };
     }
 
-    // Get all invoices
     const invoices = await Invoice.find(matchQuery);
 
-    // Calculate totals
     const totalInvoices = invoices.length;
     const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
     const totalPaid = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
@@ -503,7 +529,6 @@ export class FeeService {
     const partiallyPaidInvoices = invoices.filter(inv => inv.status === 'partially_paid').length;
     const overdueInvoices = invoices.filter(inv => inv.status === 'overdue').length;
 
-    // Get payment summary
     const payments = await Payment.aggregate([
       { $match: { tenantId } },
       {
@@ -538,22 +563,19 @@ export class FeeService {
   // ============ Reminders ============
 
   static async sendPaymentReminders(tenantId: string) {
-    // Find overdue invoices
     const overdueInvoices = await Invoice.find({
       tenantId,
       status: { $in: ['sent', 'partially_paid'] },
       dueDate: { $lt: new Date() },
       balanceDue: { $gt: 0 },
-    }).populate('studentId', 'firstName lastName guardians');
+    });
 
     const reminders = [];
 
     for (const invoice of overdueInvoices) {
-      // Get student's guardians
       const student = await Student.findById(invoice.studentId);
       if (!student || !student.guardians || student.guardians.length === 0) continue;
 
-      // Create reminder record
       const reminder = await FeeReminder.create({
         tenantId,
         invoiceId: invoice._id,
@@ -567,7 +589,6 @@ export class FeeService {
 
       reminders.push(reminder);
 
-      // Log reminder (in production, send actual emails/SMS)
       console.log(`📧 Reminder sent for invoice ${invoice.invoiceNumber}`);
       console.log(`   Student: ${student.firstName} ${student.lastName}`);
       console.log(`   Due Date: ${invoice.dueDate.toISOString().split('T')[0]}`);
@@ -578,7 +599,7 @@ export class FeeService {
     return reminders;
   }
 
-  // ============ Helper Functions ============
+  // ============ Helpers ============
 
   private static async generateInvoiceNumber(tenantId: string): Promise<string> {
     const count = await Invoice.countDocuments({ tenantId });
@@ -594,7 +615,6 @@ export class FeeService {
     return `REC-${year}-${sequence}`;
   }
 
-  // Get student fee summary
   static async getStudentFeeSummary(tenantId: string, studentId: string) {
     const invoices = await Invoice.find({
       tenantId,
@@ -607,12 +627,13 @@ export class FeeService {
     const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
 
     const paidInvoices = invoices.filter(inv => inv.status === 'paid').length;
-    const pendingInvoices = invoices.filter(inv =>
-      inv.status === 'sent' || inv.status === 'partially_paid'
+    const pendingInvoices = invoices.filter(
+      inv => inv.status === 'sent' || inv.status === 'partially_paid',
     ).length;
-    const overdueInvoices = invoices.filter(inv =>
-      (inv.status === 'sent' || inv.status === 'partially_paid') &&
-      inv.dueDate < new Date()
+    const overdueInvoices = invoices.filter(
+      inv =>
+        (inv.status === 'sent' || inv.status === 'partially_paid') &&
+        inv.dueDate < new Date(),
     ).length;
 
     return {

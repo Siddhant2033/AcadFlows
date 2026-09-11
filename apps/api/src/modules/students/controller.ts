@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { StudentService } from './service';
+import { Student } from '../../models/Student';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
 import { AppError } from '../../middleware/error-handler';
@@ -17,6 +18,7 @@ const createStudentSchema = z.object({
   password: z.string().min(8).optional(),
   grade: z.string().min(1),
   section: z.string().optional(),
+  sectionId: z.string().optional(),
   dateOfBirth: z.string().transform(str => new Date(str)),
   gender: z.enum(['male', 'female', 'other']),
   bloodGroup: z
@@ -140,10 +142,7 @@ export class StudentController {
 
       const students = await StudentService.getPublicStudentList(tenantId);
 
-      res.json({
-        success: true,
-        data: students,
-      });
+      res.json({ success: true, data: students });
     } catch (error) {
       next(error);
     }
@@ -151,7 +150,6 @@ export class StudentController {
 
   /**
    * Public — verify a student roll number and return minimal info.
-   * Used during guardian registration.
    */
   static async verifyRollNo(req: Request, res: Response, next: NextFunction) {
     try {
@@ -162,10 +160,7 @@ export class StudentController {
         validated.rollNo.trim().toUpperCase(),
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -173,21 +168,57 @@ export class StudentController {
 
   // ─── Authenticated endpoints ───────────────────────────────
 
+  /**
+   * Return the currently logged-in student's profile.
+   * Used by student dashboard and gradebook.
+   */
+  static async getCurrentStudent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authReq = req as AuthRequest;
+
+      const student = await Student.findOne({
+        userId: authReq.user.id,
+        tenantId: authReq.user.tenantId,
+        isDeleted: false,
+      }).populate('userId', 'email phone profilePicture');
+
+      if (!student) {
+        throw new AppError('Student profile not found for this user', 404);
+      }
+
+      res.json({ success: true, data: student });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async createStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
       const validated = createStudentSchema.parse(req.body);
 
-      const student = await StudentService.createStudent({
+      // NOTE: We intentionally do NOT pass `userId: authReq.user.id` — that
+      // is the admin's user ID. The service creates a fresh User for the
+      // student when `userId` is not provided. `createdBy` tracks who
+      // performed the action.
+      const result = await StudentService.createStudent({
         ...validated,
         tenantId: authReq.user.tenantId,
-        userId: authReq.user.id,
+        createdBy: authReq.user.id,
       });
 
       res.status(201).json({
         success: true,
-        data: student,
-        message: 'Student created successfully!',
+        data: result.student,
+        // Only present when a temporary password was auto-generated.
+        // Frontend can display this once so the admin can share it.
+        ...(result.tempPassword && {
+          message: `Student created successfully! Temporary password: ${result.tempPassword}`,
+          meta: { tempPassword: result.tempPassword },
+        }),
+        ...(!result.tempPassword && {
+          message: 'Student created successfully!',
+        }),
       });
     } catch (error) {
       next(error);
@@ -197,21 +228,19 @@ export class StudentController {
   static async getStudents(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-      const { grade, section, status, search, page, limit } = req.query;
+      const { grade, section, sectionId, status, search, page, limit } = req.query;
 
       const result = await StudentService.getStudents(authReq.user.tenantId, {
         grade: grade as string,
         section: section as string,
+        sectionId: sectionId as string,
         status: status as string,
         search: search as string,
         page: page ? parseInt(page as string) : 1,
         limit: limit ? parseInt(limit as string) : 20,
       });
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -222,10 +251,7 @@ export class StudentController {
       const { studentId } = req.params;
       const student = await StudentService.getStudentById(studentId);
 
-      res.json({
-        success: true,
-        data: student,
-      });
+      res.json({ success: true, data: student });
     } catch (error) {
       next(error);
     }
@@ -355,10 +381,7 @@ export class StudentController {
       const authReq = req as AuthRequest;
       const stats = await StudentService.getStudentStats(authReq.user.tenantId);
 
-      res.json({
-        success: true,
-        data: stats,
-      });
+      res.json({ success: true, data: stats });
     } catch (error) {
       next(error);
     }
@@ -378,10 +401,7 @@ export class StudentController {
         limit: 10,
       });
 
-      res.json({
-        success: true,
-        data: result.items,
-      });
+      res.json({ success: true, data: result.items });
     } catch (error) {
       next(error);
     }

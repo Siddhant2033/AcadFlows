@@ -120,8 +120,11 @@ export default function MarkAttendancePage() {
   const fetchStudents = async () => {
     setIsLoadingStudents(true);
     try {
+      // NOTE: we send `sectionId` (a Mongo ObjectId string), not `section`.
+      // The backend filters by Student.sectionId, which is what the
+      // MarkAttendance flow actually needs.
       const response = await api.get(
-        `/students?section=${sectionId}&status=active&limit=100`,
+        `/students?sectionId=${sectionId}&status=active&limit=100`,
       );
       const studentsData = response.data.data.items;
       setStudents(studentsData);

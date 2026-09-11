@@ -2,7 +2,22 @@ import mongoose from 'mongoose';
 import { Assignment, Submission, Gradebook, ReportCard } from '../../models/Assignment';
 import { Student } from '../../models/Student';
 import { Subject } from '../../models/Subject';
+import { Section } from '../../models/Section';
+import { Teacher } from '../../models/Teacher';
 import { AppError } from '../../middleware/error-handler';
+import { attachRefs } from '../../utils/attach-refs';
+
+// Reusable populate maps
+const assignmentRefs = {
+  subjectId: { model: Subject, fields: 'name code' },
+  sectionId: { model: Section, fields: 'name code' },
+  teacherId: { model: Teacher, fields: 'firstName lastName employeeId' },
+};
+
+const submissionRefs = {
+  studentId: { model: Student, fields: 'firstName lastName rollNo admissionNo' },
+  assignmentId: { model: Assignment, fields: 'title maxScore dueDate' },
+};
 
 export class AssignmentService {
   // ============ Assignments ============
@@ -26,9 +41,10 @@ export class AssignmentService {
       teacherId?: string;
       status?: string;
       type?: string;
+      search?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId };
 
@@ -38,23 +54,30 @@ export class AssignmentService {
     if (filters.status) query.status = filters.status;
     if (filters.type) query.type = filters.type;
 
+    if (filters.search) {
+      query.$or = [
+        { title: { $regex: filters.search, $options: 'i' } },
+        { description: { $regex: filters.search, $options: 'i' } },
+      ];
+    }
+
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [assignments, total] = await Promise.all([
+    const [rawAssignments, total] = await Promise.all([
       Assignment.find(query)
-        .populate('subjectId', 'name code')
-        .populate('sectionId', 'name')
-        .populate('teacherId', 'firstName lastName')
         .sort({ dueDate: 1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Assignment.countDocuments(query),
     ]);
 
+    const items = await attachRefs(rawAssignments, assignmentRefs);
+
     return {
-      items: assignments,
+      items,
       total,
       page,
       limit,
@@ -67,15 +90,12 @@ export class AssignmentService {
       throw new AppError('Invalid assignment ID', 400);
     }
 
-    const assignment = await Assignment.findById(id)
-      .populate('subjectId', 'name code')
-      .populate('sectionId', 'name')
-      .populate('teacherId', 'firstName lastName');
-
-    if (!assignment) {
+    const raw = await Assignment.findById(id).lean();
+    if (!raw) {
       throw new AppError('Assignment not found', 404);
     }
 
+    const [assignment] = await attachRefs([raw], assignmentRefs);
     return assignment;
   }
 
@@ -92,7 +112,7 @@ export class AssignmentService {
     const assignment = await Assignment.findByIdAndUpdate(
       id,
       { $set: data },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!assignment) {
@@ -107,7 +127,6 @@ export class AssignmentService {
       throw new AppError('Invalid assignment ID', 400);
     }
 
-    // Also delete all submissions
     await Submission.deleteMany({ assignmentId: id });
 
     const assignment = await Assignment.findByIdAndDelete(id);
@@ -121,7 +140,6 @@ export class AssignmentService {
   // ============ Submissions ============
 
   static async submitAssignment(tenantId: string, data: any) {
-    // Check if assignment exists and is published
     const assignment = await Assignment.findOne({
       _id: data.assignmentId,
       tenantId,
@@ -132,7 +150,6 @@ export class AssignmentService {
       throw new AppError('Assignment not found or not published', 404);
     }
 
-    // Check if student already submitted
     const existingSubmission = await Submission.findOne({
       assignmentId: data.assignmentId,
       studentId: data.studentId,
@@ -142,7 +159,6 @@ export class AssignmentService {
       throw new AppError('You have already submitted this assignment', 409);
     }
 
-    // Check if late
     const isLate = new Date() > assignment.dueDate;
 
     const submission = await Submission.create({
@@ -164,7 +180,7 @@ export class AssignmentService {
       status?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId };
 
@@ -176,19 +192,19 @@ export class AssignmentService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [submissions, total] = await Promise.all([
+    const [rawSubmissions, total] = await Promise.all([
       Submission.find(query)
-        .populate('studentId', 'firstName lastName rollNo')
-        .populate('assignmentId', 'title maxScore dueDate')
-        .populate('gradedBy', 'firstName lastName')
         .sort({ submittedAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Submission.countDocuments(query),
     ]);
 
+    const items = await attachRefs(rawSubmissions, submissionRefs);
+
     return {
-      items: submissions,
+      items,
       total,
       page,
       limit,
@@ -201,25 +217,18 @@ export class AssignmentService {
       throw new AppError('Invalid submission ID', 400);
     }
 
-    const submission = await Submission.findById(id)
-      .populate('studentId', 'firstName lastName rollNo')
-      .populate('assignmentId', 'title maxScore dueDate')
-      .populate('gradedBy', 'firstName lastName');
-
-    if (!submission) {
+    const raw = await Submission.findById(id).lean();
+    if (!raw) {
       throw new AppError('Submission not found', 404);
     }
 
+    const [submission] = await attachRefs([raw], submissionRefs);
     return submission;
   }
 
   static async gradeSubmission(
     submissionId: string,
-    data: {
-      score: number;
-      feedback: string;
-      gradedBy: string;
-    }
+    data: { score: number; feedback: string; gradedBy: string },
   ) {
     if (!mongoose.Types.ObjectId.isValid(submissionId)) {
       throw new AppError('Invalid submission ID', 400);
@@ -230,7 +239,6 @@ export class AssignmentService {
       throw new AppError('Submission not found', 404);
     }
 
-    // Update submission
     submission.score = data.score;
     submission.feedback = data.feedback;
     submission.gradedBy = data.gradedBy;
@@ -239,12 +247,11 @@ export class AssignmentService {
 
     await submission.save();
 
-    // Update gradebook
     await this.updateGradebook(
       submission.tenantId,
       submission.studentId,
       submission.assignmentId,
-      data.score
+      data.score,
     );
 
     return submission;
@@ -252,11 +259,15 @@ export class AssignmentService {
 
   // ============ Gradebook ============
 
-  static async updateGradebook(tenantId: string, studentId: string, assignmentId: string, score: number) {
+  static async updateGradebook(
+    tenantId: string,
+    studentId: string,
+    assignmentId: string,
+    score: number,
+  ) {
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) return;
 
-    // Find or create gradebook entry
     let gradebook = await Gradebook.findOne({
       tenantId,
       studentId,
@@ -274,9 +285,9 @@ export class AssignmentService {
       });
     }
 
-    // Update or add assignment
+    // Compare as strings to avoid ObjectId vs string mismatch
     const existingIndex = gradebook.assignments.findIndex(
-      (a: any) => a.assignmentId === assignmentId
+      (a: any) => a.assignmentId.toString() === assignmentId,
     );
 
     if (existingIndex >= 0) {
@@ -291,7 +302,6 @@ export class AssignmentService {
       });
     }
 
-    // Calculate totals
     let totalWeightedScore = 0;
     let totalWeightage = 0;
 
@@ -301,14 +311,13 @@ export class AssignmentService {
     }
 
     gradebook.totalScore = totalWeightedScore;
-    gradebook.averageScore = totalWeightage > 0 ? (totalWeightedScore / totalWeightage) * 100 : 0;
+    gradebook.averageScore =
+      totalWeightage > 0 ? (totalWeightedScore / totalWeightage) * 100 : 0;
 
-    // Calculate grade
     gradebook.grade = this.calculateGrade(gradebook.averageScore);
     gradebook.gradePoint = this.calculateGradePoint(gradebook.averageScore);
 
     await gradebook.save();
-
     return gradebook;
   }
 
@@ -317,9 +326,11 @@ export class AssignmentService {
       tenantId,
       studentId,
       academicYearId,
-    }).populate('subjectId', 'name code');
+    }).lean();
 
-    return gradebooks;
+    return await attachRefs(gradebooks, {
+      subjectId: { model: Subject, fields: 'name code' },
+    });
   }
 
   static async getStudentProgress(tenantId: string, studentId: string, academicYearId: string) {
@@ -327,21 +338,24 @@ export class AssignmentService {
       tenantId,
       studentId,
       academicYearId,
-    }).populate('subjectId', 'name code');
+    }).lean();
 
-    // Calculate overall averages
+    const withRefs = await attachRefs(gradebooks, {
+      subjectId: { model: Subject, fields: 'name code' },
+    });
+
     let totalScore = 0;
     let subjectCount = 0;
 
-    const subjects = gradebooks.map((g) => ({
+    const subjects = withRefs.map((g: any) => ({
       subject: g.subjectId,
       score: g.averageScore,
       grade: g.grade,
       gradePoint: g.gradePoint,
     }));
 
-    for (const g of gradebooks) {
-      totalScore += g.averageScore;
+    for (const g of withRefs) {
+      totalScore += g.averageScore || 0;
       subjectCount++;
     }
 
@@ -366,9 +380,8 @@ export class AssignmentService {
       academicYearId: string;
       term: string;
       createdBy: string;
-    }
+    },
   ) {
-    // Get student
     const student = await Student.findOne({
       _id: data.studentId,
       tenantId,
@@ -379,30 +392,34 @@ export class AssignmentService {
       throw new AppError('Student not found', 404);
     }
 
-    // Get gradebook for all subjects
     const gradebooks = await Gradebook.find({
       tenantId,
       studentId: data.studentId,
       academicYearId: data.academicYearId,
-    }).populate('subjectId', 'name code');
+    }).lean();
 
     if (gradebooks.length === 0) {
       throw new AppError('No grades found for this student', 404);
     }
 
-    // Build report card subjects
-    const subjects = gradebooks.map((g) => ({
+    const withRefs = await attachRefs(gradebooks, {
+      subjectId: { model: Subject, fields: 'name code' },
+    });
+
+    const subjects = withRefs.map((g: any) => ({
       subjectId:
-        typeof g.subjectId === 'string'
-          ? g.subjectId
-          : (g.subjectId as { _id: string })._id,
-      name: typeof g.subjectId === 'string' ? g.subjectId : (g.subjectId as { name: string }).name,
+        typeof g.subjectId === 'object' && g.subjectId
+          ? g.subjectId._id.toString()
+          : String(g.subjectId),
+      name:
+        typeof g.subjectId === 'object' && g.subjectId
+          ? g.subjectId.name
+          : 'Unknown',
       score: g.averageScore,
       grade: g.grade,
       gradePoint: g.gradePoint,
     }));
 
-    // Calculate totals
     let totalScore = 0;
     let totalGradePoint = 0;
 
@@ -412,13 +429,11 @@ export class AssignmentService {
     }
 
     const averageScore = subjects.length > 0 ? totalScore / subjects.length : 0;
-    const averageGradePoint = subjects.length > 0 ? totalGradePoint / subjects.length : 0;
+    const averageGradePoint =
+      subjects.length > 0 ? totalGradePoint / subjects.length : 0;
 
-    // Get attendance (from attendance service)
-    // For MVP, we'll use mock data or 0
-    const attendance = 0; // TODO: Integrate with attendance service
+    const attendance = 0; // TODO: integrate with attendance service
 
-    // Check if report card already exists
     let reportCard = await ReportCard.findOne({
       tenantId,
       studentId: data.studentId,
@@ -427,7 +442,6 @@ export class AssignmentService {
     });
 
     if (reportCard) {
-      // Update existing
       reportCard.subjects = subjects;
       reportCard.totalScore = totalScore;
       reportCard.averageScore = averageScore;
@@ -437,7 +451,6 @@ export class AssignmentService {
       reportCard.generatedAt = new Date();
       reportCard.createdBy = data.createdBy;
     } else {
-      // Create new
       reportCard = new ReportCard({
         tenantId,
         studentId: data.studentId,
@@ -456,7 +469,6 @@ export class AssignmentService {
     }
 
     await reportCard.save();
-
     return reportCard;
   }
 
@@ -469,7 +481,7 @@ export class AssignmentService {
       status?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId };
 
@@ -482,17 +494,21 @@ export class AssignmentService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [reportCards, total] = await Promise.all([
+    const [rawCards, total] = await Promise.all([
       ReportCard.find(query)
-        .populate('studentId', 'firstName lastName rollNo grade section')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       ReportCard.countDocuments(query),
     ]);
 
+    const items = await attachRefs(rawCards, {
+      studentId: { model: Student, fields: 'firstName lastName rollNo grade section' },
+    });
+
     return {
-      items: reportCards,
+      items,
       total,
       page,
       limit,
@@ -505,15 +521,16 @@ export class AssignmentService {
       throw new AppError('Invalid report card ID', 400);
     }
 
-    const reportCard = await ReportCard.findById(id)
-      .populate('studentId', 'firstName lastName rollNo grade section')
-      .populate('subjects.subjectId', 'name code');
-
-    if (!reportCard) {
+    const raw = await ReportCard.findById(id).lean();
+    if (!raw) {
       throw new AppError('Report card not found', 404);
     }
 
-    return reportCard;
+    const [card] = await attachRefs([raw], {
+      studentId: { model: Student, fields: 'firstName lastName rollNo grade section' },
+    });
+
+    return card;
   }
 
   static async publishReportCard(id: string) {
@@ -524,7 +541,7 @@ export class AssignmentService {
     const reportCard = await ReportCard.findByIdAndUpdate(
       id,
       { $set: { status: 'published' } },
-      { new: true }
+      { new: true },
     );
 
     if (!reportCard) {
@@ -556,7 +573,6 @@ export class AssignmentService {
     return 0;
   }
 
-  // Get assignment statistics
   static async getAssignmentStats(tenantId: string, assignmentId: string) {
     const submissions = await Submission.find({
       tenantId,
@@ -566,12 +582,13 @@ export class AssignmentService {
     const total = submissions.length;
     const graded = submissions.filter(s => s.status === 'graded').length;
     const pending = submissions.filter(s => s.status === 'submitted').length;
-    const notSubmitted = 0; // Would need to get total students
+    const notSubmitted = 0;
 
-    const scores = submissions.filter(s => s.score !== undefined).map(s => s.score!);
-    const averageScore = scores.length > 0 
-      ? scores.reduce((a, b) => a + b, 0) / scores.length 
-      : 0;
+    const scores = submissions
+      .filter(s => s.score !== undefined)
+      .map(s => s.score!);
+    const averageScore =
+      scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
 
     return {
       total,

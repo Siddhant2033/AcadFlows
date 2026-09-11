@@ -1,9 +1,12 @@
 /**
  * Seed a full test dataset for Sunrise Public School.
  * Run with: tsx src/scripts/seed-sunrise-test.ts
+ *
+ * IMPORTANT: Passwords are passed as plaintext. The User pre-save hook
+ * hashes them exactly once. Do NOT call bcrypt.hash() here — that would
+ * result in a double-hash and break login.
  */
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 import { config } from '../config';
 import { Tenant } from '../models/Tenant';
 import { User } from '../models/User';
@@ -116,7 +119,7 @@ async function seed() {
   });
 
   // 5. Subjects
-  const subjects = await Subject.insertMany([
+  await Subject.insertMany([
     { tenantId: tid, name: 'Mathematics', code: 'MATH', isElective: false },
     { tenantId: tid, name: 'Science', code: 'SCI', isElective: false },
     { tenantId: tid, name: 'English', code: 'ENG', isElective: false },
@@ -125,12 +128,11 @@ async function seed() {
     { tenantId: tid, name: 'Computer Science', code: 'CS', isElective: false },
   ]);
 
-  // 6. Admin
-  const adminPassword = await bcrypt.hash('Admin@2024', 10);
+  // 6. Admin — plaintext password; pre-save hook hashes once
   await User.create({
     tenantId: tid,
     email: 'principal@sunrisegpn.edu.in',
-    passwordHash: adminPassword,
+    passwordHash: 'Admin@2024', // ← hashed by the User model hook
     firstName: 'Rajesh',
     lastName: 'Kumar',
     role: 'admin',
@@ -139,8 +141,7 @@ async function seed() {
     emailVerified: true,
   });
 
-  // 7. Teachers
-  const teacherPassword = await bcrypt.hash('Teacher@2024', 10);
+  // 7. Teachers — plaintext passwords
   const teacherData = [
     {
       email: 'priya.sharma@sunrisegpn.edu.in',
@@ -179,7 +180,7 @@ async function seed() {
     const user = await User.create({
       tenantId: tid,
       email: t.email,
-      passwordHash: teacherPassword,
+      passwordHash: 'Teacher@2024', // ← hashed by hook
       firstName: t.firstName,
       lastName: t.lastName,
       role: 'teacher',
@@ -214,8 +215,7 @@ async function seed() {
     });
   }
 
-  // 8. Students
-  const studentPassword = await bcrypt.hash('Student@2024', 10);
+  // 8. Students — plaintext passwords
   const studentsData = [
     { firstName: 'Arjun', lastName: 'Mehta', grade: 'Class 5', section: c5a, gender: 'male' as const, dob: '2013-06-15' },
     { firstName: 'Ananya', lastName: 'Iyer', grade: 'Class 5', section: c5a, gender: 'female' as const, dob: '2013-09-03' },
@@ -234,7 +234,7 @@ async function seed() {
     const user = await User.create({
       tenantId: tid,
       email,
-      passwordHash: studentPassword,
+      passwordHash: 'Student@2024', // ← hashed by hook
       firstName: s.firstName,
       lastName: s.lastName,
       role: 'student',

@@ -32,11 +32,18 @@ interface UpcomingDeadline {
   priority: 'high' | 'medium' | 'low';
 }
 
+/** Read a resolved ref's field, or fall back. */
+function refField(ref: any, field: string, fallback = ''): string {
+  if (ref && typeof ref === 'object' && ref[field]) return String(ref[field]);
+  return fallback;
+}
+
 export default function StudentDashboard({ data, tenant, user }: StudentDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [timetable, setTimetable] = useState<TimetableClass[]>([]);
   const [recentGrades, setRecentGrades] = useState<RecentGrade[]>([]);
   const [upcomingDeadlines, setUpcomingDeadlines] = useState<UpcomingDeadline[]>([]);
+  const [studentProfile, setStudentProfile] = useState<any>(null);
   const [stats, setStats] = useState({
     attendance: '0%',
     pendingAssignments: 0,
@@ -46,69 +53,129 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
 
   useEffect(() => {
     fetchStudentData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStudentData = async () => {
     try {
       setLoading(true);
 
-      const timetableRes = await api.get(`/timetable/sections/${data?.studentSection || ''}`);
-      const timetableData = timetableRes.data.data || {};
+      // ─── 1. Get the Student document (its _id is what most endpoints want) ───
+      let studentDoc: any = null;
+      try {
+        const meRes = await api.get('/students/me');
+        studentDoc = meRes.data.data;
+        setStudentProfile(studentDoc);
+      } catch (err) {
+        console.warn('Student profile not found:', err);
+      }
 
-      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-      const today = days[new Date().getDay()];
+      const studentId = studentDoc?._id;
+      const sectionId = studentDoc?.sectionId;
 
-      const todayClasses = timetableData[today] || [];
-      setTimetable(
-        todayClasses.slice(0, 4).map((cls: any) => ({
-          subject: cls.subjectId?.name || 'Unknown',
-          time: `${cls.startTime} - ${cls.endTime}`,
-          room: cls.roomNumber || 'N/A',
-          teacher: cls.teacherId
-            ? `${cls.teacherId.firstName} ${cls.teacherId.lastName}`
-            : 'N/A',
-        })),
-      );
+      // ─── 2. Today's timetable ────────────────────────────────────
+      if (sectionId) {
+        try {
+          const timetableRes = await api.get(`/timetable/sections/${sectionId}`);
+          const timetableData = timetableRes.data.data || {};
+          const days = [
+            'sunday',
+            'monday',
+            'tuesday',
+            'wednesday',
+            'thursday',
+            'friday',
+            'saturday',
+          ];
+          const today = days[new Date().getDay()];
+          const todayClasses = timetableData[today] || [];
 
-      const gradesRes = await api.get(
-        `/assignments/gradebook/${user?.id}/${data?.academicYearId || ''}`,
-      );
-      const gradeData = gradesRes.data.data || [];
-      setRecentGrades(
-        gradeData.slice(0, 3).map((g: any) => ({
-          subject: g.subjectId?.name || 'Unknown',
-          grade: g.grade || 'N/A',
-          score: `${Math.round(g.averageScore || 0)}%`,
-          date: g.updatedAt ? formatDate(g.updatedAt) : 'N/A',
-        })),
-      );
+          setTimetable(
+            todayClasses.slice(0, 4).map((cls: any) => ({
+              subject: refField(cls.subjectId, 'name', 'Unknown'),
+              time: `${cls.startTime} - ${cls.endTime}`,
+              room: cls.roomNumber || 'N/A',
+              teacher: `${refField(cls.teacherId, 'firstName')} ${refField(
+                cls.teacherId,
+                'lastName',
+              )}`.trim() || 'N/A',
+            })),
+          );
+        } catch (err) {
+          console.error('Failed to load timetable:', err);
+        }
+      }
 
-      const assignmentsRes = await api.get('/assignments?status=published&limit=5');
-      const assignments = assignmentsRes.data.data?.items || [];
-      const deadlines = assignments
-        .filter((a: any) => new Date(a.dueDate) > new Date())
-        .slice(0, 3)
-        .map((a: any) => ({
-          title: a.title,
-          subject: a.subjectId?.name || 'Unknown',
-          dueDate: formatDate(a.dueDate),
-          priority:
-            new Date(a.dueDate) < new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
-              ? 'high'
-              : new Date(a.dueDate) < new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
-                ? 'medium'
-                : 'low',
-        }));
-      setUpcomingDeadlines(deadlines);
+      // ─── 3. Recent grades ────────────────────────────────────────
+      const academicYearId = data?.academicYearId || studentDoc?.enrollments?.[0]?.academicYearId;
+      if (studentId && academicYearId) {
+        try {
+          const gradesRes = await api.get(
+            `/assignments/gradebook/${studentId}/${academicYearId}`,
+          );
+          const gradeData = gradesRes.data.data || [];
+          setRecentGrades(
+            gradeData.slice(0, 3).map((g: any) => ({
+              subject: refField(g.subjectId, 'name', 'Unknown'),
+              grade: g.grade || 'N/A',
+              score: `${Math.round(g.averageScore || 0)}%`,
+              date: g.updatedAt ? formatDate(g.updatedAt) : 'N/A',
+            })),
+          );
 
-      const statsRes = await api.get('/dashboard');
-      const statsData = statsRes.data.data?.stats || {};
-      setStats({
-        attendance: statsData.attendance || '0%',
-        pendingAssignments: assignments.filter((a: any) => a.status === 'published').length || 0,
-        overallGrade: data?.overallGrade || 'N/A',
-        upcomingTests: deadlines.length,
-      });
+          // Overall grade average
+          if (gradeData.length > 0) {
+            const avg =
+              gradeData.reduce((sum: number, g: any) => sum + (g.averageScore || 0), 0) /
+              gradeData.length;
+            stats.overallGrade =
+              avg >= 90 ? 'A+' :
+              avg >= 80 ? 'A' :
+              avg >= 70 ? 'B+' :
+              avg >= 60 ? 'B' :
+              avg >= 50 ? 'C+' :
+              avg >= 40 ? 'C' : 'F';
+          }
+        } catch (err) {
+          console.error('Failed to load grades:', err);
+        }
+      }
+
+      // ─── 4. Upcoming deadlines ───────────────────────────────────
+      try {
+        const assignmentsRes = await api.get('/assignments?status=published&limit=5');
+        const assignments = assignmentsRes.data.data?.items || [];
+        const deadlines = assignments
+          .filter((a: any) => new Date(a.dueDate) > new Date())
+          .slice(0, 3)
+          .map((a: any) => ({
+            title: a.title,
+            subject: refField(a.subjectId, 'name', 'Unknown'),
+            dueDate: formatDate(a.dueDate),
+            priority:
+              new Date(a.dueDate) < new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+                ? 'high'
+                : new Date(a.dueDate) < new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
+                  ? 'medium'
+                  : 'low',
+          }));
+        setUpcomingDeadlines(deadlines);
+        stats.upcomingTests = deadlines.length;
+        stats.pendingAssignments = assignments.length;
+      } catch (err) {
+        console.error('Failed to load assignments:', err);
+      }
+
+      // ─── 5. Attendance percentage from dashboard stats ───────────
+      try {
+        const statsRes = await api.get('/dashboard');
+        const statsData = statsRes.data.data?.stats || {};
+        stats.attendance = statsData.attendance || '0%';
+      } catch (err) {
+        console.error('Failed to load dashboard stats:', err);
+      }
+
+      setStats({ ...stats });
     } catch (error) {
       console.error('Failed to fetch student data:', error);
     } finally {
@@ -153,6 +220,9 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
     );
   }
 
+  const grade = studentProfile?.grade || data?.grade || 'N/A';
+  const section = studentProfile?.section || data?.section || 'A';
+
   return (
     <div className="space-y-6">
       {/* Welcome */}
@@ -161,8 +231,7 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
           Welcome back, {user?.firstName || 'Student'}! 👋
         </h2>
         <p className="mt-1 text-muted">
-          {tenant?.name || 'Your school'} · Grade {data?.grade || 'N/A'} · Section{' '}
-          {data?.section || 'A'}
+          {tenant?.name || 'Your school'} · Grade {grade} · Section {section}
         </p>
       </Card>
 
@@ -194,12 +263,17 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
             <CardTitle className="mb-4">📅 Today's Timetable</CardTitle>
             <div className="space-y-3">
               {timetable.length === 0 ? (
-                <p className="text-sm text-center py-4 text-muted">No classes scheduled for today</p>
+                <p className="text-sm text-center py-4 text-muted">
+                  No classes scheduled for today
+                </p>
               ) : (
                 timetable.map((cls, index) => {
                   const status = index < 2 ? 'completed' : 'upcoming';
                   return (
-                    <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-elevated">
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 rounded-lg bg-elevated"
+                    >
                       <div>
                         <p className="font-medium text-foreground">{cls.subject}</p>
                         <p className="text-sm text-muted">
@@ -221,10 +295,15 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
             <CardTitle className="mb-4">📊 Recent Grades</CardTitle>
             <div className="space-y-3">
               {recentGrades.length === 0 ? (
-                <p className="text-sm text-center py-4 text-muted">No grades available yet</p>
+                <p className="text-sm text-center py-4 text-muted">
+                  No grades available yet
+                </p>
               ) : (
                 recentGrades.map((grade, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-elevated">
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 rounded-lg bg-elevated"
+                  >
                     <div>
                       <p className="font-medium text-foreground">{grade.subject}</p>
                       <p className="text-sm text-muted">
@@ -248,11 +327,18 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
             <CardTitle className="mb-4">⏰ Upcoming Deadlines</CardTitle>
             <div className="space-y-3">
               {upcomingDeadlines.length === 0 ? (
-                <p className="text-sm text-center py-4 text-muted">No upcoming deadlines</p>
+                <p className="text-sm text-center py-4 text-muted">
+                  No upcoming deadlines
+                </p>
               ) : (
                 upcomingDeadlines.map((deadline, index) => (
-                  <div key={index} className={cn('p-3 rounded-lg', getPriorityClasses(deadline.priority))}>
-                    <p className="text-sm font-medium text-foreground">{deadline.title}</p>
+                  <div
+                    key={index}
+                    className={cn('p-3 rounded-lg', getPriorityClasses(deadline.priority))}
+                  >
+                    <p className="text-sm font-medium text-foreground">
+                      {deadline.title}
+                    </p>
                     <p className="text-xs text-muted">
                       {deadline.subject} · Due: {deadline.dueDate}
                     </p>
@@ -269,7 +355,7 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
               {[
                 { to: '/assignments', icon: '📝', label: 'Assignments' },
                 { to: '/gradebook', icon: '📊', label: 'Grades' },
-                { to: '/attendance', icon: '✅', label: 'Attendance' },
+                { to: '/attendance/reports', icon: '✅', label: 'Attendance' },
                 { to: '/timetable', icon: '📅', label: 'Timetable' },
               ].map(action => (
                 <Link
@@ -278,7 +364,9 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
                   className="flex flex-col items-center justify-center p-3 rounded-lg border-2 border-border transition-all hover:border-primary-300 hover:bg-primary-50 dark:hover:border-primary-500/50 dark:hover:bg-primary-900/10"
                 >
                   <span className="text-xl mb-1">{action.icon}</span>
-                  <span className="text-xs text-center text-foreground">{action.label}</span>
+                  <span className="text-xs text-center text-foreground">
+                    {action.label}
+                  </span>
                 </Link>
               ))}
             </div>

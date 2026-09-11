@@ -7,7 +7,6 @@ import {
   CardDescription,
   Button,
   Input,
-  Label,
   Select,
   Textarea,
   PhoneInput,
@@ -15,7 +14,6 @@ import {
 } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
 import { getErrorMessage } from '../../lib/errors';
-import { cn } from '../../lib/cn';
 
 interface StudentFormData {
   firstName: string;

@@ -2,8 +2,30 @@ import mongoose from 'mongoose';
 import { Attendance, AttendanceSession } from '../../models/Attendance';
 import { Student } from '../../models/Student';
 import { Teacher } from '../../models/Teacher';
-import { User } from '../../models/User';
 import { AppError } from '../../middleware/error-handler';
+
+// IST is UTC+05:30. This constant is used to normalize dates so that
+// "today" always means the same calendar day regardless of server timezone.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * Normalize an input date to IST midnight.
+ * Returns both the Date object (IST midnight, expressed in UTC) and
+ * the YYYY-MM-DD string that will be stored in `dateOnly`.
+ */
+function normalizeToIST(dateInput: Date | string): { date: Date; dateOnly: string } {
+  const raw = new Date(dateInput);
+
+  // Shift into IST by adding the offset, then extract the calendar day.
+  const istShifted = new Date(raw.getTime() + IST_OFFSET_MS);
+  const dateOnly = istShifted.toISOString().split('T')[0];
+
+  // Reconstruct IST midnight as a real UTC Date so Date comparisons work.
+  // e.g. dateOnly = "2026-09-11" → 2026-09-11T00:00:00+05:30 == 2026-09-10T18:30:00Z
+  const istMidnight = new Date(`${dateOnly}T00:00:00+05:30`);
+
+  return { date: istMidnight, dateOnly };
+}
 
 export class AttendanceService {
   // Mark attendance for multiple students
@@ -20,20 +42,19 @@ export class AttendanceService {
         remarks?: string;
       }[];
       markedBy: string;
-    }
+    },
   ) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      const date = new Date(data.date);
-      date.setHours(0, 0, 0, 0);
+      const { date, dateOnly } = normalizeToIST(data.date);
 
       // Check if attendance already marked for this date
       const existing = await AttendanceSession.findOne({
         tenantId,
         sectionId: data.sectionId,
-        date: date,
+        dateOnly,
         type: 'student',
       });
 
@@ -56,11 +77,10 @@ export class AttendanceService {
         throw new AppError('No students found in this section', 404);
       }
 
-      // Create attendance records
-      const dateOnly = date.toISOString().split('T')[0];
+      // Create attendance records for provided students
       const attendanceRecords = data.records.map(record => ({
         tenantId,
-        date: date,
+        date,
         dateOnly,
         type: 'student',
         entityId: record.studentId,
@@ -73,23 +93,22 @@ export class AttendanceService {
         isHoliday: false,
       }));
 
-      // Check if all students are accounted for
+      // Auto-mark absent for missing students
       const studentIds = students.map(s => s._id.toString());
       const recordedIds = data.records.map(r => r.studentId);
 
-      // Mark absent students automatically
       for (const studentId of studentIds) {
         if (!recordedIds.includes(studentId)) {
           attendanceRecords.push({
             tenantId,
-            date: date,
+            date,
             dateOnly,
             type: 'student',
             entityId: studentId,
             sectionId: data.sectionId,
             academicYearId: data.academicYearId,
             status: 'absent',
-            checkInTime: new Date(),
+            checkInTime: date,
             markedBy: data.markedBy,
             remarks: 'Auto-marked absent',
             isHoliday: false,
@@ -97,39 +116,40 @@ export class AttendanceService {
         }
       }
 
-      // Insert attendance records
       await Attendance.insertMany(attendanceRecords, { session });
 
-      // Calculate statistics
       const stats = await this.calculateAttendanceStats(
         tenantId,
         date,
         data.sectionId,
         'student',
-        session
+        session,
       );
 
-      // Create attendance session
-      const attendanceSession = await AttendanceSession.create([{
-        tenantId,
-        academicYearId: data.academicYearId,
-        sectionId: data.sectionId,
-        date: date,
-        dateOnly,
-        type: 'student',
-        totalPresent: stats.present,
-        totalAbsent: stats.absent,
-        totalLate: stats.late,
-        totalHalfDay: stats.halfDay,
-        totalStudents: studentIds.length,
-        attendancePercentage: stats.percentage,
-        markedBy: data.markedBy,
-      }], { session });
+      const attendanceSession = await AttendanceSession.create(
+        [
+          {
+            tenantId,
+            academicYearId: data.academicYearId,
+            sectionId: data.sectionId,
+            date,
+            dateOnly,
+            type: 'student',
+            totalPresent: stats.present,
+            totalAbsent: stats.absent,
+            totalLate: stats.late,
+            totalHalfDay: stats.halfDay,
+            totalStudents: studentIds.length,
+            attendancePercentage: stats.percentage,
+            markedBy: data.markedBy,
+          },
+        ],
+        { session },
+      );
 
       await session.commitTransaction();
       session.endSession();
 
-      // Send notifications for absent students
       await this.sendAttendanceNotifications(tenantId, date, data.sectionId, 'student');
 
       return {
@@ -158,15 +178,13 @@ export class AttendanceService {
         remarks?: string;
       }[];
       markedBy: string;
-    }
+    },
   ) {
-    const date = new Date(data.date);
-    date.setHours(0, 0, 0, 0);
+    const { date, dateOnly } = normalizeToIST(data.date);
 
-    // Check if attendance already marked
     const existing = await AttendanceSession.findOne({
       tenantId,
-      date: date,
+      dateOnly,
       type: 'teacher',
     });
 
@@ -174,7 +192,6 @@ export class AttendanceService {
       throw new AppError('Teacher attendance already marked for this date', 409);
     }
 
-    // Get all active teachers
     const teachers = await Teacher.find({
       tenantId,
       status: 'active',
@@ -185,11 +202,9 @@ export class AttendanceService {
       throw new AppError('No active teachers found', 404);
     }
 
-    // Create attendance records
-    const dateOnly = date.toISOString().split('T')[0];
     const attendanceRecords = data.records.map(record => ({
       tenantId,
-      date: date,
+      date,
       dateOnly,
       type: 'teacher',
       entityId: record.teacherId,
@@ -202,7 +217,6 @@ export class AttendanceService {
       isHoliday: false,
     }));
 
-    // Check for missing teachers (mark as absent)
     const teacherIds = teachers.map(t => t._id.toString());
     const recordedIds = data.records.map(r => r.teacherId);
 
@@ -210,7 +224,7 @@ export class AttendanceService {
       if (!recordedIds.includes(teacherId)) {
         attendanceRecords.push({
           tenantId,
-          date: date,
+          date,
           dateOnly,
           type: 'teacher',
           entityId: teacherId,
@@ -227,19 +241,17 @@ export class AttendanceService {
 
     await Attendance.insertMany(attendanceRecords);
 
-    // Calculate stats
     const stats = await this.calculateAttendanceStats(
       tenantId,
       date,
       undefined,
-      'teacher'
+      'teacher',
     );
 
-    // Create attendance session
     const attendanceSession = await AttendanceSession.create({
       tenantId,
       academicYearId: data.academicYearId,
-      date: date,
+      date,
       dateOnly,
       type: 'teacher',
       totalPresent: stats.present,
@@ -264,12 +276,12 @@ export class AttendanceService {
     date: Date,
     sectionId?: string,
     type: 'student' | 'teacher' = 'student',
-    session?: mongoose.ClientSession
+    session?: mongoose.ClientSession,
   ) {
     const query: any = {
       tenantId,
-      date: date,
-      type: type,
+      date,
+      type,
     };
 
     if (sectionId) {
@@ -289,7 +301,7 @@ export class AttendanceService {
 
     if (stats.total > 0) {
       stats.percentage = Math.round(
-        ((stats.present + stats.late + stats.halfDay) / stats.total) * 100
+        ((stats.present + stats.late + stats.halfDay) / stats.total) * 100,
       );
     }
 
@@ -306,7 +318,7 @@ export class AttendanceService {
       status?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = {
       tenantId,
@@ -329,14 +341,10 @@ export class AttendanceService {
     const skip = (page - 1) * limit;
 
     const [records, total] = await Promise.all([
-      Attendance.find(query)
-        .sort({ date: -1 })
-        .skip(skip)
-        .limit(limit),
+      Attendance.find(query).sort({ date: -1 }).skip(skip).limit(limit),
       Attendance.countDocuments(query),
     ]);
 
-    // Calculate summary
     const summary = await this.getAttendanceSummary(tenantId, studentId, 'student');
 
     return {
@@ -359,7 +367,7 @@ export class AttendanceService {
       status?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = {
       tenantId,
@@ -367,25 +375,16 @@ export class AttendanceService {
       type: 'teacher',
     };
 
-    if (filters.startDate) {
-      query.date = { $gte: filters.startDate };
-    }
-    if (filters.endDate) {
-      query.date = { ...query.date, $lte: filters.endDate };
-    }
-    if (filters.status) {
-      query.status = filters.status;
-    }
+    if (filters.startDate) query.date = { $gte: filters.startDate };
+    if (filters.endDate) query.date = { ...query.date, $lte: filters.endDate };
+    if (filters.status) query.status = filters.status;
 
     const page = filters.page || 1;
     const limit = filters.limit || 30;
     const skip = (page - 1) * limit;
 
     const [records, total] = await Promise.all([
-      Attendance.find(query)
-        .sort({ date: -1 })
-        .skip(skip)
-        .limit(limit),
+      Attendance.find(query).sort({ date: -1 }).skip(skip).limit(limit),
       Attendance.countDocuments(query),
     ]);
 
@@ -401,11 +400,10 @@ export class AttendanceService {
     };
   }
 
-  // Get attendance summary for a student/teacher
   static async getAttendanceSummary(
     tenantId: string,
     entityId: string,
-    type: 'student' | 'teacher'
+    type: 'student' | 'teacher',
   ) {
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - 1);
@@ -423,9 +421,8 @@ export class AttendanceService {
     const late = records.filter(r => r.status === 'late').length;
     const halfDay = records.filter(r => r.status === 'half_day').length;
 
-    const percentage = total > 0
-      ? Math.round(((present + late + halfDay) / total) * 100)
-      : 0;
+    const percentage =
+      total > 0 ? Math.round(((present + late + halfDay) / total) * 100) : 0;
 
     return {
       total,
@@ -434,11 +431,7 @@ export class AttendanceService {
       late,
       halfDay,
       percentage,
-      thisMonth: {
-        total,
-        present,
-        percentage,
-      },
+      thisMonth: { total, present, percentage },
     };
   }
 
@@ -448,14 +441,14 @@ export class AttendanceService {
     sectionId: string,
     academicYearId: string,
     month?: number,
-    year?: number
+    year?: number,
   ) {
     const date = new Date();
     const targetMonth = month !== undefined ? month : date.getMonth();
     const targetYear = year !== undefined ? year : date.getFullYear();
 
-    const startDate = new Date(targetYear, targetMonth, 1);
-    const endDate = new Date(targetYear, targetMonth + 1, 0);
+    const startDate = new Date(Date.UTC(targetYear, targetMonth, 1) - IST_OFFSET_MS);
+    const endDate = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59) - IST_OFFSET_MS);
 
     const sessions = await AttendanceSession.find({
       tenantId,
@@ -465,7 +458,6 @@ export class AttendanceService {
       date: { $gte: startDate, $lte: endDate },
     }).sort({ date: 1 });
 
-    // Get all students in the section
     const students = await Student.find({
       tenantId,
       status: 'active',
@@ -473,7 +465,6 @@ export class AttendanceService {
       $or: [{ sectionId }, { section: sectionId }],
     }).select('_id firstName lastName rollNo sectionId section');
 
-    // Get daily attendance for each student
     const attendanceData = await Attendance.find({
       tenantId,
       sectionId,
@@ -503,7 +494,8 @@ export class AttendanceService {
         late,
         halfDay,
         total,
-        percentage: total > 0 ? Math.round(((present + late + halfDay) / total) * 100) : 0,
+        percentage:
+          total > 0 ? Math.round(((present + late + halfDay) / total) * 100) : 0,
       };
     }
 
@@ -523,7 +515,9 @@ export class AttendanceService {
       summary: {
         totalStudents,
         totalDays,
-        averageAttendance: sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) / (sessions.length || 1),
+        averageAttendance:
+          sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) /
+          (sessions.length || 1),
       },
     };
   }
@@ -533,12 +527,11 @@ export class AttendanceService {
     tenantId: string,
     date: Date,
     sectionId: string,
-    type: 'student' | 'teacher'
+    type: 'student' | 'teacher',
   ) {
-    // Get absent students
     const absentStudents = await Attendance.find({
       tenantId,
-      date: date,
+      date,
       sectionId,
       type: 'student',
       status: 'absent',
@@ -546,12 +539,11 @@ export class AttendanceService {
 
     if (absentStudents.length === 0) return;
 
-    // In production, send SMS/Email notifications
-    // For MVP, log the notifications
-    console.log(`📧 Sending attendance notifications for ${absentStudents.length} students`);
+    console.log(
+      `📧 Sending attendance notifications for ${absentStudents.length} students`,
+    );
     console.log(`📅 Date: ${date.toISOString().split('T')[0]}`);
 
-    // Log absent students
     for (const record of absentStudents) {
       const student = await Student.findById(record.entityId);
       if (student) {
@@ -562,10 +554,6 @@ export class AttendanceService {
         }
       }
     }
-
-    // TODO: Implement email/SMS integration
-    // - SendGrid for emails
-    // - Twilio for SMS
   }
 
   // Mark holiday
@@ -577,15 +565,13 @@ export class AttendanceService {
       sectionId?: string;
       academicYearId: string;
       markedBy: string;
-    }
+    },
   ) {
-    const date = new Date(data.date);
-    date.setHours(0, 0, 0, 0);
+    const { date, dateOnly } = normalizeToIST(data.date);
 
-    // Check if holiday already exists
     const existing = await Attendance.findOne({
       tenantId,
-      date: date,
+      dateOnly,
       isHoliday: true,
     });
 
@@ -593,10 +579,10 @@ export class AttendanceService {
       throw new AppError('Holiday already marked for this date', 409);
     }
 
-    // Create holiday record
     const holiday = await Attendance.create({
       tenantId,
-      date: date,
+      date,
+      dateOnly,
       type: 'student',
       entityId: 'holiday',
       sectionId: data.sectionId || '',
@@ -607,13 +593,13 @@ export class AttendanceService {
       holidayReason: data.reason,
     });
 
-    // Also create a session with holiday status
     if (data.sectionId) {
       await AttendanceSession.create({
         tenantId,
         academicYearId: data.academicYearId,
         sectionId: data.sectionId,
-        date: date,
+        date,
+        dateOnly,
         type: 'student',
         totalPresent: 0,
         totalAbsent: 0,
@@ -632,26 +618,31 @@ export class AttendanceService {
   static async getAttendanceStats(
     tenantId: string,
     academicYearId: string,
-    sectionId?: string
+    sectionId?: string,
   ) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayRaw = new Date();
+    const { dateOnly: todayDateOnly } = normalizeToIST(todayRaw);
 
-    // Today's attendance
     const todaySession = await AttendanceSession.findOne({
       tenantId,
       academicYearId,
       sectionId: sectionId || { $exists: true },
-      date: today,
+      dateOnly: todayDateOnly,
     });
 
-    // This month's stats
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthStartRaw = new Date(
+      todayRaw.getFullYear(),
+      todayRaw.getMonth(),
+      1,
+    );
+    const { date: monthStart } = normalizeToIST(monthStartRaw);
+    const { date: today } = normalizeToIST(todayRaw);
+
     const monthSessions = await AttendanceSession.find({
       tenantId,
       academicYearId,
       sectionId: sectionId || { $exists: true },
-      date: { $gte: startOfMonth, $lte: today },
+      date: { $gte: monthStart, $lte: today },
     });
 
     const monthStats = monthSessions.reduce(
@@ -664,22 +655,25 @@ export class AttendanceService {
         days: acc.days + 1,
         percentage: acc.percentage + s.attendancePercentage,
       }),
-      { present: 0, absent: 0, late: 0, halfDay: 0, total: 0, days: 0, percentage: 0 }
+      { present: 0, absent: 0, late: 0, halfDay: 0, total: 0, days: 0, percentage: 0 },
     );
 
-    const avgPercentage = monthStats.days > 0
-      ? Math.round(monthStats.percentage / monthStats.days)
-      : 0;
+    const avgPercentage =
+      monthStats.days > 0
+        ? Math.round(monthStats.percentage / monthStats.days)
+        : 0;
 
     return {
-      today: todaySession ? {
-        present: todaySession.totalPresent,
-        absent: todaySession.totalAbsent,
-        late: todaySession.totalLate,
-        halfDay: todaySession.totalHalfDay,
-        total: todaySession.totalStudents,
-        percentage: todaySession.attendancePercentage,
-      } : null,
+      today: todaySession
+        ? {
+            present: todaySession.totalPresent,
+            absent: todaySession.totalAbsent,
+            late: todaySession.totalLate,
+            halfDay: todaySession.totalHalfDay,
+            total: todaySession.totalStudents,
+            percentage: todaySession.attendancePercentage,
+          }
+        : null,
       thisMonth: {
         ...monthStats,
         averagePercentage: avgPercentage,
@@ -688,21 +682,13 @@ export class AttendanceService {
     };
   }
 
-  // Get overall attendance statistics
   private static async getOverallAttendanceStats(
     tenantId: string,
     academicYearId: string,
-    sectionId?: string
+    sectionId?: string,
   ) {
-    const query: any = {
-      tenantId,
-      academicYearId,
-      type: 'student',
-    };
-
-    if (sectionId) {
-      query.sectionId = sectionId;
-    }
+    const query: any = { tenantId, academicYearId, type: 'student' };
+    if (sectionId) query.sectionId = sectionId;
 
     const sessions = await AttendanceSession.find(query);
 
@@ -720,24 +706,29 @@ export class AttendanceService {
     const totalAbsent = sessions.reduce((acc, s) => acc + s.totalAbsent, 0);
 
     const sortedByPercentage = [...sessions].sort(
-      (a, b) => b.attendancePercentage - a.attendancePercentage
+      (a, b) => b.attendancePercentage - a.attendancePercentage,
     );
 
     return {
       totalDays: sessions.length,
       averageAttendance: Math.round(
-        sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) / sessions.length
+        sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) / sessions.length,
       ),
       totalPresent,
       totalAbsent,
-      bestDay: sortedByPercentage[0] ? {
-        date: sortedByPercentage[0].date,
-        percentage: sortedByPercentage[0].attendancePercentage,
-      } : null,
-      worstDay: sortedByPercentage[sortedByPercentage.length - 1] ? {
-        date: sortedByPercentage[sortedByPercentage.length - 1].date,
-        percentage: sortedByPercentage[sortedByPercentage.length - 1].attendancePercentage,
-      } : null,
+      bestDay: sortedByPercentage[0]
+        ? {
+            date: sortedByPercentage[0].date,
+            percentage: sortedByPercentage[0].attendancePercentage,
+          }
+        : null,
+      worstDay: sortedByPercentage[sortedByPercentage.length - 1]
+        ? {
+            date: sortedByPercentage[sortedByPercentage.length - 1].date,
+            percentage:
+              sortedByPercentage[sortedByPercentage.length - 1].attendancePercentage,
+          }
+        : null,
     };
   }
 }

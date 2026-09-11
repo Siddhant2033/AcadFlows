@@ -28,6 +28,18 @@ const statusSchema = z.enum(['active', 'inactive', 'archived'], {
   errorMap: () => ({ message: 'Status must be active, inactive, or archived' }),
 });
 
+// Shared enum — must match the Mongoose enum on Student.guardians[].relationship
+const relationshipEnum = z.enum([
+  'father',
+  'mother',
+  'guardian',
+  'grandfather',
+  'grandmother',
+  'uncle',
+  'aunt',
+  'other',
+]);
+
 const addressSchema = z.object({
   street: z.string().optional(),
   city: z.string().optional(),
@@ -83,7 +95,8 @@ export const registerSchema = z
     joiningDate: z.string().optional(),
 
     // ── Guardian ──
-    relationship: z.string().optional(),
+    // Relationship is now restricted to the same enum as the Mongoose schema.
+    relationship: relationshipEnum.optional(),
     occupation: z.string().optional(),
     children: z.array(childLinkSchema).optional(),
   })
@@ -232,6 +245,7 @@ export const validators = {
   name: nameSchema,
   role: roleSchema,
   status: statusSchema,
+  relationship: relationshipEnum,
 };
 
 export function validate<T>(schema: z.ZodSchema<T>, data: unknown): T {

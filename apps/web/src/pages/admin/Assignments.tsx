@@ -17,9 +17,9 @@ interface Assignment {
   dueDate: string;
   status: string;
   isPublished: boolean;
-  subjectId: { _id: string; name: string; code: string };
-  sectionId: { _id: string; name: string };
-  teacherId: { _id: string; firstName: string; lastName: string };
+  subjectId: { _id: string; name: string; code: string } | string;
+  sectionId: { _id: string; name: string } | string;
+  teacherId: { _id: string; firstName: string; lastName: string } | string;
 }
 
 const typeVariant: Record<
@@ -34,6 +34,17 @@ const typeVariant: Record<
   exam: 'info',
 };
 
+/**
+ * Safely read a resolved reference's field. After the backend fix,
+ * `subjectId` etc. will be objects, but if the API is behind a version
+ * that still returns string IDs, we return a placeholder rather than
+ * `undefined` being interpolated.
+ */
+function refName(ref: any, field = 'name', fallback = '—'): string {
+  if (ref && typeof ref === 'object' && ref[field]) return ref[field];
+  return fallback;
+}
+
 export default function AssignmentsPage() {
   const { user } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -46,27 +57,60 @@ export default function AssignmentsPage() {
     totalPages: 0,
   });
 
+  // The Teacher document's _id — different from the User's id.
+  const [teacherId, setTeacherId] = useState<string | null>(null);
+  const [teacherLookupDone, setTeacherLookupDone] = useState(false);
+
+  // ─── Fetch teacher's own Teacher._id once ──────────────────
   useEffect(() => {
+    if (user?.role !== 'teacher') {
+      setTeacherLookupDone(true);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get('/teachers/me')
+      .then(r => {
+        if (!cancelled) setTeacherId(r.data.data._id);
+      })
+      .catch(err => {
+        console.error('Failed to fetch teacher profile:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setTeacherLookupDone(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  // ─── Fetch assignments when filters/pagination/teacherId ready ───
+  useEffect(() => {
+    if (!teacherLookupDone) return;
     fetchAssignments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, pagination.page]);
+  }, [filters, pagination.page, teacherId, teacherLookupDone]);
 
   const fetchAssignments = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        ...filters,
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString(),
-        ...(user?.role === 'teacher' ? { teacherId: user.id } : {}),
-      });
+      const params = new URLSearchParams();
+      if (filters.status) params.set('status', filters.status);
+      if (filters.type) params.set('type', filters.type);
+      if (filters.search) params.set('search', filters.search);
+      if (user?.role === 'teacher' && teacherId) {
+        params.set('teacherId', teacherId);
+      }
+      params.set('page', pagination.page.toString());
+      params.set('limit', pagination.limit.toString());
+
       const response = await api.get(`/assignments?${params}`);
       setAssignments(response.data.data.items);
-      setPagination({
-        ...pagination,
+      setPagination(prev => ({
+        ...prev,
         total: response.data.data.total,
         totalPages: response.data.data.totalPages,
-      });
+      }));
     } catch (error) {
       console.error('Failed to fetch assignments:', error);
     } finally {
@@ -149,7 +193,11 @@ export default function AssignmentsPage() {
       ) : assignments.length === 0 ? (
         <Card className="text-center py-16">
           <p className="text-5xl mb-3">📝</p>
-          <p className="text-sm text-muted">No assignments found</p>
+          <p className="text-sm text-muted">
+            {user?.role === 'teacher' && !teacherId
+              ? 'Loading your teacher profile...'
+              : 'No assignments found'}
+          </p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -184,8 +232,8 @@ export default function AssignmentsPage() {
               </p>
 
               <div className="space-y-1.5 text-xs flex-1">
-                <Row label="Subject" value={assignment.subjectId?.name || 'N/A'} />
-                <Row label="Section" value={assignment.sectionId?.name || 'N/A'} />
+                <Row label="Subject" value={refName(assignment.subjectId)} />
+                <Row label="Section" value={refName(assignment.sectionId)} />
                 <Row label="Max Score" value={String(assignment.maxScore)} />
                 <Row label="Weightage" value={`${assignment.weightage}%`} />
                 <Row

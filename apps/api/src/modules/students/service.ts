@@ -51,7 +51,14 @@ export class StudentService {
 
   // ─── Authenticated operations ──────────────────────────────
 
-  static async createStudent(data: any) {
+  /**
+   * Create a Student. If `userId` is not provided, a new User account
+   * is created for the student with a generated temporary password.
+   *
+   * Returns { student, tempPassword? } — tempPassword only present when
+   * a new User was auto-created.
+   */
+  static async createStudent(data: any): Promise<{ student: any; tempPassword?: string }> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -60,13 +67,21 @@ export class StudentService {
       const rollNo = await this.generateRollNumber(data.tenantId, data.grade);
 
       let userId = data.userId;
+      let tempPassword: string | undefined;
+
       if (!userId) {
+        // Auto-create a User account for the student.
+        if (!data.password) {
+          tempPassword =
+            'Student@' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
         const user = await User.create(
           [
             {
               tenantId: data.tenantId,
               email: data.email,
-              passwordHash: data.password,
+              passwordHash: data.password || tempPassword!,
               firstName: data.firstName,
               lastName: data.lastName,
               role: 'student',
@@ -83,7 +98,7 @@ export class StudentService {
         userId = user[0]._id.toString();
       }
 
-      // Auto-create enrollment if sectionId provided
+      // Auto-create enrollment if sectionId provided but enrollments is empty
       const enrollments: any[] = data.enrollments || [];
       if (enrollments.length === 0 && data.sectionId) {
         const currentYear = await AcademicYear.findOne({
@@ -122,12 +137,13 @@ export class StudentService {
             religion: data.religion,
             motherTongue: data.motherTongue,
             guardians: data.guardians || [],
-            address: data.address || {
-              city: '',
-              state: '',
-              country: 'India',
-              postalCode: '',
-            },
+            address:
+              data.address || {
+                city: '',
+                state: '',
+                country: 'India',
+                postalCode: '',
+              },
             emergencyContact: data.emergencyContact,
             previousSchool: data.previousSchool,
             medicalInfo: data.medicalInfo,
@@ -141,7 +157,7 @@ export class StudentService {
       await session.commitTransaction();
       session.endSession();
 
-      return student[0];
+      return { student: student[0], tempPassword };
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
@@ -154,6 +170,7 @@ export class StudentService {
     filters: {
       grade?: string;
       section?: string;
+      sectionId?: string;
       status?: string;
       search?: string;
       page?: number;
@@ -164,6 +181,9 @@ export class StudentService {
 
     if (filters.grade) query.grade = filters.grade;
     if (filters.section) query.section = filters.section;
+    // Prefer sectionId (ObjectId string) when provided — this is what
+    // MarkAttendance sends.
+    if (filters.sectionId) query.sectionId = filters.sectionId;
     if (filters.status) query.status = filters.status;
 
     if (filters.search) {
@@ -384,13 +404,10 @@ export class StudentService {
           continue;
         }
 
-        const tempPassword =
-          'Student@' + Math.random().toString(36).substring(2, 8).toUpperCase();
-
+        // Do not pass a password — the service auto-generates and hashes it.
         await this.createStudent({
           tenantId,
           email: data.email,
-          password: tempPassword,
           firstName: data.firstName,
           lastName: data.lastName,
           middleName: data.middleName,
