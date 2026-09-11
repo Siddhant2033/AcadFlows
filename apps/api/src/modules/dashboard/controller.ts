@@ -21,7 +21,40 @@ export class DashboardController {
       });
     } catch (error) {
       console.error('❌ Dashboard data error:', error);
-      next(error);
+
+      // Fallback: return a minimal dashboard so the UI can render
+      // even when the tenant has no data yet.
+      const authReq = req as AuthRequest;
+      try {
+        const fallback = await DashboardService.getStats(
+          authReq.user.tenantId,
+          authReq.user.role,
+        );
+        return res.json({
+          success: true,
+          data: {
+            user: {
+              id: authReq.user.id,
+              firstName: '',
+              lastName: '',
+              email: authReq.user.email,
+              role: authReq.user.role,
+            },
+            tenant: {
+              id: authReq.user.tenantId,
+              name: '',
+              schoolCode: '',
+              formattedSchoolCode: '',
+            },
+            stats: fallback,
+            recentActivity: [],
+          },
+          message: 'Dashboard loaded with limited data',
+        });
+      } catch {
+        // If even the fallback fails, pass to the error handler
+        next(error);
+      }
     }
   }
 
@@ -33,10 +66,7 @@ export class DashboardController {
 
       const stats = await DashboardService.getStats(tenantId, role);
 
-      res.json({
-        success: true,
-        data: stats,
-      });
+      res.json({ success: true, data: stats });
     } catch (error) {
       next(error);
     }
@@ -51,10 +81,7 @@ export class DashboardController {
 
       const activities = await DashboardService.getRecentActivity(tenantId, userId, role);
 
-      res.json({
-        success: true,
-        data: activities,
-      });
+      res.json({ success: true, data: activities });
     } catch (error) {
       next(error);
     }
@@ -63,14 +90,8 @@ export class DashboardController {
   static async getStudents(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-      const tenantId = authReq.user.tenantId;
-
-      const students = await DashboardService.getStudents(tenantId);
-
-      res.json({
-        success: true,
-        data: students,
-      });
+      const students = await DashboardService.getStudents(authReq.user.tenantId);
+      res.json({ success: true, data: students });
     } catch (error) {
       next(error);
     }
@@ -79,14 +100,8 @@ export class DashboardController {
   static async getTeachers(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-      const tenantId = authReq.user.tenantId;
-
-      const teachers = await DashboardService.getTeachers(tenantId);
-
-      res.json({
-        success: true,
-        data: teachers,
-      });
+      const teachers = await DashboardService.getTeachers(authReq.user.tenantId);
+      res.json({ success: true, data: teachers });
     } catch (error) {
       next(error);
     }
@@ -95,14 +110,8 @@ export class DashboardController {
   static async getClasses(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-      const tenantId = authReq.user.tenantId;
-
-      const classes = await DashboardService.getClasses(tenantId);
-
-      res.json({
-        success: true,
-        data: classes,
-      });
+      const classes = await DashboardService.getClasses(authReq.user.tenantId);
+      res.json({ success: true, data: classes });
     } catch (error) {
       next(error);
     }

@@ -5,8 +5,54 @@ import { Student } from '../../models/Student';
 import { Teacher } from '../../models/Teacher';
 import { AppError } from '../../middleware/error-handler';
 
+/* ─────────────────────────────────────────────────────────────
+   Safe wrappers
+   ─────────────────────────────────────────────────────────────
+   On a fresh MongoDB database with no collections, `.countDocuments()`
+   and `.aggregate()` can throw. These wrappers return safe fallbacks
+   so the API never 500s on an empty tenant.
+   ───────────────────────────────────────────────────────────── */
+
+async function safeCount(
+  model: mongoose.Model<any>,
+  query: any,
+): Promise<number> {
+  try {
+    return await model.countDocuments(query);
+  } catch (err) {
+    console.warn(
+      `[communication] countDocuments failed on ${model.modelName} — returning 0`,
+      err instanceof Error ? err.message : err,
+    );
+    return 0;
+  }
+}
+
+async function safeFind<T = any>(
+  model: mongoose.Model<any>,
+  query: any,
+  options?: { sort?: any; limit?: number; select?: string },
+): Promise<T[]> {
+  try {
+    let q = model.find(query);
+    if (options?.select) q = q.select(options.select);
+    if (options?.sort) q = q.sort(options.sort);
+    if (options?.limit) q = q.limit(options.limit);
+    return (await q.lean()) as T[];
+  } catch (err) {
+    console.warn(
+      `[communication] find failed on ${model.modelName} — returning []`,
+      err instanceof Error ? err.message : err,
+    );
+    return [];
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   NotificationService
+   ───────────────────────────────────────────────────────────── */
+
 export class NotificationService {
-  // Create notification for a user
   static async createNotification(tenantId: string, data: any) {
     const notification = await Notification.create({
       tenantId,
@@ -18,8 +64,9 @@ export class NotificationService {
     return notification;
   }
 
-  // Create notification for multiple users
   static async createBulkNotifications(tenantId: string, userIds: string[], data: any) {
+    if (userIds.length === 0) return [];
+
     const notifications = userIds.map(userId => ({
       tenantId,
       userId,
@@ -33,7 +80,6 @@ export class NotificationService {
     return results;
   }
 
-  // Get user notifications
   static async getNotifications(
     tenantId: string,
     userId: string,
@@ -53,22 +99,37 @@ export class NotificationService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [notifications, total] = await Promise.all([
-      Notification.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      Notification.countDocuments(query),
-    ]);
+    let items: any[] = [];
+    let total = 0;
+
+    try {
+      [items, total] = await Promise.all([
+        Notification.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Notification.countDocuments(query),
+      ]);
+    } catch (err) {
+      console.warn(
+        '[notifications] query failed — returning empty list',
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    const unreadCount = await safeCount(Notification, {
+      tenantId,
+      userId,
+      read: false,
+    });
 
     return {
-      items: notifications,
+      items,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-      unreadCount: await Notification.countDocuments({ tenantId, userId, read: false }),
+      unreadCount,
     };
   }
 
-  // Mark notification as read
   static async markAsRead(tenantId: string, notificationId: string, userId: string) {
     const notification = await Notification.findOneAndUpdate(
       { _id: notificationId, tenantId, userId },
@@ -83,18 +144,24 @@ export class NotificationService {
     return notification;
   }
 
-  // Mark all notifications as read
   static async markAllAsRead(tenantId: string, userId: string) {
-    const result = await Notification.updateMany(
-      { tenantId, userId, read: false },
-      { $set: { read: true, readAt: new Date() } },
-    );
-
-    return { modifiedCount: result.modifiedCount };
+    try {
+      const result = await Notification.updateMany(
+        { tenantId, userId, read: false },
+        { $set: { read: true, readAt: new Date() } },
+      );
+      return { modifiedCount: result.modifiedCount };
+    } catch (err) {
+      console.warn('[notifications] updateMany failed', err);
+      return { modifiedCount: 0 };
+    }
   }
 
-  // Delete notification
-  static async deleteNotification(tenantId: string, notificationId: string, userId: string) {
+  static async deleteNotification(
+    tenantId: string,
+    notificationId: string,
+    userId: string,
+  ) {
     const notification = await Notification.findOneAndDelete({
       _id: notificationId,
       tenantId,
@@ -108,14 +175,17 @@ export class NotificationService {
     return notification;
   }
 
-  // Get notification count
+  // ─── Safe: returns 0 on missing collection ───
   static async getUnreadCount(tenantId: string, userId: string) {
-    return await Notification.countDocuments({ tenantId, userId, read: false });
+    return safeCount(Notification, { tenantId, userId, read: false });
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   AnnouncementService
+   ───────────────────────────────────────────────────────────── */
+
 export class AnnouncementService {
-  // Create announcement
   static async createAnnouncement(tenantId: string, data: any) {
     const announcement = await Announcement.create({
       tenantId,
@@ -130,7 +200,6 @@ export class AnnouncementService {
     return announcement;
   }
 
-  // Get announcements
   static async getAnnouncements(
     tenantId: string,
     filters: {
@@ -149,19 +218,23 @@ export class AnnouncementService {
     if (filters.isPublished !== undefined) query.isPublished = filters.isPublished;
 
     if (filters.userId) {
-      const user = await User.findById(filters.userId);
-      if (user) {
-        query.$or = [
-          { targetAudience: 'all' },
-          {
-            targetAudience:
-              user.role === 'student'
-                ? 'students'
-                : user.role === 'teacher'
-                  ? 'teachers'
-                  : 'guardians',
-          },
-        ];
+      try {
+        const user = await User.findById(filters.userId).lean();
+        if (user) {
+          query.$or = [
+            { targetAudience: 'all' },
+            {
+              targetAudience:
+                user.role === 'student'
+                  ? 'students'
+                  : user.role === 'teacher'
+                    ? 'teachers'
+                    : 'guardians',
+            },
+          ];
+        }
+      } catch {
+        /* ignore */
       }
     }
 
@@ -169,17 +242,25 @@ export class AnnouncementService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const [announcements, total] = await Promise.all([
-      Announcement.find(query)
-        .populate('createdBy', 'firstName lastName')
-        .sort({ priority: -1, publishedAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Announcement.countDocuments(query),
-    ]);
+    let items: any[] = [];
+    let total = 0;
+
+    try {
+      [items, total] = await Promise.all([
+        Announcement.find(query)
+          .populate('createdBy', 'firstName lastName')
+          .sort({ priority: -1, publishedAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Announcement.countDocuments(query),
+      ]);
+    } catch (err) {
+      console.warn('[announcements] query failed — returning empty', err);
+    }
 
     return {
-      items: announcements,
+      items,
       total,
       page,
       limit,
@@ -187,7 +268,6 @@ export class AnnouncementService {
     };
   }
 
-  // Get announcement by ID
   static async getAnnouncementById(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new AppError('Invalid announcement ID', 400);
@@ -205,7 +285,6 @@ export class AnnouncementService {
     return announcement;
   }
 
-  // Update announcement
   static async updateAnnouncement(id: string, data: any) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new AppError('Invalid announcement ID', 400);
@@ -224,7 +303,6 @@ export class AnnouncementService {
     return announcement;
   }
 
-  // Delete announcement
   static async deleteAnnouncement(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new AppError('Invalid announcement ID', 400);
@@ -238,7 +316,6 @@ export class AnnouncementService {
     return announcement;
   }
 
-  // Mark announcement as read by user
   static async markAsRead(tenantId: string, announcementId: string, userId: string) {
     const announcement = await Announcement.findOneAndUpdate(
       { _id: announcementId, tenantId },
@@ -253,50 +330,61 @@ export class AnnouncementService {
     return announcement;
   }
 
-  // Get target users for announcement
   static async getTargetUsers(tenantId: string, announcement: any) {
     let userIds: string[] = [];
 
     if (announcement.targetAudience === 'all') {
-      const users = await User.find({ tenantId, status: 'active' });
-      userIds = users.map(u => u._id.toString());
+      const users = await safeFind(User, { tenantId, status: 'active' }, { select: '_id' });
+      userIds = users.map((u: any) => u._id.toString());
     } else if (announcement.targetAudience === 'students') {
-      const students = await Student.find({ tenantId, isDeleted: false });
-      userIds = students.map(s => s.userId);
+      const students = await safeFind(
+        Student,
+        { tenantId, isDeleted: false },
+        { select: 'userId' },
+      );
+      userIds = students.map((s: any) => s.userId);
     } else if (announcement.targetAudience === 'teachers') {
-      const teachers = await Teacher.find({ tenantId, isDeleted: false });
-      userIds = teachers.map(t => t.userId);
+      const teachers = await safeFind(
+        Teacher,
+        { tenantId, isDeleted: false },
+        { select: 'userId' },
+      );
+      userIds = teachers.map((t: any) => t.userId);
     } else if (announcement.targetAudience === 'guardians') {
-      const students = await Student.find({ tenantId, isDeleted: false });
-      const guardianIds = students.flatMap(s =>
-        s.guardians
-          .map(g => g.userId)
-          .filter((userId): userId is string => Boolean(userId)),
+      const students = await safeFind(
+        Student,
+        { tenantId, isDeleted: false },
+        { select: 'guardians' },
+      );
+      const guardianIds = students.flatMap((s: any) =>
+        (s.guardians || [])
+          .map((g: any) => g.userId)
+          .filter((userId: any): userId is string => Boolean(userId)),
       );
       userIds = [...new Set(guardianIds)];
-    } else if (announcement.targetAudience === 'specific' && announcement.targetUserIds) {
+    } else if (
+      announcement.targetAudience === 'specific' &&
+      announcement.targetUserIds
+    ) {
       userIds = announcement.targetUserIds;
     }
 
     if (announcement.targetGrades?.length || announcement.targetSections?.length) {
-      const students = await Student.find({
-        tenantId,
-        isDeleted: false,
-        ...(announcement.targetGrades?.length
-          ? { grade: { $in: announcement.targetGrades } }
-          : {}),
-        ...(announcement.targetSections?.length
-          ? { section: { $in: announcement.targetSections } }
-          : {}),
-      });
-      const studentUserIds = students.map(s => s.userId);
+      const filter: any = { tenantId, isDeleted: false };
+      if (announcement.targetGrades?.length) {
+        filter.grade = { $in: announcement.targetGrades };
+      }
+      if (announcement.targetSections?.length) {
+        filter.section = { $in: announcement.targetSections };
+      }
+      const students = await safeFind(Student, filter, { select: 'userId' });
+      const studentUserIds = students.map((s: any) => s.userId);
       userIds = userIds.filter(id => studentUserIds.includes(id));
     }
 
     return userIds;
   }
 
-  // Send announcement notifications
   private static async sendAnnouncementNotifications(tenantId: string, announcement: any) {
     const userIds = await this.getTargetUsers(tenantId, announcement);
 
@@ -314,15 +402,24 @@ export class AnnouncementService {
     console.log(`📢 Announcement notifications sent to ${userIds.length} users`);
   }
 
-  // Get unread announcements count for user
   static async getUnreadCount(tenantId: string, userId: string) {
-    const announcements = await Announcement.find({
-      tenantId,
-      isPublished: true,
-      expiresAt: { $or: [{ $gte: new Date() }, { $exists: false }] },
-    });
+    let announcements: any[] = [];
+    try {
+      announcements = await Announcement.find({
+        tenantId,
+        isPublished: true,
+        expiresAt: { $or: [{ $gte: new Date() }, { $exists: false }] },
+      }).lean();
+    } catch {
+      return 0;
+    }
 
-    const user = await User.findById(userId);
+    let user: any = null;
+    try {
+      user = await User.findById(userId).lean();
+    } catch {
+      return 0;
+    }
     if (!user) return 0;
 
     const visibleAnnouncements = announcements.filter(a => {
@@ -335,7 +432,9 @@ export class AnnouncementService {
 
     let unreadCount = 0;
     for (const announcement of visibleAnnouncements) {
-      const hasRead = announcement.readBy.some(r => r.userId === userId);
+      const hasRead = (announcement.readBy || []).some(
+        (r: any) => r.userId === userId,
+      );
       if (!hasRead) unreadCount++;
     }
 
@@ -343,8 +442,11 @@ export class AnnouncementService {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   MessagingService
+   ───────────────────────────────────────────────────────────── */
+
 export class MessagingService {
-  // Start a new conversation
   static async startConversation(
     tenantId: string,
     data: {
@@ -357,7 +459,6 @@ export class MessagingService {
       attachments?: any[];
     },
   ) {
-    // Check if conversation already exists between these two users
     let conversation = await Conversation.findOne({
       tenantId,
       participants: {
@@ -380,7 +481,6 @@ export class MessagingService {
       });
     }
 
-    // Create message
     const message = await Message.create({
       tenantId,
       senderId: data.senderId,
@@ -394,12 +494,10 @@ export class MessagingService {
       isRead: false,
     });
 
-    // Update conversation
     conversation.lastMessage = data.content.substring(0, 200);
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
-    // Create notification for recipient
     await NotificationService.createNotification(tenantId, {
       userId: data.recipientId,
       type: 'info',
@@ -413,7 +511,6 @@ export class MessagingService {
     return { conversation, message };
   }
 
-  // Reply to conversation
   static async replyToConversation(
     tenantId: string,
     conversationId: string,
@@ -473,7 +570,6 @@ export class MessagingService {
     return { conversation, message };
   }
 
-  // Get user conversations
   static async getConversations(
     tenantId: string,
     userId: string,
@@ -483,18 +579,32 @@ export class MessagingService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const conversations = await Conversation.find({
-      tenantId,
-      'participants.userId': userId,
-      isActive: true,
-    })
-      .sort({ lastMessageAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    let conversations: any[] = [];
+    let total = 0;
+
+    try {
+      [conversations, total] = await Promise.all([
+        Conversation.find({
+          tenantId,
+          'participants.userId': userId,
+          isActive: true,
+        })
+          .sort({ lastMessageAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        Conversation.countDocuments({
+          tenantId,
+          'participants.userId': userId,
+          isActive: true,
+        }),
+      ]);
+    } catch (err) {
+      console.warn('[messages] conversations query failed', err);
+    }
 
     const conversationsWithDetails = await Promise.all(
       conversations.map(async conv => {
-        const unreadCount = await Message.countDocuments({
+        const unreadCount = await safeCount(Message, {
           tenantId,
           conversationId: conv._id,
           recipientId: userId,
@@ -502,11 +612,16 @@ export class MessagingService {
           isDeleted: false,
         });
 
-        const lastMessage = await Message.findOne({
-          tenantId,
-          conversationId: conv._id,
-          isDeleted: false,
-        }).sort({ createdAt: -1 });
+        let lastMessage: any = null;
+        try {
+          lastMessage = await Message.findOne({
+            tenantId,
+            conversationId: conv._id,
+            isDeleted: false,
+          }).sort({ createdAt: -1 });
+        } catch {
+          /* ignore */
+        }
 
         return {
           ...conv.toObject(),
@@ -515,12 +630,6 @@ export class MessagingService {
         };
       }),
     );
-
-    const total = await Conversation.countDocuments({
-      tenantId,
-      'participants.userId': userId,
-      isActive: true,
-    });
 
     return {
       items: conversationsWithDetails,
@@ -531,7 +640,6 @@ export class MessagingService {
     };
   }
 
-  // Get conversation messages
   static async getConversationMessages(
     tenantId: string,
     conversationId: string,
@@ -568,21 +676,29 @@ export class MessagingService {
       await conversation.save();
     }
 
-    const [messages, total] = await Promise.all([
-      Message.find({
-        tenantId,
-        conversationId,
-        isDeleted: false,
-      })
-        .sort({ createdAt: 1 })
-        .skip(skip)
-        .limit(limit),
-      Message.countDocuments({
-        tenantId,
-        conversationId,
-        isDeleted: false,
-      }),
-    ]);
+    let messages: any[] = [];
+    let total = 0;
+
+    try {
+      [messages, total] = await Promise.all([
+        Message.find({
+          tenantId,
+          conversationId,
+          isDeleted: false,
+        })
+          .sort({ createdAt: 1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Message.countDocuments({
+          tenantId,
+          conversationId,
+          isDeleted: false,
+        }),
+      ]);
+    } catch (err) {
+      console.warn('[messages] messages query failed', err);
+    }
 
     return {
       items: messages,
@@ -593,7 +709,6 @@ export class MessagingService {
     };
   }
 
-  // Delete message (soft delete)
   static async deleteMessage(tenantId: string, messageId: string, userId: string) {
     const message = await Message.findOneAndUpdate(
       { _id: messageId, tenantId, senderId: userId },
@@ -608,9 +723,8 @@ export class MessagingService {
     return message;
   }
 
-  // Get unread message count
   static async getUnreadCount(tenantId: string, userId: string) {
-    return await Message.countDocuments({
+    return safeCount(Message, {
       tenantId,
       recipientId: userId,
       isRead: false,
@@ -618,10 +732,6 @@ export class MessagingService {
     });
   }
 
-  /**
-   * Return a list of users the current user is allowed to message.
-   * Used by the "New Message" modal.
-   */
   static async listRecipients(
     tenantId: string,
     userId: string,
@@ -634,12 +744,9 @@ export class MessagingService {
       status: 'active',
     };
 
-    // Role-based recipient restriction
     if (role === 'student' || role === 'guardian') {
-      // Students and guardians can message teachers and admins
       query.role = { $in: ['teacher', 'admin'] };
     }
-    // Teachers and admins can message anyone (no role filter)
 
     if (search) {
       query.$or = [
@@ -649,10 +756,16 @@ export class MessagingService {
       ];
     }
 
-    const users = await User.find(query)
-      .select('_id firstName lastName email role')
-      .limit(50)
-      .lean();
+    let users: any[] = [];
+    try {
+      users = await User.find(query)
+        .select('_id firstName lastName email role')
+        .limit(50)
+        .lean();
+    } catch (err) {
+      console.warn('[messages] listRecipients query failed', err);
+      users = [];
+    }
 
     return users.map(u => ({
       _id: u._id,

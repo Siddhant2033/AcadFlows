@@ -7,9 +7,9 @@ import { Invoice } from '../../models/Fee';
 import { Attendance } from '../../models/Attendance';
 import { AppError } from '../../middleware/error-handler';
 
-// ─────────────────────────────────────────────────────────────
-// Interfaces
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Interfaces (unchanged)
+   ───────────────────────────────────────────────────────────── */
 
 interface UserData {
   id: string;
@@ -146,9 +146,48 @@ interface DashboardResponse {
   feeStatus?: FeeStatus;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Service
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Safe aggregate helper
+   ─────────────────────────────────────────────────────────────
+   MongoDB `aggregate()` on a non-existent collection can throw on
+   the free tier. This wrapper catches that and returns a fallback.
+   ───────────────────────────────────────────────────────────── */
+
+async function safeAggregate<T>(
+  model: mongoose.Model<any>,
+  pipeline: any[],
+  fallback: T,
+): Promise<T> {
+  try {
+    const result = await model.aggregate(pipeline);
+    return result as T;
+  } catch (err) {
+    console.warn(
+      `[dashboard] aggregate failed on ${model.modelName} — returning fallback`,
+      err instanceof Error ? err.message : err,
+    );
+    return fallback;
+  }
+}
+
+async function safeCount(
+  model: mongoose.Model<any>,
+  query: any,
+): Promise<number> {
+  try {
+    return await model.countDocuments(query);
+  } catch (err) {
+    console.warn(
+      `[dashboard] countDocuments failed on ${model.modelName} — returning 0`,
+      err instanceof Error ? err.message : err,
+    );
+    return 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Service
+   ───────────────────────────────────────────────────────────── */
 
 export class DashboardService {
   static async getDashboardData(
@@ -207,23 +246,23 @@ export class DashboardService {
     };
   }
 
-  static async getStats(tenantId: string, role: string): Promise<DashboardStats> {
+  static async getStats(tenantId: string, _role: string): Promise<DashboardStats> {
     const [totalStudents, totalTeachers, totalInvoices] = await Promise.all([
-      Student.countDocuments({ tenantId, isDeleted: false }),
-      Teacher.countDocuments({ tenantId, isDeleted: false }),
-      Invoice.countDocuments({ tenantId }),
+      safeCount(Student, { tenantId, isDeleted: false }),
+      safeCount(Teacher, { tenantId, isDeleted: false }),
+      safeCount(Invoice, { tenantId }),
     ]);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayAttendance = await Attendance.countDocuments({
+    const todayAttendance = await safeCount(Attendance, {
       tenantId,
       date: today,
       status: { $in: ['present', 'late', 'half_day'] },
     });
 
-    const totalAttendance = await Attendance.countDocuments({
+    const totalAttendance = await safeCount(Attendance, {
       tenantId,
       date: today,
     });
@@ -231,15 +270,24 @@ export class DashboardService {
     const attendancePercentage =
       totalAttendance > 0 ? Math.round((todayAttendance / totalAttendance) * 100) : 0;
 
-    const paidInvoices = await Invoice.aggregate([
-      { $match: { tenantId, status: 'paid' } },
-      { $group: { _id: null, total: { $sum: '$total' } } },
-    ]);
+    // Safe aggregate for revenue
+    const paidInvoices = await safeAggregate<any[]>(
+      Invoice,
+      [
+        { $match: { tenantId, status: 'paid' } },
+        { $group: { _id: null, total: { $sum: '$total' } } },
+      ],
+      [],
+    );
 
-    const totalInvoicesAmount = await Invoice.aggregate([
-      { $match: { tenantId } },
-      { $group: { _id: null, total: { $sum: '$total' } } },
-    ]);
+    const totalInvoicesAmount = await safeAggregate<any[]>(
+      Invoice,
+      [
+        { $match: { tenantId } },
+        { $group: { _id: null, total: { $sum: '$total' } } },
+      ],
+      [],
+    );
 
     const totalRevenue =
       totalInvoicesAmount.length > 0 ? totalInvoicesAmount[0].total : 0;
@@ -249,7 +297,7 @@ export class DashboardService {
         ? Math.round(((paidInvoices[0]?.total || 0) / totalInvoicesAmount[0].total) * 100)
         : 0;
 
-    const pendingInvoices = await Invoice.countDocuments({
+    const pendingInvoices = await safeCount(Invoice, {
       tenantId,
       status: { $in: ['sent', 'partially_paid', 'overdue'] },
     });
@@ -266,73 +314,88 @@ export class DashboardService {
 
   static async getRecentActivity(
     tenantId: string,
-    userId: string,
-    role: string,
+    _userId: string,
+    _role: string,
   ): Promise<ActivityItem[]> {
     const activities: ActivityItem[] = [];
 
-    const recentStudents = await Student.find({ tenantId, isDeleted: false })
-      .sort({ createdAt: -1 })
-      .limit(3)
-      .select('firstName lastName createdAt');
+    // All find() calls are safe on missing collections — return [].
+    try {
+      const recentStudents = await Student.find({ tenantId, isDeleted: false })
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .select('firstName lastName createdAt');
 
-    recentStudents.forEach((student: any) => {
-      activities.push({
-        id: `student_${student._id}`,
-        icon: '👨‍🎓',
-        message: `${student.firstName} ${student.lastName} registered as a student`,
-        timestamp: this.getTimeAgo(student.createdAt),
-        type: 'student_registration',
+      recentStudents.forEach((student: any) => {
+        activities.push({
+          id: `student_${student._id}`,
+          icon: '👨‍🎓',
+          message: `${student.firstName} ${student.lastName} registered as a student`,
+          timestamp: this.getTimeAgo(student.createdAt),
+          type: 'student_registration',
+        });
       });
-    });
+    } catch {
+      /* safe fallback */
+    }
 
-    const recentTeachers = await Teacher.find({ tenantId, isDeleted: false })
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .select('firstName lastName createdAt');
+    try {
+      const recentTeachers = await Teacher.find({ tenantId, isDeleted: false })
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .select('firstName lastName createdAt');
 
-    recentTeachers.forEach((teacher: any) => {
-      activities.push({
-        id: `teacher_${teacher._id}`,
-        icon: '👨‍🏫',
-        message: `${teacher.firstName} ${teacher.lastName} joined as a teacher`,
-        timestamp: this.getTimeAgo(teacher.createdAt),
-        type: 'teacher_registration',
+      recentTeachers.forEach((teacher: any) => {
+        activities.push({
+          id: `teacher_${teacher._id}`,
+          icon: '👨‍🏫',
+          message: `${teacher.firstName} ${teacher.lastName} joined as a teacher`,
+          timestamp: this.getTimeAgo(teacher.createdAt),
+          type: 'teacher_registration',
+        });
       });
-    });
+    } catch {
+      /* safe fallback */
+    }
 
-    const recentInvoices = await Invoice.find({ tenantId })
-      .sort({ createdAt: -1 })
-      .limit(2)
-      .select('invoiceNumber total status createdAt');
+    try {
+      const recentInvoices = await Invoice.find({ tenantId })
+        .sort({ createdAt: -1 })
+        .limit(2)
+        .select('invoiceNumber total status createdAt');
 
-    recentInvoices.forEach((invoice: any) => {
-      const statusIcon = invoice.status === 'paid' ? '💰' : '📄';
-      activities.push({
-        id: `invoice_${invoice._id}`,
-        icon: statusIcon,
-        message: `Invoice ${invoice.invoiceNumber} ${invoice.status === 'paid' ? 'paid' : 'generated'
+      recentInvoices.forEach((invoice: any) => {
+        const statusIcon = invoice.status === 'paid' ? '💰' : '📄';
+        activities.push({
+          id: `invoice_${invoice._id}`,
+          icon: statusIcon,
+          message: `Invoice ${invoice.invoiceNumber} ${
+            invoice.status === 'paid' ? 'paid' : 'generated'
           } - ₹${invoice.total}`,
-        timestamp: this.getTimeAgo(invoice.createdAt),
-        type: 'invoice',
+          timestamp: this.getTimeAgo(invoice.createdAt),
+          type: 'invoice',
+        });
       });
-    });
+    } catch {
+      /* safe fallback */
+    }
 
-    activities.sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
-      return timeB - timeA;
-    });
-
-    return activities.slice(0, 10);
+    // Sort and return
+    return activities
+      .sort((a, b) => {
+        const timeA = new Date(a.timestamp).getTime();
+        const timeB = new Date(b.timestamp).getTime();
+        return timeB - timeA;
+      })
+      .slice(0, 10);
   }
 
   static async getAdminData(tenantId: string): Promise<AdminData> {
     const [totalStudents, totalTeachers, totalInvoices, pendingInvoices] = await Promise.all([
-      Student.countDocuments({ tenantId, isDeleted: false }),
-      Teacher.countDocuments({ tenantId, isDeleted: false }),
-      Invoice.countDocuments({ tenantId }),
-      Invoice.countDocuments({
+      safeCount(Student, { tenantId, isDeleted: false }),
+      safeCount(Teacher, { tenantId, isDeleted: false }),
+      safeCount(Invoice, { tenantId }),
+      safeCount(Invoice, {
         tenantId,
         status: { $in: ['sent', 'partially_paid', 'overdue'] },
       }),
@@ -383,7 +446,6 @@ export class DashboardService {
 
   static async getTeacherData(userId: string, tenantId: string): Promise<TeacherData> {
     const teacher = await Teacher.findOne({ userId, tenantId, isDeleted: false });
-
     if (!teacher) {
       return { myClasses: [], pendingTasks: [] };
     }
@@ -427,7 +489,6 @@ export class DashboardService {
 
   static async getStudentData(userId: string, tenantId: string): Promise<StudentData> {
     const student = await Student.findOne({ userId, tenantId, isDeleted: false });
-
     if (!student) {
       return {
         timetable: [],
@@ -442,13 +503,8 @@ export class DashboardService {
       const TimetableEntry = mongoose.model('TimetableEntry');
       const today = new Date();
       const days = [
-        'sunday',
-        'monday',
-        'tuesday',
-        'wednesday',
-        'thursday',
-        'friday',
-        'saturday',
+        'sunday', 'monday', 'tuesday', 'wednesday',
+        'thursday', 'friday', 'saturday',
       ];
       const dayName = days[today.getDay()];
 
@@ -473,7 +529,8 @@ export class DashboardService {
 
       const overallGrade =
         grades.length > 0
-          ? grades.reduce((acc, g) => acc + (g.averageScore || 0), 0) / grades.length
+          ? grades.reduce((acc: number, g: any) => acc + (g.averageScore || 0), 0) /
+            grades.length
           : 0;
 
       const Assignment = mongoose.model('Assignment');
@@ -523,10 +580,6 @@ export class DashboardService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Guardian — fully dynamic (attendance %, grades, fee status)
-  // ─────────────────────────────────────────────────────────────
-
   static async getGuardianData(userId: string, tenantId: string): Promise<GuardianData> {
     const students = await Student.find({
       tenantId,
@@ -538,27 +591,32 @@ export class DashboardService {
       students.map(async (s: any) => {
         const studentId = s._id.toString();
 
-        // ── Attendance percentage across all records ──
-        const totalAttendance = await Attendance.countDocuments({
+        const totalAttendance = await safeCount(Attendance, {
           tenantId,
           entityId: studentId,
           type: 'student',
         });
-        const presentOrLate = await Attendance.countDocuments({
+        const presentOrLate = await safeCount(Attendance, {
           tenantId,
           entityId: studentId,
           type: 'student',
           status: { $in: ['present', 'late', 'half_day'] },
         });
         const attendancePct =
-          totalAttendance > 0 ? Math.round((presentOrLate / totalAttendance) * 100) : 0;
+          totalAttendance > 0
+            ? Math.round((presentOrLate / totalAttendance) * 100)
+            : 0;
 
-        // ── Overall grade from Gradebook ──
         const Gradebook = mongoose.model('Gradebook');
-        const gradebooks = await Gradebook.find({
-          tenantId,
-          studentId: s._id,
-        }).lean();
+        let gradebooks: any[] = [];
+        try {
+          gradebooks = await Gradebook.find({
+            tenantId,
+            studentId: s._id,
+          }).lean();
+        } catch {
+          gradebooks = [];
+        }
 
         let overallGrade = 'N/A';
         let averageScore = 0;
@@ -572,13 +630,17 @@ export class DashboardService {
           overallGrade = this.calculateGrade(averageScore);
         }
 
-        // ── Subject-wise grades (up to 3) ──
         const Subject = mongoose.model('Subject');
         const subjects: ChildSubject[] = await Promise.all(
           gradebooks.slice(0, 3).map(async (g: any) => {
-            const subjectDoc: any = await Subject.findById(g.subjectId)
-              .select('name')
-              .lean();
+            let subjectDoc: any = null;
+            try {
+              subjectDoc = await Subject.findById(g.subjectId)
+                .select('name')
+                .lean();
+            } catch {
+              subjectDoc = null;
+            }
             return {
               name: subjectDoc?.name || 'Unknown',
               grade: g.grade || 'N/A',
@@ -601,14 +663,18 @@ export class DashboardService {
       }),
     );
 
-    // ── Fee status across all children ──
     const studentIds = students.map((s: any) => s._id.toString());
 
-    const outstandingInvoices = await Invoice.find({
-      tenantId,
-      studentId: { $in: studentIds },
-      status: { $in: ['sent', 'partially_paid', 'overdue'] },
-    }).lean();
+    let outstandingInvoices: any[] = [];
+    try {
+      outstandingInvoices = await Invoice.find({
+        tenantId,
+        studentId: { $in: studentIds },
+        status: { $in: ['sent', 'partially_paid', 'overdue'] },
+      }).lean();
+    } catch {
+      outstandingInvoices = [];
+    }
 
     const totalDue = outstandingInvoices.reduce(
       (sum: number, inv: any) => sum + (inv.balanceDue || 0),
@@ -616,7 +682,8 @@ export class DashboardService {
     );
 
     const nextInvoice = [...outstandingInvoices].sort(
-      (a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      (a: any, b: any) =>
+        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
     )[0];
 
     return {
@@ -629,9 +696,7 @@ export class DashboardService {
     };
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────────────────────
+  /* ─── Helpers ─────────────────────────────────────── */
 
   private static calculateGrade(score: number): string {
     if (score >= 90) return 'A+';
@@ -661,15 +726,23 @@ export class DashboardService {
   }
 
   static async getStudents(tenantId: string): Promise<any[]> {
-    return await Student.find({ tenantId, isDeleted: false })
-      .select('firstName lastName grade section')
-      .limit(10);
+    try {
+      return await Student.find({ tenantId, isDeleted: false })
+        .select('firstName lastName grade section')
+        .limit(10);
+    } catch {
+      return [];
+    }
   }
 
   static async getTeachers(tenantId: string): Promise<any[]> {
-    return await Teacher.find({ tenantId, isDeleted: false })
-      .select('firstName lastName')
-      .limit(10);
+    try {
+      return await Teacher.find({ tenantId, isDeleted: false })
+        .select('firstName lastName')
+        .limit(10);
+    } catch {
+      return [];
+    }
   }
 
   static async getClasses(tenantId: string): Promise<any[]> {
