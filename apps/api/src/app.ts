@@ -20,6 +20,7 @@ import feeRoutes from './modules/fees/routes';
 import assignmentRoutes from './modules/assignments/routes';
 import communicationRoutes from './modules/communication/routes';
 import timetableRoutes from './modules/timetable/routes';
+import documentsRoutes from './modules/documents/routes';
 
 const app: Express = express();
 
@@ -96,6 +97,7 @@ app.use('/api/v1/fees', feeRoutes);
 app.use('/api/v1/assignments', assignmentRoutes);
 app.use('/api/v1/communication', communicationRoutes);
 app.use('/api/v1/timetable', timetableRoutes);
+app.use('/api/v1/documents', documentsRoutes);
 
 // ─────────────────────────────────────────────────────────────
 // Error handling (must be last)

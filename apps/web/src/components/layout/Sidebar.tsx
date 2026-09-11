@@ -86,9 +86,16 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: 'Documents',
+    items: [
+      { label: 'ID Cards', icon: '🪪', path: '/documents/id-cards', roles: ['admin'] },
+    ],
+  },
+  {
     label: 'Account',
     items: [
       { label: 'Profile', icon: '👤', path: '/profile', roles: ['admin', 'teacher', 'student', 'guardian'] },
+      { label: 'Settings', icon: '⚙️', path: '/settings', roles: ['admin'] },
     ],
   },
 ];

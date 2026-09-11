@@ -54,6 +54,8 @@ import StudentFeeHistoryPage from './pages/admin/StudentFeeHistory';
 import LeavesPage from './pages/admin/Leaves';
 import TeacherAttendancePage from './pages/admin/TeacherAttendance';
 import LowAttendancePage from './pages/admin/LowAttendance';
+import SettingsPage from './pages/admin/Settings';
+import IdCardsPage from './pages/admin/IdCards';
 
 function App() {
   return (
@@ -478,6 +480,23 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <LowAttendancePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/documents/id-cards"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <IdCardsPage />
                 </ProtectedRoute>
               }
             />
