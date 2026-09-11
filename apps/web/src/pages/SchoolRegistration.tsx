@@ -1,29 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useTheme } from '../contexts/ThemeContext';
 import { createSchool } from '../lib/tenant';
 import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 
-// Theme-aware styles
-const getInputClass = (theme: any) =>
-  `mt-1.5 block w-full rounded-lg border px-3.5 py-2.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200 ${
-    theme ? 'bg-white border-gray-300 text-gray-900' : 'dark:bg-[#1E293B] dark:border-[#334155] dark:text-[#F1F5F9]'
-  }`;
-
-const getLabelClass = (theme: any) =>
-  `block text-sm font-medium transition-colors duration-200 ${
-    theme ? 'text-gray-700' : 'dark:text-[#94A3B8]'
-  }`;
-
-const getPrimaryBtnClass = () =>
-  'w-full flex justify-center rounded-lg bg-primary-600 py-2.5 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
-
 export default function SchoolRegistrationPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const { mode } = useTheme();
-  const theme = mode === 'light';
 
   const [step, setStep] = useState<'school' | 'admin'>('school');
   const [isLoading, setIsLoading] = useState(false);
@@ -49,17 +32,11 @@ export default function SchoolRegistrationPage() {
   } | null>(null);
 
   const handleSchoolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSchoolData({
-      ...schoolData,
-      [e.target.name]: e.target.value,
-    });
+    setSchoolData({ ...schoolData, [e.target.name]: e.target.value });
   };
 
   const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAdminData({
-      ...adminData,
-      [e.target.name]: e.target.value,
-    });
+    setAdminData({ ...adminData, [e.target.name]: e.target.value });
   };
 
   const handleCreateSchool = async (e: React.FormEvent) => {
@@ -81,7 +58,7 @@ export default function SchoolRegistrationPage() {
         email: schoolData.email || undefined,
       });
 
-      const schoolId = school.id || school._id;
+      const schoolId = school.id || (school as any)._id;
       const schoolCode = school.schoolCode;
 
       if (!schoolId) {
@@ -91,15 +68,20 @@ export default function SchoolRegistrationPage() {
       setCreatedSchool({
         id: schoolId,
         name: school.name,
-        schoolCode: schoolCode,
-        formattedSchoolCode: school.formattedSchoolCode || formatSchoolCode(schoolCode),
+        schoolCode,
+        formattedSchoolCode:
+          school.formattedSchoolCode || formatSchoolCode(schoolCode),
       });
 
       setStep('admin');
       setError('');
     } catch (err: any) {
       console.error('❌ School creation error:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to create school. Please try again.');
+      setError(
+        err.response?.data?.error ||
+          err.message ||
+          'Failed to create school. Please try again.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -149,38 +131,39 @@ export default function SchoolRegistrationPage() {
       navigate('/dashboard');
     } catch (err: any) {
       console.error('❌ Admin registration error:', err);
-      setError(err.response?.data?.error || err.message || 'Registration failed. Please try again.');
+      setError(
+        err.response?.data?.error ||
+          err.message ||
+          'Registration failed. Please try again.',
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const labelClass = getLabelClass(theme);
-  const inputClass = getInputClass(theme);
-  const primaryBtnClass = getPrimaryBtnClass();
+  const inputClass =
+    'mt-1.5 block w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors';
+  const labelClass = 'block text-sm font-medium text-foreground';
 
   return (
-    <div className={`min-h-screen flex transition-colors duration-200 ${
-      theme ? 'bg-white' : 'dark:bg-[#0B0F17]'
-    }`}>
+    <div className="min-h-screen flex bg-background text-foreground">
       {/* Left: form panel */}
       <div className="w-full lg:w-[46%] flex flex-col px-6 sm:px-12 lg:px-16 py-10">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-primary-600 rounded-lg flex items-center justify-center">
+            <div className="w-9 h-9 bg-primary-500 rounded-lg flex items-center justify-center">
               <span className="text-lg">🏫</span>
             </div>
-            <span className={`font-semibold tracking-tight transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              Acad<span className="text-primary-600">Flows</span>
+            <span className="font-semibold text-foreground tracking-tight">
+              Acad<span className="text-primary-500">Flows</span>
             </span>
           </Link>
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <Link to="/" className={`text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-400 hover:text-gray-600' : 'dark:text-[#64748B] dark:hover:text-[#94A3B8]'
-            }`}>
+            <Link
+              to="/"
+              className="text-sm text-muted hover:text-foreground transition-colors"
+            >
               ← Back to home
             </Link>
           </div>
@@ -188,15 +171,15 @@ export default function SchoolRegistrationPage() {
 
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-md mx-auto">
-            <h1 className={`text-3xl font-bold transition-colors duration-200 ${
-              theme ? 'text-gray-900' : 'dark:text-[#F1F5F9]'
-            }`}>
-              {step === 'school' ? 'Register your school' : 'Complete your admin account'}
+            <h1 className="text-3xl font-bold text-foreground">
+              {step === 'school'
+                ? 'Register your school'
+                : 'Complete your admin account'}
             </h1>
-            <p className={`mt-2 text-sm transition-colors duration-200 ${
-              theme ? 'text-gray-500' : 'dark:text-[#94A3B8]'
-            }`}>
-              {step === 'school' ? 'Fill in your school details to get started' : 'Create your admin account to manage your school'}
+            <p className="mt-2 text-sm text-muted">
+              {step === 'school'
+                ? 'Fill in your school details to get started'
+                : 'Create your admin account to manage your school'}
             </p>
 
             {/* Progress steps */}
@@ -204,41 +187,55 @@ export default function SchoolRegistrationPage() {
               <div className="flex items-center flex-1">
                 <div className="flex items-center gap-2">
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 transition-colors duration-200 ${
-                      step === 'school' ? 'bg-primary-600 text-white' : 'bg-green-500 text-white'
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 transition-colors ${
+                      step === 'school'
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-success text-white'
                     }`}
                   >
                     {step === 'school' ? '1' : '✓'}
                   </div>
-                  <span className={`text-xs whitespace-nowrap transition-colors duration-200 ${
-                    step === 'school' ? theme ? 'text-gray-900 font-medium' : 'dark:text-[#F1F5F9] font-medium' : 'text-green-600'
-                  }`}>
+                  <span
+                    className={`text-xs whitespace-nowrap ${
+                      step === 'school'
+                        ? 'text-foreground font-medium'
+                        : 'text-success'
+                    }`}
+                  >
                     School details
                   </span>
                 </div>
-                <div className={`flex-1 h-px mx-3 transition-colors duration-200 ${
-                  step === 'admin' ? 'bg-primary-600' : theme ? 'bg-gray-200' : 'dark:bg-[#1E293B]'
-                }`} />
+                <div
+                  className={`flex-1 h-px mx-3 transition-colors ${
+                    step === 'admin' ? 'bg-primary-500' : 'bg-border'
+                  }`}
+                />
               </div>
               <div className="flex items-center">
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 transition-colors duration-200 ${
-                    step === 'admin' ? 'bg-primary-600 text-white' : theme ? 'bg-gray-100 text-gray-400' : 'dark:bg-[#1E293B] dark:text-[#64748B]'
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ${
+                    step === 'admin'
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-elevated text-muted'
                   }`}
                 >
                   2
                 </div>
-                <span className={`ml-2 text-xs whitespace-nowrap transition-colors duration-200 ${
-                  step === 'admin' ? theme ? 'text-gray-900 font-medium' : 'dark:text-[#F1F5F9] font-medium' : theme ? 'text-gray-400' : 'dark:text-[#64748B]'
-                }`}>
+                <span
+                  className={`ml-2 text-xs whitespace-nowrap ${
+                    step === 'admin'
+                      ? 'text-foreground font-medium'
+                      : 'text-muted'
+                  }`}
+                >
                   Admin account
                 </span>
               </div>
             </div>
 
             {error && (
-              <div className="mt-6 rounded-lg bg-red-50 border border-red-100 p-3">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="mt-6 rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+                <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
               </div>
             )}
 
@@ -247,7 +244,7 @@ export default function SchoolRegistrationPage() {
               <form onSubmit={handleCreateSchool} className="mt-6 space-y-4">
                 <div>
                   <label htmlFor="name" className={labelClass}>
-                    School name <span className="text-red-500">*</span>
+                    School name <span className="text-primary-500">*</span>
                   </label>
                   <input
                     id="name"
@@ -287,7 +284,7 @@ export default function SchoolRegistrationPage() {
                     className={inputClass}
                     value={schoolData.phone}
                     onChange={handleSchoolChange}
-                    placeholder="e.g., +1-555-123-4567"
+                    placeholder="e.g., 9876543210"
                   />
                 </div>
 
@@ -309,7 +306,7 @@ export default function SchoolRegistrationPage() {
                 <button
                   type="submit"
                   disabled={isLoading || !schoolData.name.trim()}
-                  className={primaryBtnClass}
+                  className="w-full flex justify-center rounded-lg bg-primary-500 py-2.5 text-sm font-medium text-white hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isLoading ? 'Creating school...' : 'Create school'}
                 </button>
@@ -319,28 +316,22 @@ export default function SchoolRegistrationPage() {
             {/* Admin Registration Step */}
             {step === 'admin' && createdSchool && (
               <>
-                <div className={`mt-6 rounded-lg border p-4 transition-colors duration-200 ${
-                  theme ? 'bg-green-50 border-green-100' : 'dark:bg-green-900/20 dark:border-green-800'
-                }`}>
-                  <p className={`text-sm font-medium transition-colors duration-200 ${
-                    theme ? 'text-green-800' : 'dark:text-green-400'
-                  }`}>
+                <div className="mt-6 rounded-lg border border-success/30 bg-success/10 p-4">
+                  <p className="text-sm font-medium text-success">
                     ✅ School created successfully
                   </p>
-                  <p className={`text-sm mt-1.5 transition-colors duration-200 ${
-                    theme ? 'text-green-700' : 'dark:text-green-300'
-                  }`}>
+                  <p className="text-sm mt-1.5 text-foreground">
                     School name: <strong>{createdSchool.name}</strong>
                   </p>
-                  <p className={`text-sm transition-colors duration-200 ${
-                    theme ? 'text-green-700' : 'dark:text-green-300'
-                  }`}>
-                    School code: <strong className="font-mono text-base">{createdSchool.formattedSchoolCode}</strong>
+                  <p className="text-sm text-foreground">
+                    School code:{' '}
+                    <strong className="font-mono text-base">
+                      {createdSchool.formattedSchoolCode}
+                    </strong>
                   </p>
-                  <p className={`text-xs mt-2 transition-colors duration-200 ${
-                    theme ? 'text-green-700/80' : 'dark:text-green-300/80'
-                  }`}>
-                    ⚠️ Save this code — students and teachers will need it to join your school.
+                  <p className="text-xs mt-2 text-muted">
+                    ⚠️ Save this code — students and teachers will need it to
+                    join your school.
                   </p>
                 </div>
 
@@ -348,7 +339,7 @@ export default function SchoolRegistrationPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="firstName" className={labelClass}>
-                        First name <span className="text-red-500">*</span>
+                        First name <span className="text-primary-500">*</span>
                       </label>
                       <input
                         id="firstName"
@@ -362,7 +353,7 @@ export default function SchoolRegistrationPage() {
                     </div>
                     <div>
                       <label htmlFor="lastName" className={labelClass}>
-                        Last name <span className="text-red-500">*</span>
+                        Last name <span className="text-primary-500">*</span>
                       </label>
                       <input
                         id="lastName"
@@ -378,7 +369,7 @@ export default function SchoolRegistrationPage() {
 
                   <div>
                     <label htmlFor="adminEmail" className={labelClass}>
-                      Email <span className="text-red-500">*</span>
+                      Email <span className="text-primary-500">*</span>
                     </label>
                     <input
                       id="adminEmail"
@@ -394,7 +385,7 @@ export default function SchoolRegistrationPage() {
 
                   <div>
                     <label htmlFor="password" className={labelClass}>
-                      Password <span className="text-red-500">*</span>
+                      Password <span className="text-primary-500">*</span>
                     </label>
                     <input
                       id="password"
@@ -410,7 +401,7 @@ export default function SchoolRegistrationPage() {
 
                   <div>
                     <label htmlFor="confirmPassword" className={labelClass}>
-                      Confirm password <span className="text-red-500">*</span>
+                      Confirm password <span className="text-primary-500">*</span>
                     </label>
                     <input
                       id="confirmPassword"
@@ -423,7 +414,11 @@ export default function SchoolRegistrationPage() {
                     />
                   </div>
 
-                  <button type="submit" disabled={isLoading} className={primaryBtnClass}>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full flex justify-center rounded-lg bg-primary-500 py-2.5 text-sm font-medium text-white hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
                     {isLoading ? 'Creating admin account...' : 'Complete registration'}
                   </button>
                 </form>

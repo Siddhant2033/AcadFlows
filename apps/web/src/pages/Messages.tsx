@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../lib/api';
-import { Card, Button, Input, Badge } from '../components/ui';
+import { Card, Button, Input, Badge, Label } from '../components/ui';
 import { DashboardLayout, PageHeader } from '../components/layout';
 import { formatTimeAgo } from '../lib/format';
 import { cn } from '../lib/cn';
@@ -25,6 +25,13 @@ interface Message {
   isRead: boolean;
 }
 
+interface Recipient {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
 export default function MessagesPage() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -35,6 +42,7 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showNewModal, setShowNewModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -140,6 +148,15 @@ export default function MessagesPage() {
               { label: 'Messages' },
             ]}
             className="mb-4"
+            actions={
+              <Button
+                variant="primary"
+                leftIcon="➕"
+                onClick={() => setShowNewModal(true)}
+              >
+                New Message
+              </Button>
+            }
           />
         </div>
 
@@ -175,7 +192,7 @@ export default function MessagesPage() {
                     <p className="text-4xl mb-2">💬</p>
                     <p className="text-sm text-muted">No conversations</p>
                     <p className="text-xs text-muted mt-1">
-                      Start by replying to a message
+                      Click "New Message" to start one
                     </p>
                   </div>
                 ) : (
@@ -313,9 +330,7 @@ export default function MessagesPage() {
                               <p
                                 className={cn(
                                   'text-[10px] mt-1 text-right',
-                                  isOwn
-                                    ? 'text-white/70'
-                                    : 'text-muted',
+                                  isOwn ? 'text-white/70' : 'text-muted',
                                 )}
                               >
                                 {formatTime(message.createdAt)}
@@ -367,6 +382,202 @@ export default function MessagesPage() {
           </Card>
         </div>
       </div>
+
+      {/* New Message Modal */}
+      {showNewModal && (
+        <NewMessageModal
+          onClose={() => setShowNewModal(false)}
+          onSuccess={conversationId => {
+            setShowNewModal(false);
+            fetchConversations();
+            setSelectedConversation(conversationId);
+          }}
+        />
+      )}
     </DashboardLayout>
+  );
+}
+
+/* ─────────────────────────────────────────────────────── */
+/* New Message Modal                                        */
+/* ─────────────────────────────────────────────────────── */
+
+function NewMessageModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: (conversationId: string) => void;
+}) {
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [search, setSearch] = useState('');
+  const [selectedRecipient, setSelectedRecipient] = useState<Recipient | null>(null);
+  const [subject, setSubject] = useState('');
+  const [content, setContent] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api
+      .get('/communication/messages/recipients')
+      .then(r => {
+        if (!cancelled) setRecipients(r.data.data || []);
+      })
+      .catch(err => {
+        if (!cancelled) {
+          console.error('Failed to fetch recipients:', err);
+          setError('Failed to load recipients');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = search
+    ? recipients.filter(
+        r =>
+          r.name.toLowerCase().includes(search.toLowerCase()) ||
+          r.email.toLowerCase().includes(search.toLowerCase()) ||
+          r.role.toLowerCase().includes(search.toLowerCase()),
+      )
+    : recipients;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRecipient) {
+      setError('Please select a recipient');
+      return;
+    }
+    if (!content.trim()) {
+      setError('Message content is required');
+      return;
+    }
+
+    setSending(true);
+    setError('');
+
+    try {
+      const response = await api.post('/communication/messages', {
+        recipientId: selectedRecipient._id,
+        recipientType: selectedRecipient.role,
+        subject: subject.trim() || undefined,
+        content: content.trim(),
+      });
+
+      const conversationId = response.data.data.conversation._id;
+      onSuccess(conversationId);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send message');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+      <Card
+        padding="lg"
+        className="max-w-lg w-full animate-scale-in max-h-[90vh] overflow-y-auto"
+      >
+        <h3 className="text-xl font-bold text-foreground mb-5">New Message</h3>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label required>Search Recipients</Label>
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Name, email, or role..."
+              leftIcon="🔍"
+            />
+          </div>
+
+          <div className="max-h-48 overflow-y-auto border border-border rounded-lg">
+            {loading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-[3px] border-border border-t-primary-500" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="p-3 text-sm text-muted text-center">
+                No recipients found
+              </p>
+            ) : (
+              filtered.slice(0, 50).map(recipient => (
+                <button
+                  key={recipient._id}
+                  type="button"
+                  onClick={() => setSelectedRecipient(recipient)}
+                  className={cn(
+                    'w-full text-left px-3 py-2 text-sm border-b border-border last:border-0',
+                    'hover:bg-elevated transition-colors',
+                    selectedRecipient?._id === recipient._id &&
+                      'bg-primary-500/10 text-primary-700 dark:text-primary-400',
+                  )}
+                >
+                  <span className="font-medium">{recipient.name}</span>
+                  <span className="text-xs text-muted ml-2 capitalize">
+                    ({recipient.role}) · {recipient.email}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+          {selectedRecipient && (
+            <div className="p-3 rounded-lg bg-primary-500/10 border border-primary-500/20 text-sm text-primary-700 dark:text-primary-400">
+              To: <strong>{selectedRecipient.name}</strong> ({selectedRecipient.role})
+            </div>
+          )}
+
+          <div>
+            <Label>Subject</Label>
+            <Input
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+
+          <div>
+            <Label required>Message</Label>
+            <textarea
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              rows={4}
+              required
+              placeholder="Type your message..."
+              className="block w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={sending}
+              disabled={!selectedRecipient || !content.trim()}
+            >
+              Send Message
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
   );
 }

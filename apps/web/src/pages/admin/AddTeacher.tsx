@@ -7,7 +7,6 @@ import {
   CardDescription,
   Button,
   Input,
-  Label,
   Select,
   Textarea,
   PhoneInput,
@@ -136,76 +135,86 @@ export default function AddTeacherPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState<TeacherFormData>(defaultFormData);
-  const [subjects, setSubjects] = useState<{ _id: string; name: string; code: string }[]>(
-    [],
-  );
+  const [subjects, setSubjects] = useState<
+    { _id: string; name: string; code: string }[]
+  >([]);
 
   const isEditMode = !!id;
 
+  // ─── Load reference data FIRST, then teacher (if editing) ─────
+  // This fixes the race condition where fetchTeacher ran before
+  // fetchSubjects finished, leaving subject selections unpopulated.
   useEffect(() => {
-    fetchSubjects();
-    if (isEditMode) fetchTeacher();
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      try {
+        // 1. Fetch subjects list first
+        const subjectsRes = await api.get('/academic/subjects');
+        if (cancelled) return;
+        setSubjects(subjectsRes.data.data || []);
+
+        // 2. If editing, fetch teacher AFTER subjects are loaded
+        if (isEditMode) {
+          const teacherRes = await api.get(`/teachers/${id}`);
+          if (cancelled) return;
+          const data = teacherRes.data.data;
+
+          setFormData({
+            firstName: data.firstName,
+            lastName: data.lastName,
+            middleName: data.middleName || '',
+            email: data.email,
+            password: '',
+            dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split('T')[0] : '',
+            gender: data.gender || 'male',
+            maritalStatus: data.maritalStatus || 'single',
+            nationality: data.nationality || 'Indian',
+            religion: data.religion || '',
+            phone: data.phone || '',
+            alternativeEmail: data.alternativeEmail || '',
+            address: data.address || defaultFormData.address,
+            qualifications:
+              data.qualifications?.length > 0
+                ? data.qualifications
+                : defaultFormData.qualifications,
+            experience:
+              data.experience?.length > 0
+                ? data.experience.map((e: any) => ({
+                    ...e,
+                    fromDate: e.fromDate ? e.fromDate.split('T')[0] : '',
+                    toDate: e.toDate ? e.toDate.split('T')[0] : '',
+                  }))
+                : defaultFormData.experience,
+            subjects: data.subjects || [],
+            specialization: data.specialization || [],
+            joiningDate: data.joiningDate ? data.joiningDate.split('T')[0] : '',
+            employmentType: data.employmentType || 'permanent',
+            contractEndDate: data.contractEndDate
+              ? data.contractEndDate.split('T')[0]
+              : '',
+            salary: data.salary || defaultFormData.salary,
+            bankDetails: data.bankDetails || defaultFormData.bankDetails,
+            emergencyContact:
+              data.emergencyContact || defaultFormData.emergencyContact,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load teacher data:', err);
+          setError(getErrorMessage(err));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-
-  const fetchSubjects = async () => {
-    try {
-      const response = await api.get('/academic/subjects');
-      setSubjects(response.data.data);
-    } catch (err) {
-      console.error('Failed to fetch subjects:', err);
-    }
-  };
-
-  const fetchTeacher = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/teachers/${id}`);
-      const data = response.data.data;
-      setFormData({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        middleName: data.middleName || '',
-        email: data.email,
-        password: '',
-        dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split('T')[0] : '',
-        gender: data.gender || 'male',
-        maritalStatus: data.maritalStatus || 'single',
-        nationality: data.nationality || 'Indian',
-        religion: data.religion || '',
-        phone: data.phone || '',
-        alternativeEmail: data.alternativeEmail || '',
-        address: data.address || defaultFormData.address,
-        qualifications:
-          data.qualifications?.length > 0
-            ? data.qualifications
-            : defaultFormData.qualifications,
-        experience:
-          data.experience?.length > 0
-            ? data.experience.map((e: any) => ({
-                ...e,
-                fromDate: e.fromDate ? e.fromDate.split('T')[0] : '',
-                toDate: e.toDate ? e.toDate.split('T')[0] : '',
-              }))
-            : defaultFormData.experience,
-        subjects: data.subjects || [],
-        specialization: data.specialization || [],
-        joiningDate: data.joiningDate ? data.joiningDate.split('T')[0] : '',
-        employmentType: data.employmentType || 'permanent',
-        contractEndDate: data.contractEndDate
-          ? data.contractEndDate.split('T')[0]
-          : '',
-        salary: data.salary || defaultFormData.salary,
-        bankDetails: data.bankDetails || defaultFormData.bankDetails,
-        emergencyContact: data.emergencyContact || defaultFormData.emergencyContact,
-      });
-    } catch (err) {
-      console.error('Failed to fetch teacher:', err);
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleChange = (field: string, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -290,7 +299,6 @@ export default function AddTeacherPage() {
     setSaving(true);
     setError('');
 
-    // Frontend validation
     if (!formData.phone || formData.phone.length !== 10) {
       setError('Please enter a valid 10-digit phone number');
       setSaving(false);
@@ -330,18 +338,17 @@ export default function AddTeacherPage() {
         emergencyContact: formData.emergencyContact,
       };
 
-      // Only include fields with values
       if (formData.middleName?.trim()) payload.middleName = formData.middleName.trim();
       if (formData.password?.trim()) payload.password = formData.password;
       if (formData.maritalStatus) payload.maritalStatus = formData.maritalStatus;
-      if (formData.nationality?.trim()) payload.nationality = formData.nationality.trim();
+      if (formData.nationality?.trim())
+        payload.nationality = formData.nationality.trim();
       if (formData.religion?.trim()) payload.religion = formData.religion.trim();
       if (formData.alternativeEmail?.trim())
         payload.alternativeEmail = formData.alternativeEmail.trim();
       if (formData.specialization?.length > 0)
         payload.specialization = formData.specialization;
 
-      // Contract end date only when relevant
       if (
         (formData.employmentType === 'contract' ||
           formData.employmentType === 'probation') &&
@@ -350,14 +357,18 @@ export default function AddTeacherPage() {
         payload.contractEndDate = new Date(formData.contractEndDate);
       }
 
-      // Salary: only send if amount is > 0
       if (formData.salary?.amount && formData.salary.amount > 0) {
         payload.salary = formData.salary;
       }
 
-      // Bank details: only send if at least one field is filled
       const bd = formData.bankDetails;
-      if (bd && (bd.bankName?.trim() || bd.accountNumber?.trim() || bd.ifscCode?.trim() || bd.branchName?.trim())) {
+      if (
+        bd &&
+        (bd.bankName?.trim() ||
+          bd.accountNumber?.trim() ||
+          bd.ifscCode?.trim() ||
+          bd.branchName?.trim())
+      ) {
         payload.bankDetails = {
           bankName: bd.bankName?.trim() || '',
           accountNumber: bd.accountNumber?.trim() || '',
@@ -366,7 +377,6 @@ export default function AddTeacherPage() {
         };
       }
 
-      // Qualifications: only include filled-in ones
       const validQuals = formData.qualifications.filter(
         q => q.degree?.trim() && q.institution?.trim(),
       );
@@ -380,7 +390,6 @@ export default function AddTeacherPage() {
         }));
       }
 
-      // Experience: only include filled-in ones
       const validExp = formData.experience.filter(
         e => e.institution?.trim() && e.position?.trim() && e.fromDate,
       );
@@ -598,7 +607,11 @@ export default function AddTeacherPage() {
                             )}
                           >
                             {isSelected && (
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <svg
+                                className="w-3 h-3"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
                                 <path
                                   fillRule="evenodd"
                                   d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -608,7 +621,9 @@ export default function AddTeacherPage() {
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{subject.name}</p>
+                            <p className="text-sm font-medium truncate">
+                              {subject.name}
+                            </p>
                             <p className="text-[10px] text-muted">{subject.code}</p>
                           </div>
                         </button>
@@ -677,7 +692,11 @@ export default function AddTeacherPage() {
                         <Input
                           value={qual.institution}
                           onChange={e =>
-                            handleQualificationChange(index, 'institution', e.target.value)
+                            handleQualificationChange(
+                              index,
+                              'institution',
+                              e.target.value,
+                            )
                           }
                           required
                           placeholder="e.g., Delhi University"
@@ -703,7 +722,11 @@ export default function AddTeacherPage() {
                         <Input
                           value={qual.specialization}
                           onChange={e =>
-                            handleQualificationChange(index, 'specialization', e.target.value)
+                            handleQualificationChange(
+                              index,
+                              'specialization',
+                              e.target.value,
+                            )
                           }
                           placeholder="e.g., Pure Mathematics"
                         />
@@ -811,7 +834,11 @@ export default function AddTeacherPage() {
                             type="checkbox"
                             checked={exp.isCurrent}
                             onChange={e =>
-                              handleExperienceChange(index, 'isCurrent', e.target.checked)
+                              handleExperienceChange(
+                                index,
+                                'isCurrent',
+                                e.target.checked,
+                              )
                             }
                             className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500"
                           />
@@ -825,7 +852,11 @@ export default function AddTeacherPage() {
                           <Textarea
                             value={exp.responsibilities}
                             onChange={e =>
-                              handleExperienceChange(index, 'responsibilities', e.target.value)
+                              handleExperienceChange(
+                                index,
+                                'responsibilities',
+                                e.target.value,
+                              )
                             }
                             rows={2}
                             placeholder="Key responsibilities and achievements"

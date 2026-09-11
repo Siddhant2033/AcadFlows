@@ -54,13 +54,10 @@ export class CommunicationController {
           type: type as string,
           page: page ? parseInt(page as string) : 1,
           limit: limit ? parseInt(limit as string) : 20,
-        }
+        },
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -74,7 +71,7 @@ export class CommunicationController {
       const notification = await NotificationService.markAsRead(
         authReq.user.tenantId,
         id,
-        authReq.user.id
+        authReq.user.id,
       );
 
       res.json({
@@ -93,7 +90,7 @@ export class CommunicationController {
 
       const result = await NotificationService.markAllAsRead(
         authReq.user.tenantId,
-        authReq.user.id
+        authReq.user.id,
       );
 
       res.json({
@@ -114,13 +111,10 @@ export class CommunicationController {
       await NotificationService.deleteNotification(
         authReq.user.tenantId,
         id,
-        authReq.user.id
+        authReq.user.id,
       );
 
-      res.json({
-        success: true,
-        message: 'Notification deleted',
-      });
+      res.json({ success: true, message: 'Notification deleted' });
     } catch (error) {
       next(error);
     }
@@ -132,13 +126,10 @@ export class CommunicationController {
 
       const count = await NotificationService.getUnreadCount(
         authReq.user.tenantId,
-        authReq.user.id
+        authReq.user.id,
       );
 
-      res.json({
-        success: true,
-        data: { count },
-      });
+      res.json({ success: true, data: { count } });
     } catch (error) {
       next(error);
     }
@@ -156,7 +147,7 @@ export class CommunicationController {
         {
           ...validated,
           createdBy: authReq.user.id,
-        }
+        },
       );
 
       res.status(201).json({
@@ -180,16 +171,13 @@ export class CommunicationController {
           type: type as string,
           priority: priority as string,
           isPublished: isPublished === 'true' ? true : isPublished === 'false' ? false : undefined,
-          userId: userId as string || authReq.user.id,
+          userId: (userId as string) || authReq.user.id,
           page: page ? parseInt(page as string) : 1,
           limit: limit ? parseInt(limit as string) : 20,
-        }
+        },
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -200,10 +188,7 @@ export class CommunicationController {
       const { id } = req.params;
       const announcement = await AnnouncementService.getAnnouncementById(id);
 
-      res.json({
-        success: true,
-        data: announcement,
-      });
+      res.json({ success: true, data: announcement });
     } catch (error) {
       next(error);
     }
@@ -231,10 +216,7 @@ export class CommunicationController {
       const { id } = req.params;
       await AnnouncementService.deleteAnnouncement(id);
 
-      res.json({
-        success: true,
-        message: 'Announcement deleted successfully!',
-      });
+      res.json({ success: true, message: 'Announcement deleted successfully!' });
     } catch (error) {
       next(error);
     }
@@ -248,7 +230,7 @@ export class CommunicationController {
       const announcement = await AnnouncementService.markAsRead(
         authReq.user.tenantId,
         id,
-        authReq.user.id
+        authReq.user.id,
       );
 
       res.json({
@@ -267,13 +249,10 @@ export class CommunicationController {
 
       const count = await AnnouncementService.getUnreadCount(
         authReq.user.tenantId,
-        authReq.user.id
+        authReq.user.id,
       );
 
-      res.json({
-        success: true,
-        data: { count },
-      });
+      res.json({ success: true, data: { count } });
     } catch (error) {
       next(error);
     }
@@ -292,7 +271,7 @@ export class CommunicationController {
           senderId: authReq.user.id,
           senderType: authReq.user.role,
           ...validated,
-        }
+        },
       );
 
       res.status(201).json({
@@ -318,7 +297,7 @@ export class CommunicationController {
           senderId: authReq.user.id,
           senderType: authReq.user.role,
           ...validated,
-        }
+        },
       );
 
       res.json({
@@ -342,13 +321,10 @@ export class CommunicationController {
         {
           page: page ? parseInt(page as string) : 1,
           limit: limit ? parseInt(limit as string) : 20,
-        }
+        },
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -367,13 +343,10 @@ export class CommunicationController {
         {
           page: page ? parseInt(page as string) : 1,
           limit: limit ? parseInt(limit as string) : 50,
-        }
+        },
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -387,13 +360,10 @@ export class CommunicationController {
       await MessagingService.deleteMessage(
         authReq.user.tenantId,
         messageId,
-        authReq.user.id
+        authReq.user.id,
       );
 
-      res.json({
-        success: true,
-        message: 'Message deleted successfully!',
-      });
+      res.json({ success: true, message: 'Message deleted successfully!' });
     } catch (error) {
       next(error);
     }
@@ -405,13 +375,36 @@ export class CommunicationController {
 
       const count = await MessagingService.getUnreadCount(
         authReq.user.tenantId,
-        authReq.user.id
+        authReq.user.id,
       );
 
-      res.json({
-        success: true,
-        data: { count },
-      });
+      res.json({ success: true, data: { count } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * List possible message recipients for the current user.
+   * Used by the "New Message" modal.
+   *
+   * Admins / teachers: can message anyone at the school.
+   * Students: can message their teachers and admins.
+   * Guardians: can message their children's teachers and admins.
+   */
+  static async listMessageRecipients(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authReq = req as AuthRequest;
+      const { search } = req.query;
+
+      const recipients = await MessagingService.listRecipients(
+        authReq.user.tenantId,
+        authReq.user.id,
+        authReq.user.role,
+        (search as string) || '',
+      );
+
+      res.json({ success: true, data: recipients });
     } catch (error) {
       next(error);
     }

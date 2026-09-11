@@ -116,77 +116,88 @@ export default function AddStudentPage() {
 
   const isEditMode = !!id;
 
+  // ─── Load reference data FIRST, then student (if editing) ─────
   useEffect(() => {
-    fetchGrades();
-    fetchSections();
-    if (isEditMode) fetchStudent();
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      try {
+        // 1. Fetch grades + sections in parallel
+        const [gradesRes, sectionsRes] = await Promise.all([
+          api.get('/academic/grades'),
+          api.get('/academic/sections'),
+        ]);
+
+        if (cancelled) return;
+
+        const gradesData = gradesRes.data.data || [];
+        const sectionsData = sectionsRes.data.data || [];
+
+        setGrades(gradesData);
+        setSections(sectionsData);
+
+        // 2. If editing, fetch the student AFTER grades are loaded so we
+        //    can match the grade name to a grade ID for the dropdown.
+        if (isEditMode) {
+          const studentRes = await api.get(`/students/${id}`);
+          if (cancelled) return;
+          const data = studentRes.data.data;
+          const matchingGrade = gradesData.find(
+            (g: any) => g.name === data.grade,
+          );
+
+          setFormData({
+            firstName: data.firstName,
+            lastName: data.lastName,
+            middleName: data.middleName || '',
+            email: data.userId?.email || '',
+            password: '',
+            grade: data.grade || '',
+            gradeId: matchingGrade?._id || '',
+            section: data.section || '',
+            sectionId: data.sectionId || '',
+            dateOfBirth: data.dateOfBirth
+              ? data.dateOfBirth.split('T')[0]
+              : '',
+            gender: data.gender || 'other',
+            bloodGroup: data.bloodGroup || '',
+            nationality: data.nationality || 'Indian',
+            religion: data.religion || '',
+            motherTongue: data.motherTongue || '',
+            phone: data.userId?.phone || '',
+            address: data.address || defaultFormData.address,
+            guardians:
+              data.guardians?.length > 0
+                ? data.guardians.map((g: any) => ({
+                    name: g.name,
+                    phone: g.phone,
+                    email: g.email || '',
+                    relationship: g.relationship,
+                    occupation: g.occupation || '',
+                  }))
+                : defaultFormData.guardians,
+            emergencyContact:
+              data.emergencyContact || defaultFormData.emergencyContact,
+            previousSchool: data.previousSchool || defaultFormData.previousSchool,
+            medicalInfo: data.medicalInfo || defaultFormData.medicalInfo,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load student data:', err);
+          setError(getErrorMessage(err));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-
-  const fetchGrades = async () => {
-    try {
-      const response = await api.get('/academic/grades');
-      setGrades(response.data.data);
-    } catch (err) {
-      console.error('Failed to fetch grades:', err);
-    }
-  };
-
-  const fetchSections = async () => {
-    try {
-      const response = await api.get('/academic/sections');
-      setSections(response.data.data);
-    } catch (err) {
-      console.error('Failed to fetch sections:', err);
-    }
-  };
-
-  const fetchStudent = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/students/${id}`);
-      const data = response.data.data;
-      const matchingGrade = grades.find(g => g.name === data.grade);
-
-      setFormData({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        middleName: data.middleName || '',
-        email: data.userId?.email || '',
-        password: '',
-        grade: data.grade || '',
-        gradeId: matchingGrade?._id || '',
-        section: data.section || '',
-        sectionId: data.sectionId || '',
-        dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split('T')[0] : '',
-        gender: data.gender || 'other',
-        bloodGroup: data.bloodGroup || '',
-        nationality: data.nationality || 'Indian',
-        religion: data.religion || '',
-        motherTongue: data.motherTongue || '',
-        phone: data.userId?.phone || '',
-        address: data.address || defaultFormData.address,
-        guardians:
-          data.guardians?.length > 0
-            ? data.guardians.map((g: any) => ({
-                name: g.name,
-                phone: g.phone,
-                email: g.email || '',
-                relationship: g.relationship,
-                occupation: g.occupation || '',
-              }))
-            : defaultFormData.guardians,
-        emergencyContact: data.emergencyContact || defaultFormData.emergencyContact,
-        previousSchool: data.previousSchool || defaultFormData.previousSchool,
-        medicalInfo: data.medicalInfo || defaultFormData.medicalInfo,
-      });
-    } catch (err) {
-      console.error('Failed to fetch student:', err);
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleChange = (field: string, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -248,7 +259,6 @@ export default function AddStudentPage() {
         emergencyContact: formData.emergencyContact,
       };
 
-      // Only include optional fields when they have values
       if (formData.middleName?.trim()) payload.middleName = formData.middleName.trim();
       if (formData.password?.trim()) payload.password = formData.password;
       if (formData.section) payload.section = formData.section;
@@ -261,18 +271,17 @@ export default function AddStudentPage() {
         payload.motherTongue = formData.motherTongue.trim();
       if (formData.phone?.trim()) payload.phone = formData.phone.trim();
 
-      // Guardians: only include those with at least a name
-      const validGuardians = formData.guardians.filter(g => g.name?.trim() && g.phone?.trim());
+      const validGuardians = formData.guardians.filter(
+        g => g.name?.trim() && g.phone?.trim(),
+      );
       if (validGuardians.length > 0) {
         payload.guardians = validGuardians;
       }
 
-      // Previous school: only if a name is provided
       if (formData.previousSchool.name?.trim()) {
         payload.previousSchool = formData.previousSchool;
       }
 
-      // Medical info: only if any field is filled
       const mi = formData.medicalInfo;
       if (
         mi.allergies?.length > 0 ||

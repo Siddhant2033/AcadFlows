@@ -13,7 +13,6 @@ export class NotificationService {
       ...data,
     });
 
-    // In production, emit via WebSocket here
     console.log(`📢 Notification created for user ${data.userId}: ${data.title}`);
 
     return notification;
@@ -28,7 +27,7 @@ export class NotificationService {
     }));
 
     const results = await Notification.insertMany(notifications);
-    
+
     console.log(`📢 ${results.length} notifications created`);
 
     return results;
@@ -43,7 +42,7 @@ export class NotificationService {
       type?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId, userId };
 
@@ -55,10 +54,7 @@ export class NotificationService {
     const skip = (page - 1) * limit;
 
     const [notifications, total] = await Promise.all([
-      Notification.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
+      Notification.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
       Notification.countDocuments(query),
     ]);
 
@@ -77,7 +73,7 @@ export class NotificationService {
     const notification = await Notification.findOneAndUpdate(
       { _id: notificationId, tenantId, userId },
       { $set: { read: true, readAt: new Date() } },
-      { new: true }
+      { new: true },
     );
 
     if (!notification) {
@@ -91,7 +87,7 @@ export class NotificationService {
   static async markAllAsRead(tenantId: string, userId: string) {
     const result = await Notification.updateMany(
       { tenantId, userId, read: false },
-      { $set: { read: true, readAt: new Date() } }
+      { $set: { read: true, readAt: new Date() } },
     );
 
     return { modifiedCount: result.modifiedCount };
@@ -127,7 +123,6 @@ export class AnnouncementService {
       publishedAt: data.isPublished ? new Date() : undefined,
     });
 
-    // Send notifications to target users
     if (data.isPublished) {
       await this.sendAnnouncementNotifications(tenantId, announcement);
     }
@@ -145,7 +140,7 @@ export class AnnouncementService {
       userId?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId };
 
@@ -153,15 +148,19 @@ export class AnnouncementService {
     if (filters.priority) query.priority = filters.priority;
     if (filters.isPublished !== undefined) query.isPublished = filters.isPublished;
 
-    // Filter by user visibility
     if (filters.userId) {
       const user = await User.findById(filters.userId);
       if (user) {
         query.$or = [
           { targetAudience: 'all' },
-          { targetAudience: user.role === 'student' ? 'students' : 
-                          user.role === 'teacher' ? 'teachers' : 
-                          'guardians' },
+          {
+            targetAudience:
+              user.role === 'student'
+                ? 'students'
+                : user.role === 'teacher'
+                  ? 'teachers'
+                  : 'guardians',
+          },
         ];
       }
     }
@@ -194,8 +193,10 @@ export class AnnouncementService {
       throw new AppError('Invalid announcement ID', 400);
     }
 
-    const announcement = await Announcement.findById(id)
-      .populate('createdBy', 'firstName lastName');
+    const announcement = await Announcement.findById(id).populate(
+      'createdBy',
+      'firstName lastName',
+    );
 
     if (!announcement) {
       throw new AppError('Announcement not found', 404);
@@ -213,7 +214,7 @@ export class AnnouncementService {
     const announcement = await Announcement.findByIdAndUpdate(
       id,
       { $set: data },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!announcement) {
@@ -242,7 +243,7 @@ export class AnnouncementService {
     const announcement = await Announcement.findOneAndUpdate(
       { _id: announcementId, tenantId },
       { $addToSet: { readBy: { userId, readAt: new Date() } } },
-      { new: true }
+      { new: true },
     );
 
     if (!announcement) {
@@ -266,25 +267,27 @@ export class AnnouncementService {
       const teachers = await Teacher.find({ tenantId, isDeleted: false });
       userIds = teachers.map(t => t.userId);
     } else if (announcement.targetAudience === 'guardians') {
-      // Get guardians from students
       const students = await Student.find({ tenantId, isDeleted: false });
       const guardianIds = students.flatMap(s =>
         s.guardians
           .map(g => g.userId)
-          .filter((userId): userId is string => Boolean(userId))
+          .filter((userId): userId is string => Boolean(userId)),
       );
       userIds = [...new Set(guardianIds)];
     } else if (announcement.targetAudience === 'specific' && announcement.targetUserIds) {
       userIds = announcement.targetUserIds;
     }
 
-    // Filter by grades/sections if specified
     if (announcement.targetGrades?.length || announcement.targetSections?.length) {
       const students = await Student.find({
         tenantId,
         isDeleted: false,
-        ...(announcement.targetGrades?.length ? { grade: { $in: announcement.targetGrades } } : {}),
-        ...(announcement.targetSections?.length ? { section: { $in: announcement.targetSections } } : {}),
+        ...(announcement.targetGrades?.length
+          ? { grade: { $in: announcement.targetGrades } }
+          : {}),
+        ...(announcement.targetSections?.length
+          ? { section: { $in: announcement.targetSections } }
+          : {}),
       });
       const studentUserIds = students.map(s => s.userId);
       userIds = userIds.filter(id => studentUserIds.includes(id));
@@ -313,14 +316,12 @@ export class AnnouncementService {
 
   // Get unread announcements count for user
   static async getUnreadCount(tenantId: string, userId: string) {
-    // Get all published announcements
     const announcements = await Announcement.find({
       tenantId,
       isPublished: true,
       expiresAt: { $or: [{ $gte: new Date() }, { $exists: false }] },
     });
 
-    // Filter by user visibility
     const user = await User.findById(userId);
     if (!user) return 0;
 
@@ -332,7 +333,6 @@ export class AnnouncementService {
       return false;
     });
 
-    // Count unread
     let unreadCount = 0;
     for (const announcement of visibleAnnouncements) {
       const hasRead = announcement.readBy.some(r => r.userId === userId);
@@ -355,9 +355,9 @@ export class MessagingService {
       subject?: string;
       content: string;
       attachments?: any[];
-    }
+    },
   ) {
-    // Check if conversation already exists
+    // Check if conversation already exists between these two users
     let conversation = await Conversation.findOne({
       tenantId,
       participants: {
@@ -423,7 +423,7 @@ export class MessagingService {
       content: string;
       attachments?: any[];
       parentMessageId?: string;
-    }
+    },
   ) {
     const conversation = await Conversation.findOne({
       _id: conversationId,
@@ -435,16 +435,14 @@ export class MessagingService {
       throw new AppError('Conversation not found', 404);
     }
 
-    // Find recipient (the other participant)
     const recipient = conversation.participants.find(
-      p => p.userId !== data.senderId
+      p => p.userId !== data.senderId,
     );
 
     if (!recipient) {
       throw new AppError('Recipient not found', 404);
     }
 
-    // Create message
     const message = await Message.create({
       tenantId,
       senderId: data.senderId,
@@ -458,12 +456,10 @@ export class MessagingService {
       isRead: false,
     });
 
-    // Update conversation
     conversation.lastMessage = data.content.substring(0, 200);
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
-    // Create notification for recipient
     await NotificationService.createNotification(tenantId, {
       userId: recipient.userId,
       type: 'info',
@@ -481,10 +477,7 @@ export class MessagingService {
   static async getConversations(
     tenantId: string,
     userId: string,
-    filters: {
-      page?: number;
-      limit?: number;
-    }
+    filters: { page?: number; limit?: number },
   ) {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -499,9 +492,8 @@ export class MessagingService {
       .skip(skip)
       .limit(limit);
 
-    // Get unread count for each conversation
     const conversationsWithDetails = await Promise.all(
-      conversations.map(async (conv) => {
+      conversations.map(async conv => {
         const unreadCount = await Message.countDocuments({
           tenantId,
           conversationId: conv._id,
@@ -510,7 +502,6 @@ export class MessagingService {
           isDeleted: false,
         });
 
-        // Get last message
         const lastMessage = await Message.findOne({
           tenantId,
           conversationId: conv._id,
@@ -522,7 +513,7 @@ export class MessagingService {
           unreadCount,
           lastMessage: lastMessage || null,
         };
-      })
+      }),
     );
 
     const total = await Conversation.countDocuments({
@@ -545,10 +536,7 @@ export class MessagingService {
     tenantId: string,
     conversationId: string,
     userId: string,
-    filters: {
-      page?: number;
-      limit?: number;
-    }
+    filters: { page?: number; limit?: number },
   ) {
     const conversation = await Conversation.findOne({
       _id: conversationId,
@@ -560,7 +548,6 @@ export class MessagingService {
       throw new AppError('Conversation not found', 404);
     }
 
-    // Check if user is participant
     const isParticipant = conversation.participants.some(p => p.userId === userId);
     if (!isParticipant) {
       throw new AppError('Unauthorized', 403);
@@ -570,18 +557,11 @@ export class MessagingService {
     const limit = filters.limit || 50;
     const skip = (page - 1) * limit;
 
-    // Mark messages as read
     await Message.updateMany(
-      {
-        tenantId,
-        conversationId,
-        recipientId: userId,
-        isRead: false,
-      },
-      { $set: { isRead: true, readAt: new Date() } }
+      { tenantId, conversationId, recipientId: userId, isRead: false },
+      { $set: { isRead: true, readAt: new Date() } },
     );
 
-    // Update participant's lastReadAt
     const participant = conversation.participants.find(p => p.userId === userId);
     if (participant) {
       participant.lastReadAt = new Date();
@@ -618,7 +598,7 @@ export class MessagingService {
     const message = await Message.findOneAndUpdate(
       { _id: messageId, tenantId, senderId: userId },
       { $set: { isDeleted: true, deletedBy: userId } },
-      { new: true }
+      { new: true },
     );
 
     if (!message) {
@@ -636,5 +616,49 @@ export class MessagingService {
       isRead: false,
       isDeleted: false,
     });
+  }
+
+  /**
+   * Return a list of users the current user is allowed to message.
+   * Used by the "New Message" modal.
+   */
+  static async listRecipients(
+    tenantId: string,
+    userId: string,
+    role: string,
+    search: string,
+  ) {
+    const query: any = {
+      tenantId,
+      _id: { $ne: userId },
+      status: 'active',
+    };
+
+    // Role-based recipient restriction
+    if (role === 'student' || role === 'guardian') {
+      // Students and guardians can message teachers and admins
+      query.role = { $in: ['teacher', 'admin'] };
+    }
+    // Teachers and admins can message anyone (no role filter)
+
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const users = await User.find(query)
+      .select('_id firstName lastName email role')
+      .limit(50)
+      .lean();
+
+    return users.map(u => ({
+      _id: u._id,
+      name: `${u.firstName} ${u.lastName}`,
+      email: u.email,
+      role: u.role,
+    }));
   }
 }

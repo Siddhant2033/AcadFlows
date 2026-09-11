@@ -77,6 +77,12 @@ interface Teacher {
   };
 }
 
+interface SubjectOption {
+  _id: string;
+  name: string;
+  code: string;
+}
+
 type TabKey = 'profile' | 'qualifications' | 'experience' | 'leave';
 
 const tabs: { id: TabKey; label: string; icon: string }[] = [
@@ -90,21 +96,37 @@ export default function TeacherDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [teacher, setTeacher] = useState<Teacher | null>(null);
+  const [subjectMap, setSubjectMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('profile');
 
   useEffect(() => {
-    fetchTeacher();
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const fetchTeacher = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await api.get(`/teachers/${id}`);
-      setTeacher(response.data.data);
-    } catch (error) {
-      console.error('Failed to fetch teacher:', error);
+      // Fetch teacher + subjects in parallel. Subjects are only needed for
+      // name lookup, so a failure there doesn't block rendering the teacher.
+      const [teacherRes, subjectsRes] = await Promise.allSettled([
+        api.get(`/teachers/${id}`),
+        api.get('/academic/subjects'),
+      ]);
+
+      if (teacherRes.status === 'fulfilled') {
+        setTeacher(teacherRes.value.data.data);
+      } else {
+        console.error('Failed to fetch teacher:', teacherRes.reason);
+      }
+
+      if (subjectsRes.status === 'fulfilled') {
+        const subjects: SubjectOption[] = subjectsRes.value.data.data || [];
+        const map = new Map<string, string>();
+        subjects.forEach(s => map.set(s._id, s.name));
+        setSubjectMap(map);
+      }
     } finally {
       setLoading(false);
     }
@@ -133,6 +155,10 @@ export default function TeacherDetailPage() {
     return map[status] || 'default';
   };
 
+  /** Resolve a subject ID to its display name (or show the ID if unknown). */
+  const subjectName = (idOrName: string): string =>
+    subjectMap.get(idOrName) || idOrName;
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -149,7 +175,11 @@ export default function TeacherDetailPage() {
         <Card className="max-w-2xl mx-auto text-center py-12">
           <p className="text-5xl mb-4">🔍</p>
           <p className="text-muted">Teacher not found</p>
-          <Button variant="outline" className="mt-4" onClick={() => navigate('/teachers')}>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => navigate('/teachers')}
+          >
             Back to Teachers
           </Button>
         </Card>
@@ -229,7 +259,7 @@ export default function TeacherDetailPage() {
                 </p>
                 <p className="text-sm text-foreground">
                   {teacher.subjects?.length > 0
-                    ? teacher.subjects.join(', ')
+                    ? teacher.subjects.map(subjectName).join(', ')
                     : 'Not assigned'}
                 </p>
               </div>
@@ -425,7 +455,11 @@ export default function TeacherDetailPage() {
                                 </p>
                               )}
                             </div>
-                            {exp.isCurrent && <Badge variant="success" dot>Current</Badge>}
+                            {exp.isCurrent && (
+                              <Badge variant="success" dot>
+                                Current
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -465,10 +499,6 @@ export default function TeacherDetailPage() {
     </DashboardLayout>
   );
 }
-
-/* ─────────────────────────────────────────────────── */
-/* Helper subcomponents                                 */
-/* ─────────────────────────────────────────────────── */
 
 function InfoItem({
   label,
