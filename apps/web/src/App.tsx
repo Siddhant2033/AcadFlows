@@ -1,7 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { TenantProvider } from './contexts/TenantContext';
-import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Pages
@@ -63,8 +62,7 @@ import BulkGenerateInvoicesPage from './pages/admin/BulkGenerateInvoices';
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
+    <AuthProvider>
         <TenantProvider>
           <Routes>
             {/* Landing */}
@@ -546,8 +544,7 @@ function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </TenantProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    </AuthProvider>
   );
 }
 

@@ -13,11 +13,17 @@ import { AppError } from '../../middleware/error-handler';
 /**
  * Cookie options for the refresh token.
  *
- * - In production: `sameSite: 'none'` + `secure: true`. Required when the
- *   frontend (acadflows.vercel.app) and backend (acadflows.onrender.com)
- *   are on different origins and the cookie must be sent cross-site.
- * - In development: `sameSite: 'lax'` + `secure: false`. Works on
- *   http://localhost and does not require HTTPS.
+ * Cross-origin setup (Vercel frontend + Render backend):
+ *   secure      → must be true
+ *   sameSite    → 'none' (allows cross-site)
+ *   partitioned → required by modern Chrome/Edge for third-party cookies
+ *
+ * Same-origin setup (both on the same domain):
+ *   sameSite    → 'lax'
+ *   partitioned → not needed
+ *
+ * We detect the deployment from FRONTEND_URL. If the frontend host is
+ * NOT a subdomain of the backend host, we use the cross-site config.
  */
 function getRefreshCookieOptions(): {
   httpOnly: boolean;
@@ -25,15 +31,42 @@ function getRefreshCookieOptions(): {
   sameSite: 'lax' | 'none';
   maxAge: number;
   path: string;
+  partitioned?: boolean;
 } {
   const isProd = process.env.NODE_ENV === 'production';
-  return {
+  const frontendUrl = process.env.FRONTEND_URL || '';
+  const backendHost = process.env.RENDER_EXTERNAL_HOSTNAME || '';
+
+  // Cross-site if the frontend isn't served from the same site as the API.
+  // In dev, this is always http://localhost — treat as same-site (lax).
+  let isCrossSite = isProd;
+
+  if (isProd && frontendUrl && backendHost) {
+    try {
+      const frontendHost = new URL(frontendUrl).hostname;
+      // Same-site if frontend ends with backend's registrable domain
+      // (rough check — refine later if needed)
+      const backendRoot = backendHost.split('.').slice(-2).join('.');
+      isCrossSite = !frontendHost.endsWith(backendRoot);
+    } catch {
+      isCrossSite = true;
+    }
+  }
+
+  const options: any = {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd, // Always Secure in production (cross-site cookies require it)
+    sameSite: isCrossSite ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   };
+
+  // Modern Chrome requires Partitioned for third-party cookies.
+  if (isCrossSite) {
+    options.partitioned = true;
+  }
+
+  return options;
 }
 
 export class AuthController {
@@ -59,7 +92,9 @@ export class AuthController {
         tenantId: result.user.tenantId,
       });
 
-      res.cookie('refreshToken', result.tokens.refreshToken, getRefreshCookieOptions());
+      const cookieOpts = getRefreshCookieOptions();
+      console.log('🍪 Setting refresh cookie with options:', cookieOpts);
+      res.cookie('refreshToken', result.tokens.refreshToken, cookieOpts);
 
       res.status(201).json({
         success: true,
@@ -84,7 +119,9 @@ export class AuthController {
 
       console.log('✅ Login successful for:', result.user.email);
 
-      res.cookie('refreshToken', result.tokens.refreshToken, getRefreshCookieOptions());
+      const cookieOpts = getRefreshCookieOptions();
+      console.log('🍪 Setting refresh cookie with options:', cookieOpts);
+      res.cookie('refreshToken', result.tokens.refreshToken, cookieOpts);
 
       res.json({
         success: true,
@@ -104,6 +141,13 @@ export class AuthController {
     try {
       const refreshToken = req.cookies.refreshToken;
 
+      console.log(
+        '🔄 Refresh attempt — cookie present?',
+        !!refreshToken,
+        '| cookies keys:',
+        Object.keys(req.cookies || {}),
+      );
+
       if (!refreshToken) {
         throw new AppError('Refresh token required', 401);
       }
@@ -113,7 +157,8 @@ export class AuthController {
 
       console.log('✅ Token refreshed successfully');
 
-      res.cookie('refreshToken', tokens.refreshToken, getRefreshCookieOptions());
+      const cookieOpts = getRefreshCookieOptions();
+      res.cookie('refreshToken', tokens.refreshToken, cookieOpts);
 
       res.json({
         success: true,
@@ -130,12 +175,13 @@ export class AuthController {
 
   static async logout(req: Request, res: Response, next: NextFunction) {
     try {
-      const options = getRefreshCookieOptions();
+      const cookieOpts = getRefreshCookieOptions();
       res.clearCookie('refreshToken', {
-        httpOnly: options.httpOnly,
-        secure: options.secure,
-        sameSite: options.sameSite,
-        path: options.path,
+        httpOnly: cookieOpts.httpOnly,
+        secure: cookieOpts.secure,
+        sameSite: cookieOpts.sameSite,
+        path: cookieOpts.path,
+        ...(cookieOpts.partitioned ? { partitioned: true } : {}),
       });
 
       console.log(
@@ -203,7 +249,8 @@ export class AuthController {
 
       res.json({
         success: true,
-        message: 'Password reset successfully. You can now login with your new password.',
+        message:
+          'Password reset successfully. You can now login with your new password.',
       });
     } catch (error) {
       console.error('❌ Reset password error:', error);

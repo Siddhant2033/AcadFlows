@@ -123,15 +123,15 @@ export class CommunicationController {
   static async getUnreadCount(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-
       const count = await NotificationService.getUnreadCount(
         authReq.user.tenantId,
         authReq.user.id,
       );
-
       res.json({ success: true, data: { count } });
     } catch (error) {
-      next(error);
+      console.error('❌ Unread count error:', error);
+      // Return 0 rather than 500 — the badge just won't show.
+      res.json({ success: true, data: { count: 0 } });
     }
   }
 
@@ -246,15 +246,14 @@ export class CommunicationController {
   static async getAnnouncementUnreadCount(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-
       const count = await AnnouncementService.getUnreadCount(
         authReq.user.tenantId,
         authReq.user.id,
       );
-
       res.json({ success: true, data: { count } });
     } catch (error) {
-      next(error);
+      console.error('❌ Announcement unread count error:', error);
+      res.json({ success: true, data: { count: 0 } });
     }
   }
 
@@ -372,15 +371,14 @@ export class CommunicationController {
   static async getMessageUnreadCount(req: Request, res: Response, next: NextFunction) {
     try {
       const authReq = req as AuthRequest;
-
       const count = await MessagingService.getUnreadCount(
         authReq.user.tenantId,
         authReq.user.id,
       );
-
       res.json({ success: true, data: { count } });
     } catch (error) {
-      next(error);
+      console.error('❌ Message unread count error:', error);
+      res.json({ success: true, data: { count: 0 } });
     }
   }
 

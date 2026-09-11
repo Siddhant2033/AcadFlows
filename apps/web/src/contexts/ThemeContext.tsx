@@ -1,66 +1,86 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { getTenantSlugFromURL, getTenantInfo, getCurrentTenant } from '../lib/tenant';
+import type { TenantInfo } from '../lib/tenant';
 
-type ThemeMode = 'light' | 'dark';
-
-interface ThemeContextType {
-  /** Current mode as a string */
-  mode: ThemeMode;
-  /** Convenience boolean — true in dark mode */
-  isDark: boolean;
-  /** Toggle between light/dark */
-  toggleTheme: () => void;
-  /** Set explicitly */
-  setTheme: (mode: ThemeMode) => void;
+interface TenantContextType {
+  tenant: TenantInfo | null;
+  tenantSlug: string | null;
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') return 'light';
+export function TenantProvider({ children }: { children: ReactNode }) {
+  const [tenant, setTenant] = useState<TenantInfo | null>(null);
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    const saved = localStorage.getItem('theme-mode') as ThemeMode | null;
-    if (saved === 'light' || saved === 'dark') return saved;
+  const fetchTenant = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light';
-  });
+      // 1. Try to get tenant from URL (query param or subdomain)
+      const slug = getTenantSlugFromURL();
+      setTenantSlug(slug);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle('dark', mode === 'dark');
-    root.setAttribute('data-theme', mode);
+      if (slug) {
+        const info = await getTenantInfo(slug);
+        if (info) {
+          setTenant(info);
+          setIsLoading(false);
+          return;
+        }
+      }
 
-    localStorage.setItem('theme-mode', mode);
+      // 2. Only attempt /tenants/current if the user has a session.
+      //    Otherwise it 404s on every public page load, which is noise.
+      const hasToken = !!localStorage.getItem('accessToken');
+      if (!hasToken) {
+        setIsLoading(false);
+        return;
+      }
 
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) {
-      meta.setAttribute('content', mode === 'dark' ? '#0B0F17' : '#F8FAFC');
+      const info = await getCurrentTenant();
+      if (info) {
+        setTenant(info);
+      }
+    } catch (err) {
+      // Silent — expected on public pages
+      console.debug('Tenant context resolution skipped:', err);
+    } finally {
+      setIsLoading(false);
     }
-  }, [mode]);
-
-  const toggleTheme = () => setMode(p => (p === 'light' ? 'dark' : 'light'));
-
-  const value: ThemeContextType = {
-    mode,
-    isDark: mode === 'dark',
-    toggleTheme,
-    setTheme: setMode,
   };
 
+  useEffect(() => {
+    fetchTenant();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <ThemeContext.Provider value={value}>
+    <TenantContext.Provider
+      value={{
+        tenant,
+        tenantSlug,
+        isLoading,
+        error,
+        refetch: fetchTenant,
+      }}
+    >
       {children}
-    </ThemeContext.Provider>
+    </TenantContext.Provider>
   );
 }
 
-export function useTheme() {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) {
-    throw new Error('useTheme must be used within ThemeProvider');
+export function useTenant() {
+  const context = useContext(TenantContext);
+  if (context === undefined) {
+    throw new Error('useTenant must be used within a TenantProvider');
   }
-  return ctx;
+  return context;
 }
