@@ -49,7 +49,9 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Attendance',
     items: [
       { label: 'Mark Attendance', icon: '✅', path: '/attendance/mark', roles: ['admin', 'teacher'] },
+      { label: 'Teacher Attendance', icon: '👨‍🏫', path: '/attendance/teachers', roles: ['admin'] },
       { label: 'Reports', icon: '📈', path: '/attendance/reports', roles: ['admin', 'teacher'] },
+      { label: 'Warnings', icon: '⚠️', path: '/attendance/warnings', roles: ['admin', 'teacher'] },
     ],
   },
   {

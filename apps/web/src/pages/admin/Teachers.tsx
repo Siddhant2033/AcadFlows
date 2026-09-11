@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import {
@@ -9,6 +9,7 @@ import {
   Badge,
 } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
+import { downloadFile } from '../../lib/download';
 import { cn } from '../../lib/cn';
 
 interface Teacher {
@@ -33,6 +34,7 @@ interface Teacher {
 export default function TeachersPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState({
     status: 'active',
     employmentType: '',
@@ -61,11 +63,11 @@ export default function TeachersPage() {
       });
       const response = await api.get(`/teachers?${params}`);
       setTeachers(response.data.data.items);
-      setPagination({
-        ...pagination,
+      setPagination(prev => ({
+        ...prev,
         total: response.data.data.total,
         totalPages: response.data.data.totalPages,
-      });
+      }));
     } catch (error) {
       console.error('Failed to fetch teachers:', error);
     } finally {
@@ -77,6 +79,28 @@ export default function TeachersPage() {
     e.preventDefault();
     setPagination({ ...pagination, page: 1 });
     fetchTeachers();
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.status) params.set('status', filters.status);
+      if (filters.employmentType)
+        params.set('employmentType', filters.employmentType);
+      if (filters.subject) params.set('subject', filters.subject);
+      if (filters.search) params.set('search', filters.search);
+
+      await downloadFile(
+        `/teachers/export?${params}`,
+        `teachers-${new Date().toISOString().split('T')[0]}.csv`,
+      );
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const statusVariant: Record<
@@ -107,11 +131,22 @@ export default function TeachersPage() {
         description={`${pagination.total} teacher${pagination.total === 1 ? '' : 's'} on staff`}
         breadcrumb={[{ label: 'Dashboard', path: '/dashboard' }, { label: 'Teachers' }]}
         actions={
-          <Link to="/teachers/add">
-            <Button variant="primary" leftIcon="➕">
-              Add Teacher
+          <>
+            <Button
+              variant="outline"
+              leftIcon="📥"
+              onClick={handleExport}
+              loading={exporting}
+              disabled={pagination.total === 0}
+            >
+              Export CSV
             </Button>
-          </Link>
+            <Link to="/teachers/add">
+              <Button variant="primary" leftIcon="➕">
+                Add Teacher
+              </Button>
+            </Link>
+          </>
         }
       />
 
@@ -150,7 +185,9 @@ export default function TeachersPage() {
             </label>
             <Select
               value={filters.employmentType}
-              onChange={e => setFilters({ ...filters, employmentType: e.target.value })}
+              onChange={e =>
+                setFilters({ ...filters, employmentType: e.target.value })
+              }
             >
               <option value="">All Types</option>
               <option value="permanent">Permanent</option>
@@ -228,7 +265,8 @@ export default function TeachersPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">
-                              {teacher.firstName} {teacher.middleName} {teacher.lastName}
+                              {teacher.firstName} {teacher.middleName}{' '}
+                              {teacher.lastName}
                             </p>
                             <p className="text-xs text-muted">
                               {teacher.subjects?.length || 0} subject
@@ -252,7 +290,9 @@ export default function TeachersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge
-                          variant={employmentVariant[teacher.employmentType] || 'default'}
+                          variant={
+                            employmentVariant[teacher.employmentType] || 'default'
+                          }
                         >
                           {teacher.employmentType.toUpperCase()}
                         </Badge>
@@ -297,14 +337,19 @@ export default function TeachersPage() {
                     {(pagination.page - 1) * pagination.limit + 1}–
                     {Math.min(pagination.page * pagination.limit, pagination.total)}
                   </span>{' '}
-                  of <span className="text-foreground font-medium">{pagination.total}</span>{' '}
+                  of{' '}
+                  <span className="text-foreground font-medium">
+                    {pagination.total}
+                  </span>{' '}
                   teachers
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                    onClick={() =>
+                      setPagination({ ...pagination, page: pagination.page - 1 })
+                    }
                     disabled={pagination.page === 1}
                   >
                     Previous
@@ -315,7 +360,9 @@ export default function TeachersPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                    onClick={() =>
+                      setPagination({ ...pagination, page: pagination.page + 1 })
+                    }
                     disabled={pagination.page === pagination.totalPages}
                   >
                     Next

@@ -1,20 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import { Card, Button, Input, Select, Badge } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { downloadFile } from '../../lib/download';
 import { cn } from '../../lib/cn';
 
 interface Invoice {
   _id: string;
   invoiceNumber: string;
-  studentId: {
-    _id: string;
-    firstName: string;
-    lastName: string;
-    rollNo: string;
-  };
+  studentId:
+    | {
+        _id: string;
+        firstName: string;
+        lastName: string;
+        rollNo: string;
+      }
+    | string;
   total: number;
   paidAmount: number;
   balanceDue: number;
@@ -24,7 +27,10 @@ interface Invoice {
   createdAt: string;
 }
 
-const statusVariant: Record<string, 'default' | 'info' | 'success' | 'warning' | 'danger'> = {
+const statusVariant: Record<
+  string,
+  'default' | 'info' | 'success' | 'warning' | 'danger'
+> = {
   draft: 'default',
   sent: 'info',
   paid: 'success',
@@ -33,9 +39,15 @@ const statusVariant: Record<string, 'default' | 'info' | 'success' | 'warning' |
   cancelled: 'default',
 };
 
+function refField(ref: any, field: string, fallback = ''): string {
+  if (ref && typeof ref === 'object' && ref[field]) return String(ref[field]);
+  return fallback;
+}
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState({ status: '', search: '' });
   const [pagination, setPagination] = useState({
     page: 1,
@@ -59,11 +71,11 @@ export default function InvoicesPage() {
       });
       const response = await api.get(`/fees/invoices?${params}`);
       setInvoices(response.data.data.items);
-      setPagination({
-        ...pagination,
+      setPagination(prev => ({
+        ...prev,
         total: response.data.data.total,
         totalPages: response.data.data.totalPages,
-      });
+      }));
     } catch (error) {
       console.error('Failed to fetch invoices:', error);
     } finally {
@@ -71,7 +83,25 @@ export default function InvoicesPage() {
     }
   };
 
-  // Aggregate stats
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.status) params.set('status', filters.status);
+
+      await downloadFile(
+        `/fees/invoices/export?${params}`,
+        `invoices-${new Date().toISOString().split('T')[0]}.csv`,
+      );
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Aggregate stats from current page
   const stats = {
     total: invoices.reduce((sum, i) => sum + i.total, 0),
     paid: invoices.reduce((sum, i) => sum + i.paidAmount, 0),
@@ -89,33 +119,49 @@ export default function InvoicesPage() {
           { label: 'Invoices' },
         ]}
         actions={
-          <Link to="/fees/invoices/generate">
-            <Button variant="primary" leftIcon="➕">
-              Generate Invoice
+          <>
+            <Button
+              variant="outline"
+              leftIcon="📥"
+              onClick={handleExport}
+              loading={exporting}
+              disabled={pagination.total === 0}
+            >
+              Export CSV
             </Button>
-          </Link>
+            <Link to="/fees/invoices/generate">
+              <Button variant="primary" leftIcon="➕">
+                Generate Invoice
+              </Button>
+            </Link>
+          </>
         }
       />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
-          <p className="text-xs uppercase tracking-wider text-muted">Total Invoiced</p>
+          <p className="text-xs uppercase tracking-wider text-muted">
+            Total Invoiced
+          </p>
           <p className="text-2xl font-bold text-foreground mt-1">
             {formatCurrency(stats.total)}
           </p>
+          <p className="text-xs text-muted mt-1">On this page</p>
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-wider text-muted">Collected</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
             {formatCurrency(stats.paid)}
           </p>
+          <p className="text-xs text-muted mt-1">On this page</p>
         </Card>
         <Card>
           <p className="text-xs uppercase tracking-wider text-muted">Outstanding</p>
           <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
             {formatCurrency(stats.due)}
           </p>
+          <p className="text-xs text-muted mt-1">On this page</p>
         </Card>
       </div>
 
@@ -170,87 +216,104 @@ export default function InvoicesPage() {
               <table className="w-full">
                 <thead className="bg-elevated border-b border-border">
                   <tr>
-                    {['Invoice #', 'Student', 'Amount', 'Balance', 'Status', 'Due Date', ''].map(
-                      (h, i) => (
-                        <th
-                          key={i}
-                          className={cn(
-                            'px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted',
-                            i === 6 ? 'text-right' : 'text-left',
-                          )}
-                        >
-                          {h}
-                        </th>
-                      ),
-                    )}
+                    {[
+                      'Invoice #',
+                      'Student',
+                      'Amount',
+                      'Balance',
+                      'Status',
+                      'Due Date',
+                      '',
+                    ].map((h, i) => (
+                      <th
+                        key={i}
+                        className={cn(
+                          'px-6 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted',
+                          i === 6 ? 'text-right' : 'text-left',
+                        )}
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {invoices.map(invoice => (
-                    <tr
-                      key={invoice._id}
-                      className="hover:bg-elevated/50 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-mono font-medium text-foreground">
-                          {invoice.invoiceNumber}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <p className="text-sm text-foreground">
-                          {invoice.studentId?.firstName} {invoice.studentId?.lastName}
-                        </p>
-                        <p className="text-xs text-muted">
-                          Roll: {invoice.studentId?.rollNo}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-foreground">
-                          {formatCurrency(invoice.total)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={cn(
-                            'text-sm font-medium',
-                            invoice.balanceDue > 0
-                              ? 'text-red-600 dark:text-red-400'
-                              : 'text-green-600 dark:text-green-400',
-                          )}
-                        >
-                          {formatCurrency(invoice.balanceDue)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={statusVariant[invoice.status] || 'default'} dot>
-                          {invoice.status.replace('_', ' ').toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-muted">
-                          {formatDate(invoice.dueDate)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex justify-end gap-3">
-                          <Link
-                            to={`/fees/invoices/${invoice._id}`}
-                            className="text-primary-600 hover:text-primary-700 dark:text-primary-400 text-sm font-medium"
+                  {invoices.map(invoice => {
+                    const studentName = `${refField(
+                      invoice.studentId,
+                      'firstName',
+                    )} ${refField(invoice.studentId, 'lastName')}`.trim();
+
+                    return (
+                      <tr
+                        key={invoice._id}
+                        className="hover:bg-elevated/50 transition-colors"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-mono font-medium text-foreground">
+                            {invoice.invoiceNumber}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <p className="text-sm text-foreground">
+                            {studentName || 'Unknown Student'}
+                          </p>
+                          <p className="text-xs text-muted">
+                            Roll: {refField(invoice.studentId, 'rollNo', '—')}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-medium text-foreground">
+                            {formatCurrency(invoice.total)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={cn(
+                              'text-sm font-medium',
+                              invoice.balanceDue > 0
+                                ? 'text-red-600 dark:text-red-400'
+                                : 'text-green-600 dark:text-green-400',
+                            )}
                           >
-                            View
-                          </Link>
-                          {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+                            {formatCurrency(invoice.balanceDue)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge
+                            variant={statusVariant[invoice.status] || 'default'}
+                            dot
+                          >
+                            {invoice.status.replace('_', ' ').toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-muted">
+                            {formatDate(invoice.dueDate)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex justify-end gap-3">
                             <Link
-                              to={`/fees/invoices/${invoice._id}/pay`}
-                              className="text-green-600 hover:text-green-700 dark:text-green-400 text-sm font-medium"
+                              to={`/fees/invoices/${invoice._id}`}
+                              className="text-primary-600 hover:text-primary-700 dark:text-primary-400 text-sm font-medium"
                             >
-                              Pay
+                              View
                             </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {invoice.status !== 'paid' &&
+                              invoice.status !== 'cancelled' && (
+                                <Link
+                                  to={`/fees/invoices/${invoice._id}/pay`}
+                                  className="text-green-600 hover:text-green-700 dark:text-green-400 text-sm font-medium"
+                                >
+                                  Pay
+                                </Link>
+                              )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -263,14 +326,19 @@ export default function InvoicesPage() {
                     {(pagination.page - 1) * pagination.limit + 1}–
                     {Math.min(pagination.page * pagination.limit, pagination.total)}
                   </span>{' '}
-                  of <span className="text-foreground font-medium">{pagination.total}</span>{' '}
+                  of{' '}
+                  <span className="text-foreground font-medium">
+                    {pagination.total}
+                  </span>{' '}
                   invoices
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                    onClick={() =>
+                      setPagination({ ...pagination, page: pagination.page - 1 })
+                    }
                     disabled={pagination.page === 1}
                   >
                     Previous
@@ -281,7 +349,9 @@ export default function InvoicesPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                    onClick={() =>
+                      setPagination({ ...pagination, page: pagination.page + 1 })
+                    }
                     disabled={pagination.page === pagination.totalPages}
                   >
                     Next

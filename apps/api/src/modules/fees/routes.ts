@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { FeeController } from './controller';
 import { FeeReportsController } from './reports.controller';
+import { FeeExportController } from './export.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
@@ -8,10 +9,7 @@ const router: Router = Router();
 router.use(authenticate);
 router.use(ensureTenantMatch);
 
-// ─────────────────────────────────────────────────────────────
-// Reports — must be mounted BEFORE /invoices/:id and /structures/:id
-// so that "reports" isn't parsed as an ID.
-// ─────────────────────────────────────────────────────────────
+// ── Reports ──
 router.get(
   '/reports/collection',
   requireRole('admin'),
@@ -32,38 +30,46 @@ router.get(
   FeeReportsController.getStudentFeeHistory,
 );
 
-// ============ Fee Structures ============
+// ── Exports (mounted BEFORE /invoices/:id) ──
+router.get(
+  '/invoices/export',
+  requireRole('admin'),
+  FeeExportController.exportInvoices,
+);
+router.get(
+  '/payments/export',
+  requireRole('admin'),
+  FeeExportController.exportPayments,
+);
+
+// ── Fee Structures ──
 router.get('/structures', FeeController.getFeeStructures);
 router.post('/structures', requireRole('admin'), FeeController.createFeeStructure);
 router.get('/structures/:id', FeeController.getFeeStructureById);
 router.put('/structures/:id', requireRole('admin'), FeeController.updateFeeStructure);
 router.delete('/structures/:id', requireRole('admin'), FeeController.deleteFeeStructure);
 
-// ============ Invoices ============
+// ── Invoices ──
 router.get('/invoices', FeeController.getInvoices);
 router.post('/invoices', requireRole('admin'), FeeController.generateInvoice);
 router.get('/invoices/:id', FeeController.getInvoiceById);
 router.put('/invoices/:id/status', requireRole('admin'), FeeController.updateInvoiceStatus);
 
-// ============ Payments ============
+// ── Payments ──
 router.get('/payments', FeeController.getPayments);
 router.post('/payments', requireRole('admin'), FeeController.recordPayment);
 router.get('/payments/:id', FeeController.getPaymentById);
 
-// ============ Discounts ============
+// ── Discounts ──
 router.get('/discounts', FeeController.getDiscounts);
 router.post('/discounts', requireRole('admin'), FeeController.createDiscount);
 router.get('/discounts/validate/:code', FeeController.validateDiscount);
 router.put('/discounts/:id', requireRole('admin'), FeeController.updateDiscount);
 router.delete('/discounts/:id', requireRole('admin'), FeeController.deleteDiscount);
 
-// ============ Reports (legacy) ============
+// ── Legacy ──
 router.get('/reports', requireRole('admin'), FeeController.getFeeReport);
-
-// ============ Student Summary ============
 router.get('/students/:studentId/summary', FeeController.getStudentFeeSummary);
-
-// ============ Reminders ============
 router.post('/reminders', requireRole('admin'), FeeController.sendReminders);
 
 export default router;

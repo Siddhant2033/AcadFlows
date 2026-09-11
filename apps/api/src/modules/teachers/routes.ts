@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { TeacherController } from './controller';
+import { TeacherExportController } from './export.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 import multer from 'multer';
 
@@ -10,18 +11,15 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images and PDFs are allowed') as any, false);
-    }
+    if (allowedTypes.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only images and PDFs are allowed') as any, false);
   },
 });
 
 router.use(authenticate);
 router.use(ensureTenantMatch);
 
-// Current user's teacher profile — must come BEFORE /:teacherId
+// Current user's teacher profile
 router.get('/me', TeacherController.getCurrentTeacher);
 
 // Teacher CRUD
@@ -29,7 +27,10 @@ router.get('/', requireRole('admin'), TeacherController.getTeachers);
 router.get('/stats', requireRole('admin'), TeacherController.getStats);
 router.post('/', requireRole('admin'), TeacherController.createTeacher);
 
-// ───── Leaves — mounted BEFORE /:teacherId to avoid conflict ─────
+// ⚠️ Export MUST come before /:teacherId
+router.get('/export', requireRole('admin'), TeacherExportController.export);
+
+// Leaves
 router.get(
   '/leaves/pending-count',
   requireRole('admin'),
@@ -44,12 +45,11 @@ router.put(
 );
 router.delete('/leaves/:leaveId', requireRole('admin'), TeacherController.deleteLeave);
 
-// ───── Teacher-specific routes ─────
+// Teacher-specific
 router.get('/:teacherId', TeacherController.getTeacherById);
 router.put('/:teacherId', requireRole('admin'), TeacherController.updateTeacher);
 router.delete('/:teacherId', requireRole('admin'), TeacherController.deleteTeacher);
 
-// Subject assignments
 router.post('/:teacherId/subjects', requireRole('admin'), TeacherController.assignSubject);
 router.delete(
   '/:teacherId/subjects/:subjectId/sections/:sectionId',
@@ -57,15 +57,11 @@ router.delete(
   TeacherController.removeSubject,
 );
 
-// Schedule
 router.get('/:teacherId/schedule', TeacherController.getSchedule);
-
-// Per-teacher leaves
 router.get('/:teacherId/leaves', TeacherController.getLeaves);
 router.post('/:teacherId/leaves', TeacherController.createLeave);
 router.get('/:teacherId/leaves/balance', TeacherController.getLeaveBalance);
 
-// Document upload (stub)
 router.post(
   '/:teacherId/documents',
   requireRole('admin'),

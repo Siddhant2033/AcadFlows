@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AttendanceController } from './controller';
+import { AttendanceWarningsController } from './warnings.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 import { requireClassTeacherOrAdmin } from '../../middleware/class-teacher';
 
@@ -8,7 +9,19 @@ const router: Router = Router();
 router.use(authenticate);
 router.use(ensureTenantMatch);
 
-// ─────────────── Mark student attendance ───────────────
+// ── Warnings ──
+router.get(
+  '/warnings',
+  requireRole('admin', 'teacher'),
+  AttendanceWarningsController.getWarnings,
+);
+router.get(
+  '/warnings/export',
+  requireRole('admin'),
+  AttendanceWarningsController.exportWarnings,
+);
+
+// ── Mark student attendance ──
 router.post(
   '/students',
   requireRole('admin', 'teacher'),
@@ -16,21 +29,19 @@ router.post(
   AttendanceController.markStudentAttendance,
 );
 
-// ─────────────── Mark teacher attendance ───────────────
-// List all active teachers for the marking UI
+// ── Teachers ──
 router.get(
   '/teachers/list',
   requireRole('admin'),
   AttendanceController.getAllTeachersForAttendance,
 );
-
 router.post(
   '/teachers',
   requireRole('admin'),
   AttendanceController.markTeacherAttendance,
 );
 
-// ─────────────── Get attendance ───────────────
+// ── Get attendance ──
 router.get('/students/:studentId', AttendanceController.getStudentAttendance);
 router.get(
   '/teachers/:teacherId',
@@ -38,7 +49,7 @@ router.get(
   AttendanceController.getTeacherAttendance,
 );
 
-// ─────────────── Reports ───────────────
+// ── Reports ──
 router.get(
   '/sections/:sectionId/report',
   requireRole('admin', 'teacher'),
@@ -46,17 +57,24 @@ router.get(
   AttendanceController.getSectionReport,
 );
 
-// Teacher attendance report — must come BEFORE the /teachers/:teacherId catch-all
+// CSV export for a section
+router.get(
+  '/sections/:sectionId/export',
+  requireRole('admin', 'teacher'),
+  requireClassTeacherOrAdmin(),
+  AttendanceWarningsController.exportSectionAttendance,
+);
+
 router.get(
   '/teachers-report',
   requireRole('admin'),
   AttendanceController.getTeacherReport,
 );
 
-// ─────────────── Holiday ───────────────
+// ── Holiday ──
 router.post('/holiday', requireRole('admin'), AttendanceController.markHoliday);
 
-// ─────────────── Stats ───────────────
+// ── Stats ──
 router.get('/stats', AttendanceController.getStats);
 
 export default router;

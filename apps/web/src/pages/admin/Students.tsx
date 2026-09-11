@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import {
@@ -9,6 +9,7 @@ import {
   Badge,
 } from '../../components/ui';
 import { DashboardLayout, PageHeader } from '../../components/layout';
+import { downloadFile } from '../../lib/download';
 import { cn } from '../../lib/cn';
 
 interface Student {
@@ -31,6 +32,7 @@ interface Student {
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState({
     grade: '',
     section: '',
@@ -59,11 +61,11 @@ export default function StudentsPage() {
       });
       const response = await api.get(`/students?${params}`);
       setStudents(response.data.data.items);
-      setPagination({
-        ...pagination,
+      setPagination(prev => ({
+        ...prev,
         total: response.data.data.total,
         totalPages: response.data.data.totalPages,
-      });
+      }));
     } catch (error) {
       console.error('Failed to fetch students:', error);
     } finally {
@@ -75,6 +77,27 @@ export default function StudentsPage() {
     e.preventDefault();
     setPagination({ ...pagination, page: 1 });
     fetchStudents();
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.grade) params.set('grade', filters.grade);
+      if (filters.section) params.set('section', filters.section);
+      if (filters.status) params.set('status', filters.status);
+      if (filters.search) params.set('search', filters.search);
+
+      await downloadFile(
+        `/students/export?${params}`,
+        `students-${new Date().toISOString().split('T')[0]}.csv`,
+      );
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const statusVariant: Record<
@@ -96,8 +119,17 @@ export default function StudentsPage() {
         breadcrumb={[{ label: 'Dashboard', path: '/dashboard' }, { label: 'Students' }]}
         actions={
           <>
+            <Button
+              variant="outline"
+              leftIcon="📥"
+              onClick={handleExport}
+              loading={exporting}
+              disabled={pagination.total === 0}
+            >
+              Export CSV
+            </Button>
             <Link to="/students/import">
-              <Button variant="outline" leftIcon="📥">
+              <Button variant="outline" leftIcon="📤">
                 Import CSV
               </Button>
             </Link>
@@ -183,19 +215,24 @@ export default function StudentsPage() {
               <table className="w-full">
                 <thead className="bg-elevated border-b border-border">
                   <tr>
-                    {['Student', 'Admission No', 'Grade / Section', 'Status', 'Contact', ''].map(
-                      (header, i) => (
-                        <th
-                          key={i}
-                          className={cn(
-                            'px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted',
-                            i === 5 && 'text-right',
-                          )}
-                        >
-                          {header}
-                        </th>
-                      ),
-                    )}
+                    {[
+                      'Student',
+                      'Admission No',
+                      'Grade / Section',
+                      'Status',
+                      'Contact',
+                      '',
+                    ].map((header, i) => (
+                      <th
+                        key={i}
+                        className={cn(
+                          'px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted',
+                          i === 5 && 'text-right',
+                        )}
+                      >
+                        {header}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -226,7 +263,9 @@ export default function StudentsPage() {
                             <p className="text-sm font-medium text-foreground truncate">
                               {student.firstName} {student.lastName}
                             </p>
-                            <p className="text-xs text-muted">Roll: {student.rollNo}</p>
+                            <p className="text-xs text-muted">
+                              Roll: {student.rollNo}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -242,8 +281,12 @@ export default function StudentsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={statusVariant[student.status] || 'default'} dot>
-                          {student.status.charAt(0).toUpperCase() + student.status.slice(1)}
+                        <Badge
+                          variant={statusVariant[student.status] || 'default'}
+                          dot
+                        >
+                          {student.status.charAt(0).toUpperCase() +
+                            student.status.slice(1)}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -251,7 +294,9 @@ export default function StudentsPage() {
                           {student.userId?.email || 'N/A'}
                         </p>
                         {student.userId?.phone && (
-                          <p className="text-xs text-muted">+91 {student.userId.phone}</p>
+                          <p className="text-xs text-muted">
+                            +91 {student.userId.phone}
+                          </p>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -287,14 +332,18 @@ export default function StudentsPage() {
                     {Math.min(pagination.page * pagination.limit, pagination.total)}
                   </span>{' '}
                   of{' '}
-                  <span className="text-foreground font-medium">{pagination.total}</span>{' '}
+                  <span className="text-foreground font-medium">
+                    {pagination.total}
+                  </span>{' '}
                   students
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                    onClick={() =>
+                      setPagination({ ...pagination, page: pagination.page - 1 })
+                    }
                     disabled={pagination.page === 1}
                   >
                     Previous
@@ -305,7 +354,9 @@ export default function StudentsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                    onClick={() =>
+                      setPagination({ ...pagination, page: pagination.page + 1 })
+                    }
                     disabled={pagination.page === pagination.totalPages}
                   >
                     Next

@@ -1,41 +1,33 @@
 import { Router } from 'express';
 import { StudentController } from './controller';
+import { StudentExportController } from './export.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 import multer from 'multer';
 
 const router: Router = Router();
 
-// ─────────────────────────────────────────────────────────────
-// Public routes — used during guardian registration, before login.
-// Must be mounted BEFORE router.use(authenticate) and BEFORE the
-// wildcard /:studentId route.
-// ─────────────────────────────────────────────────────────────
-
+// Public routes
 router.get('/tenant/:tenantId', StudentController.getStudentsByTenant);
 router.post('/verify-rollno', StudentController.verifyRollNo);
 
-// ─────────────────────────────────────────────────────────────
-// Protected routes
-// ─────────────────────────────────────────────────────────────
-
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images and PDFs are allowed') as any, false);
-    }
+    if (allowedTypes.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only images and PDFs are allowed') as any, false);
   },
 });
 
 router.use(authenticate);
 router.use(ensureTenantMatch);
 
-// Current user's student profile — must come BEFORE /:studentId
+// Current user's student profile
 router.get('/me', StudentController.getCurrentStudent);
+
+// ⚠️ Export MUST come before /:studentId
+router.get('/export', requireRole('admin'), StudentExportController.export);
 
 // Student CRUD
 router.get('/', StudentController.getStudents);
