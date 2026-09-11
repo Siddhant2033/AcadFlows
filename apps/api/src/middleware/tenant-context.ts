@@ -9,17 +9,96 @@ export interface TenantRequest extends Request {
   isSubdomainTenant?: boolean;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   In-memory tenant cache
+   
+   Keyed by the resolution "source" (subdomain slug, header ID, etc.),
+   storing { tenant, expiresAt }. Avoids hitting MongoDB on every
+   request in a multi-tenant app where the same school is hit
+   repeatedly.
+   ───────────────────────────────────────────────────────────── */
+
+const TENANT_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+const tenantCache = new Map<string, { tenant: any | null; expiresAt: number }>();
+
+function getCached(key: string) {
+  const entry = tenantCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt < Date.now()) {
+    tenantCache.delete(key);
+    return undefined;
+  }
+  return entry.tenant;
+}
+
+function setCached(key: string, tenant: any | null) {
+  tenantCache.set(key, {
+    tenant,
+    expiresAt: Date.now() + TENANT_CACHE_TTL_MS,
+  });
+
+  // Simple eviction: cap the cache at 1000 entries to avoid unbounded growth.
+  if (tenantCache.size > 1000) {
+    const firstKey = tenantCache.keys().next().value;
+    if (firstKey !== undefined) tenantCache.delete(firstKey);
+  }
+}
+
+// Cleanup expired entries periodically (optional, keeps memory tidy).
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of tenantCache.entries()) {
+    if (entry.expiresAt < now) tenantCache.delete(key);
+  }
+}, TENANT_CACHE_TTL_MS).unref?.();
+
+/**
+ * Subdomains that are NEVER tenant slugs. Prevents wasted DB lookups for
+ * the platform's own hosts (`acadflows.onrender.com`, `*.vercel.app`, etc.).
+ */
+const RESERVED_SUBDOMAINS = new Set([
+  'www',
+  'app',
+  'api',
+  'admin',
+  'localhost',
+  'acadflows',   // backend host
+  'render',
+  'onrender',
+  'vercel',
+  'netlify',
+]);
+
+/**
+ * Extract the tenant slug from the request host, if any.
+ */
+function extractSubdomainSlug(host: string): string | null {
+  if (!host) return null;
+
+  // Strip port (e.g. "localhost:5000" → "localhost")
+  const hostname = host.split(':')[0];
+  if (!hostname) return null;
+
+  const parts = hostname.split('.');
+  if (parts.length < 2) return null;
+
+  const candidate = parts[0];
+  if (!candidate) return null;
+  if (RESERVED_SUBDOMAINS.has(candidate)) return null;
+
+  return candidate;
+}
+
 /**
  * Tenant Context Middleware
- * Resolves tenant from multiple sources with better error handling
+ * Resolves the tenant from multiple sources with caching.
  */
 export async function tenantContext(req: Request, res: Response, next: NextFunction) {
-  // Skip tenant resolution for auth routes (they handle tenant differently)
+  // Skip tenant resolution for auth routes (except /auth/me)
   if (req.path.includes('/auth/') && !req.path.includes('/auth/me')) {
     return next();
   }
 
-  // Skip for health check
   if (req.path === '/health') {
     return next();
   }
@@ -28,92 +107,96 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
   let tenant: any = null;
 
   try {
-    // 1. Try to get tenant from subdomain
+    // 1. Subdomain
     const host = req.get('host') || '';
-    const hostParts = host.split('.');
-    
-    const reservedSubdomains = ['www', 'app', 'api', 'admin', 'localhost'];
-    
-    let subdomain: string | null = null;
-    if (hostParts.length >= 3) {
-      subdomain = hostParts[0];
-    } else if (hostParts.length === 2 && !hostParts[0].includes('localhost')) {
-      subdomain = hostParts[0];
-    }
-
-    if (subdomain && !reservedSubdomains.includes(subdomain)) {
-      tenant = await Tenant.findOne({ 
-        slug: subdomain, 
-        status: 'active' 
-      });
-      
-      if (tenant) {
-        tenantId = tenant._id.toString();
+    const slug = extractSubdomainSlug(host);
+    if (slug) {
+      const cacheKey = `slug:${slug}`;
+      let cached = getCached(cacheKey);
+      if (cached === undefined) {
+        cached = await Tenant.findOne({ slug, status: 'active' });
+        setCached(cacheKey, cached);
+      }
+      if (cached) {
+        tenant = cached;
+        tenantId = cached._id.toString();
       }
     }
 
-    // 2. Try header
+    // 2. X-Tenant-Id header
     if (!tenantId) {
-      const headerTenantId = req.headers['x-tenant-id'] as string;
+      const headerTenantId = req.headers['x-tenant-id'] as string | undefined;
       if (headerTenantId) {
-        if (mongoose.Types.ObjectId.isValid(headerTenantId)) {
-          tenant = await Tenant.findById(headerTenantId);
-        } else {
-          tenant = await Tenant.findOne({ slug: headerTenantId, status: 'active' });
+        const cacheKey = `header:${headerTenantId}`;
+        let cached = getCached(cacheKey);
+        if (cached === undefined) {
+          if (mongoose.Types.ObjectId.isValid(headerTenantId)) {
+            cached = await Tenant.findById(headerTenantId);
+          } else {
+            cached = await Tenant.findOne({ slug: headerTenantId, status: 'active' });
+          }
+          setCached(cacheKey, cached);
         }
-        
-        if (tenant) {
-          tenantId = tenant._id.toString();
+        if (cached) {
+          tenant = cached;
+          tenantId = cached._id.toString();
         }
       }
     }
 
-    // 3. Try query parameter
+    // 3. Query param
     if (!tenantId && req.query.tenantId) {
       const queryTenantId = req.query.tenantId as string;
-      if (mongoose.Types.ObjectId.isValid(queryTenantId)) {
-        tenant = await Tenant.findById(queryTenantId);
-      } else {
-        tenant = await Tenant.findOne({ slug: queryTenantId, status: 'active' });
+      const cacheKey = `query:${queryTenantId}`;
+      let cached = getCached(cacheKey);
+      if (cached === undefined) {
+        if (mongoose.Types.ObjectId.isValid(queryTenantId)) {
+          cached = await Tenant.findById(queryTenantId);
+        } else {
+          cached = await Tenant.findOne({ slug: queryTenantId, status: 'active' });
+        }
+        setCached(cacheKey, cached);
       }
-      
-      if (tenant) {
-        tenantId = tenant._id.toString();
+      if (cached) {
+        tenant = cached;
+        tenantId = cached._id.toString();
       }
     }
 
-    // 4. Try cookie
+    // 4. Cookie
     if (!tenantId && req.cookies?.tenantId) {
       const cookieTenantId = req.cookies.tenantId;
-      if (mongoose.Types.ObjectId.isValid(cookieTenantId)) {
-        tenant = await Tenant.findById(cookieTenantId);
-      } else {
-        tenant = await Tenant.findOne({ slug: cookieTenantId, status: 'active' });
+      const cacheKey = `cookie:${cookieTenantId}`;
+      let cached = getCached(cacheKey);
+      if (cached === undefined) {
+        if (mongoose.Types.ObjectId.isValid(cookieTenantId)) {
+          cached = await Tenant.findById(cookieTenantId);
+        } else {
+          cached = await Tenant.findOne({ slug: cookieTenantId, status: 'active' });
+        }
+        setCached(cacheKey, cached);
       }
-      
-      if (tenant) {
-        tenantId = tenant._id.toString();
+      if (cached) {
+        tenant = cached;
+        tenantId = cached._id.toString();
       }
     }
 
-    // 5. Fallback for development
+    // 5. Development fallback — first active tenant
     if (!tenantId && process.env.NODE_ENV === 'development') {
-      // Try to get default tenant
-      const defaultTenant = await Tenant.findOne({ 
-        slug: config.tenant.defaultSlug || 'default',
-        status: 'active' 
-      });
-      
-      if (defaultTenant) {
-        tenantId = defaultTenant._id.toString();
-        tenant = defaultTenant;
-      } else {
-        // Try to find any active tenant
-        const anyTenant = await Tenant.findOne({ status: 'active' });
-        if (anyTenant) {
-          tenantId = anyTenant._id.toString();
-          tenant = anyTenant;
-        }
+      const cacheKey = 'dev:any';
+      let cached = getCached(cacheKey);
+      if (cached === undefined) {
+        const defaultTenant = await Tenant.findOne({
+          slug: config.tenant.defaultSlug || 'default',
+          status: 'active',
+        });
+        cached = defaultTenant || (await Tenant.findOne({ status: 'active' }));
+        setCached(cacheKey, cached);
+      }
+      if (cached) {
+        tenant = cached;
+        tenantId = cached._id.toString();
       }
     }
 
@@ -122,14 +205,13 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
       (req as TenantRequest).tenantId = tenantId;
       (req as TenantRequest).tenant = tenant;
 
-      // Set tenant cookie if not already set
       if (!req.cookies?.tenantId || req.cookies.tenantId !== tenantId) {
         res.cookie('tenantId', tenantId, {
           httpOnly: false,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           maxAge: 30 * 24 * 60 * 60 * 1000,
-          path: '/'
+          path: '/',
         });
       }
     }
@@ -137,13 +219,12 @@ export async function tenantContext(req: Request, res: Response, next: NextFunct
     next();
   } catch (error) {
     console.error('Tenant context error:', error);
-    // Don't block the request, just log the error
     next();
   }
 }
 
 /**
- * Middleware to require a tenant context
+ * Middleware to require a tenant context.
  */
 export function requireTenant() {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -151,7 +232,7 @@ export function requireTenant() {
     if (!tenantReq.tenantId || !tenantReq.tenant) {
       return res.status(400).json({
         success: false,
-        error: 'Tenant context is required for this operation'
+        error: 'Tenant context is required for this operation',
       });
     }
     next();

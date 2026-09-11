@@ -3,8 +3,53 @@ import path from 'path';
 
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const isProduction = nodeEnv === 'production';
+
+/* ─────────────────────────────────────────────────────────────
+   Fail-fast checks
+   
+   In production, missing secrets would result in broken auth and
+   confusing 500 errors. Better to refuse to boot with a clear
+   message than to silently run with insecure defaults.
+   ───────────────────────────────────────────────────────────── */
+
+if (isProduction) {
+  const required = [
+    'MONGODB_URI',
+    'JWT_SECRET',
+    'JWT_REFRESH_SECRET',
+    'FRONTEND_URL',
+  ] as const;
+
+  const missing = required.filter(key => !process.env[key]);
+
+  if (missing.length > 0) {
+    console.error(
+      `❌ Missing required environment variables in production: ${missing.join(', ')}`,
+    );
+    console.error(
+      '   Set these on your hosting provider (Render dashboard → Environment).',
+    );
+    process.exit(1);
+  }
+
+  // JWT secrets must be long enough to be secure.
+  if ((process.env.JWT_SECRET || '').length < 32) {
+    console.error('❌ JWT_SECRET must be at least 32 characters in production.');
+    process.exit(1);
+  }
+  if ((process.env.JWT_REFRESH_SECRET || '').length < 32) {
+    console.error(
+      '❌ JWT_REFRESH_SECRET must be at least 32 characters in production.',
+    );
+    process.exit(1);
+  }
+}
+
 export const config = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
+  isProduction,
   port: parseInt(process.env.PORT || '5000', 10),
 
   mongodb: {
@@ -38,9 +83,7 @@ export const config = {
     baseUrl: process.env.BASE_URL || 'http://localhost:5173',
   },
 
-  // ─────────────────────────────────────────────────────────────
-  // India-specific defaults (B18)
-  // ─────────────────────────────────────────────────────────────
+  // India-specific defaults
   india: {
     country: 'IN',
     currency: 'INR',

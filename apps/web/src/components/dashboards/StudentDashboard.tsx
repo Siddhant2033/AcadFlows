@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/api';
 import { Card, CardTitle, Badge } from '../ui';
@@ -38,6 +38,17 @@ function refField(ref: any, field: string, fallback = ''): string {
   return fallback;
 }
 
+/** Day names indexed by JS `getDay()` (0 = Sunday … 6 = Saturday). */
+const DAY_NAMES = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+
 export default function StudentDashboard({ data, tenant, user }: StudentDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [timetable, setTimetable] = useState<TimetableClass[]>([]);
@@ -60,7 +71,7 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
     try {
       setLoading(true);
 
-      // ─── 1. Get the Student document (its _id is what most endpoints want) ───
+      // 1. Fetch the Student document for this user
       let studentDoc: any = null;
       try {
         const meRes = await api.get('/students/me');
@@ -73,32 +84,23 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
       const studentId = studentDoc?._id;
       const sectionId = studentDoc?.sectionId;
 
-      // ─── 2. Today's timetable ────────────────────────────────────
+      // 2. Today's timetable
       if (sectionId) {
         try {
           const timetableRes = await api.get(`/timetable/sections/${sectionId}`);
           const timetableData = timetableRes.data.data || {};
-          const days = [
-            'sunday',
-            'monday',
-            'tuesday',
-            'wednesday',
-            'thursday',
-            'friday',
-            'saturday',
-          ];
-          const today = days[new Date().getDay()];
-          const todayClasses = timetableData[today] || [];
+
+          const todayKey: string = DAY_NAMES[new Date().getDay()] ?? 'monday';
+          const todayClasses = (timetableData[todayKey] as any[]) || [];
 
           setTimetable(
             todayClasses.slice(0, 4).map((cls: any) => ({
               subject: refField(cls.subjectId, 'name', 'Unknown'),
               time: `${cls.startTime} - ${cls.endTime}`,
               room: cls.roomNumber || 'N/A',
-              teacher: `${refField(cls.teacherId, 'firstName')} ${refField(
-                cls.teacherId,
-                'lastName',
-              )}`.trim() || 'N/A',
+              teacher:
+                `${refField(cls.teacherId, 'firstName')} ${refField(cls.teacherId, 'lastName')}`.trim() ||
+                'N/A',
             })),
           );
         } catch (err) {
@@ -106,8 +108,10 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
         }
       }
 
-      // ─── 3. Recent grades ────────────────────────────────────────
-      const academicYearId = data?.academicYearId || studentDoc?.enrollments?.[0]?.academicYearId;
+      // 3. Recent grades
+      const academicYearId =
+        data?.academicYearId || studentDoc?.enrollments?.[0]?.academicYearId;
+
       if (studentId && academicYearId) {
         try {
           const gradesRes = await api.get(
@@ -123,25 +127,33 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
             })),
           );
 
-          // Overall grade average
           if (gradeData.length > 0) {
             const avg =
-              gradeData.reduce((sum: number, g: any) => sum + (g.averageScore || 0), 0) /
-              gradeData.length;
+              gradeData.reduce(
+                (sum: number, g: any) => sum + (g.averageScore || 0),
+                0,
+              ) / gradeData.length;
             stats.overallGrade =
-              avg >= 90 ? 'A+' :
-              avg >= 80 ? 'A' :
-              avg >= 70 ? 'B+' :
-              avg >= 60 ? 'B' :
-              avg >= 50 ? 'C+' :
-              avg >= 40 ? 'C' : 'F';
+              avg >= 90
+                ? 'A+'
+                : avg >= 80
+                  ? 'A'
+                  : avg >= 70
+                    ? 'B+'
+                    : avg >= 60
+                      ? 'B'
+                      : avg >= 50
+                        ? 'C+'
+                        : avg >= 40
+                          ? 'C'
+                          : 'F';
           }
         } catch (err) {
           console.error('Failed to load grades:', err);
         }
       }
 
-      // ─── 4. Upcoming deadlines ───────────────────────────────────
+      // 4. Upcoming deadlines
       try {
         const assignmentsRes = await api.get('/assignments?status=published&limit=5');
         const assignments = assignmentsRes.data.data?.items || [];
@@ -166,7 +178,7 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
         console.error('Failed to load assignments:', err);
       }
 
-      // ─── 5. Attendance percentage from dashboard stats ───────────
+      // 5. Attendance percentage
       try {
         const statsRes = await api.get('/dashboard');
         const statsData = statsRes.data.data?.stats || {};
@@ -225,7 +237,6 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
 
   return (
     <div className="space-y-6">
-      {/* Welcome */}
       <Card>
         <h2 className="text-2xl font-bold text-foreground">
           Welcome back, {user?.firstName || 'Student'}! 👋
@@ -235,7 +246,6 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
         </p>
       </Card>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { icon: '📊', label: 'Attendance', value: stats.attendance, valueClass: 'text-foreground' },
@@ -255,10 +265,8 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
         ))}
       </div>
 
-      {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Today's Timetable */}
           <Card>
             <CardTitle className="mb-4">📅 Today's Timetable</CardTitle>
             <div className="space-y-3">
@@ -290,7 +298,6 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
             </div>
           </Card>
 
-          {/* Recent Grades */}
           <Card>
             <CardTitle className="mb-4">📊 Recent Grades</CardTitle>
             <div className="space-y-3">
@@ -310,7 +317,9 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
                         {grade.date} · Score: {grade.score}
                       </p>
                     </div>
-                    <span className={cn('text-lg font-bold', getGradeColor(grade.grade))}>
+                    <span
+                      className={cn('text-lg font-bold', getGradeColor(grade.grade))}
+                    >
                       {grade.grade}
                     </span>
                   </div>
@@ -320,9 +329,7 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
           </Card>
         </div>
 
-        {/* Right Column */}
         <div className="space-y-6">
-          {/* Upcoming Deadlines */}
           <Card>
             <CardTitle className="mb-4">⏰ Upcoming Deadlines</CardTitle>
             <div className="space-y-3">
@@ -348,7 +355,6 @@ export default function StudentDashboard({ data, tenant, user }: StudentDashboar
             </div>
           </Card>
 
-          {/* Quick Actions */}
           <Card>
             <CardTitle className="mb-4">Quick Actions</CardTitle>
             <div className="grid grid-cols-2 gap-2">

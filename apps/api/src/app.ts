@@ -27,9 +27,27 @@ const app: Express = express();
 connectDB();
 
 // ─────────────────────────────────────────────────────────────
-// Global middleware
+// Trust proxy — required on Render, Vercel, and any reverse proxy.
+// Without this, req.ip is wrong and `secure` cookies may fail.
 // ─────────────────────────────────────────────────────────────
-app.use(helmet());
+app.set('trust proxy', 1);
+
+// ─────────────────────────────────────────────────────────────
+// Security headers
+// ─────────────────────────────────────────────────────────────
+app.use(
+  helmet({
+    // The API serves JSON only; CSP is best enforced on the frontend
+    // (Vercel). We relax crossOriginResourcePolicy so file uploads /
+    // images can be loaded cross-origin from the frontend.
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: false,
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────
+// CORS
+// ─────────────────────────────────────────────────────────────
 app.use(
   cors({
     origin: config.cors.origin,
@@ -37,13 +55,16 @@ app.use(
   }),
 );
 
-// Explicit body size limits — prevents accidental DoS via huge payloads.
-// File uploads use multer, which handles its own limits per-route.
+// ─────────────────────────────────────────────────────────────
+// Body parsers
+// ─────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
-// Tenant context runs for every request
+// ─────────────────────────────────────────────────────────────
+// Tenant context (cached) — runs for every request
+// ─────────────────────────────────────────────────────────────
 app.use(tenantContext);
 
 // ─────────────────────────────────────────────────────────────
@@ -56,25 +77,17 @@ app.get('/health', (_req, res) => {
 // ─────────────────────────────────────────────────────────────
 // Public + mixed modules
 //
-// IMPORTANT: Do NOT mount `authenticate` or `ensureTenantMatch` at
-// the app level for these modules. They each declare their own public
-// routes (e.g. /students/verify-rollno, /users/admin-exists/:tenantId)
-// BEFORE their router.use(authenticate) line. Mounting auth here would
-// block those public routes.
+// Modules with public routes (e.g. /students/verify-rollno,
+// /users/admin-exists/:tenantId) handle their own auth internally
+// so those routes remain reachable without a login.
 // ─────────────────────────────────────────────────────────────
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tenants', tenantRoutes);
-
-// Students and Users have public routes — modules guard themselves.
 app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/users', userRoutes);
 
 // ─────────────────────────────────────────────────────────────
-// Fully-protected modules
-//
-// These modules have no public routes. Each also calls
-// router.use(authenticate) internally — so we do NOT add auth at
-// the app level to avoid running it twice.
+// Fully-protected modules — each router calls authenticate() itself
 // ─────────────────────────────────────────────────────────────
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/academic', academicRoutes);

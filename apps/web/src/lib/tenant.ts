@@ -2,7 +2,7 @@ import api from './api';
 
 export interface TenantInfo {
   id: string;
-  _id?: string; // For backward compatibility
+  _id?: string;
   name: string;
   slug: string;
   schoolCode: string;
@@ -27,72 +27,66 @@ export interface SchoolCodeValidation {
 }
 
 /**
- * Get tenant slug from current URL
+ * Get tenant slug from current URL.
+ * Checks subdomain first, then ?tenant= query param.
  */
 export function getTenantSlugFromURL(): string | null {
   if (typeof window === 'undefined') return null;
-  
+
   const host = window.location.hostname;
   const parts = host.split('.');
-  
+
   const reservedSubdomains = ['www', 'app', 'api', 'admin', 'localhost'];
-  
+
+  // Multi-part hostname (e.g. "dpsnoida.acadflows.in")
   if (parts.length >= 3) {
-    const potentialSubdomain = parts[0];
-    if (!reservedSubdomains.includes(potentialSubdomain)) {
-      return potentialSubdomain;
-    }
-  } else if (parts.length === 2 && !parts[0].includes('localhost')) {
-    const potentialSubdomain = parts[0];
-    if (!reservedSubdomains.includes(potentialSubdomain)) {
-      return potentialSubdomain;
+    const candidate = parts[0];
+    if (candidate && !reservedSubdomains.includes(candidate)) {
+      return candidate;
     }
   }
-  
+  // Two-part hostname (e.g. "dpsnoida.localhost" — dev subdomain)
+  else if (parts.length === 2) {
+    const candidate = parts[0];
+    if (candidate && !candidate.includes('localhost') && !reservedSubdomains.includes(candidate)) {
+      return candidate;
+    }
+  }
+
   const params = new URLSearchParams(window.location.search);
   const tenantParam = params.get('tenant');
-  if (tenantParam) {
-    return tenantParam;
-  }
-  
+  if (tenantParam) return tenantParam;
+
   return null;
 }
 
 /**
- * Validate school code
+ * Validate a school code.
  */
-export async function validateSchoolCode(schoolCode: string): Promise<SchoolCodeValidation> {
+export async function validateSchoolCode(
+  schoolCode: string,
+): Promise<SchoolCodeValidation> {
   try {
     const response = await api.post('/tenants/validate-code', { schoolCode });
-    
+
     if (response.data.success && response.data.data) {
-      return {
-        valid: true,
-        tenant: response.data.data,
-      };
+      return { valid: true, tenant: response.data.data };
     }
-    
+
     return { valid: false };
   } catch (error: any) {
-    // Check if it's a 404 (school not found)
-    if (error.response?.status === 404) {
-      return { valid: false };
-    }
-    
-    // Check if it's a validation error
-    if (error.response?.status === 400) {
-      return { valid: false };
-    }
-    
-    // Re-throw other errors
+    if (error.response?.status === 404) return { valid: false };
+    if (error.response?.status === 400) return { valid: false };
     throw error;
   }
 }
 
 /**
- * Get tenant info by school code
+ * Get tenant info by school code.
  */
-export async function getTenantBySchoolCode(schoolCode: string): Promise<TenantInfo | null> {
+export async function getTenantBySchoolCode(
+  schoolCode: string,
+): Promise<TenantInfo | null> {
   try {
     const response = await api.get(`/tenants/public/code/${schoolCode}`);
     return response.data.data;
@@ -103,7 +97,7 @@ export async function getTenantBySchoolCode(schoolCode: string): Promise<TenantI
 }
 
 /**
- * Get tenant info by slug
+ * Get tenant info by slug.
  */
 export async function getTenantInfo(slug: string): Promise<TenantInfo | null> {
   try {
@@ -116,7 +110,7 @@ export async function getTenantInfo(slug: string): Promise<TenantInfo | null> {
 }
 
 /**
- * Get current tenant info
+ * Get current tenant info.
  */
 export async function getCurrentTenant(): Promise<TenantInfo | null> {
   try {
@@ -129,19 +123,19 @@ export async function getCurrentTenant(): Promise<TenantInfo | null> {
 }
 
 /**
- * Validate tenant ID
+ * Validate tenant ID.
  */
 export async function validateTenant(tenantId: string): Promise<boolean> {
   try {
     const response = await api.get(`/tenants/validate/${tenantId}`);
     return response.data.data.isValid;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
 
 /**
- * Get tenant display name for UI
+ * Get tenant display name for UI.
  */
 export function getTenantDisplayName(tenant: TenantInfo | null): string {
   if (!tenant) return 'School';
@@ -149,7 +143,7 @@ export function getTenantDisplayName(tenant: TenantInfo | null): string {
 }
 
 /**
- * Format school code for display
+ * Format school code for display.
  */
 export function formatSchoolCodeForDisplay(code: string): string {
   if (!code) return '';
@@ -159,7 +153,7 @@ export function formatSchoolCodeForDisplay(code: string): string {
 }
 
 /**
- * Create a new school (for admin registration)
+ * Create a new school (for admin registration).
  */
 export async function createSchool(data: {
   name: string;
@@ -168,8 +162,7 @@ export async function createSchool(data: {
   email?: string;
 }): Promise<TenantInfo> {
   const response = await api.post('/tenants/create-school', data);
-  
-  // Ensure the response data has both id and _id for consistency
+
   const schoolData = response.data.data;
   if (schoolData && schoolData._id && !schoolData.id) {
     schoolData.id = schoolData._id;
@@ -177,6 +170,6 @@ export async function createSchool(data: {
   if (schoolData && schoolData.id && !schoolData._id) {
     schoolData._id = schoolData.id;
   }
-  
+
   return schoolData;
 }
