@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AttendanceService } from './service';
+import { Teacher } from '../../models/Teacher';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
 
@@ -8,24 +9,28 @@ const markStudentAttendanceSchema = z.object({
   sectionId: z.string().min(1),
   academicYearId: z.string().min(1),
   date: z.string().transform(str => new Date(str)),
-  records: z.array(z.object({
-    studentId: z.string().min(1),
-    status: z.enum(['present', 'absent', 'late', 'half_day']),
-    checkInTime: z.string().transform(str => new Date(str)).optional(),
-    remarks: z.string().optional(),
-  })),
+  records: z.array(
+    z.object({
+      studentId: z.string().min(1),
+      status: z.enum(['present', 'absent', 'late', 'half_day']),
+      checkInTime: z.string().transform(str => new Date(str)).optional(),
+      remarks: z.string().optional(),
+    }),
+  ),
 });
 
 const markTeacherAttendanceSchema = z.object({
   academicYearId: z.string().min(1),
   date: z.string().transform(str => new Date(str)),
-  records: z.array(z.object({
-    teacherId: z.string().min(1),
-    status: z.enum(['present', 'absent', 'late', 'half_day']),
-    checkInTime: z.string().transform(str => new Date(str)).optional(),
-    checkOutTime: z.string().transform(str => new Date(str)).optional(),
-    remarks: z.string().optional(),
-  })),
+  records: z.array(
+    z.object({
+      teacherId: z.string().min(1),
+      status: z.enum(['present', 'absent', 'late', 'half_day']),
+      checkInTime: z.string().transform(str => new Date(str)).optional(),
+      checkOutTime: z.string().transform(str => new Date(str)).optional(),
+      remarks: z.string().optional(),
+    }),
+  ),
 });
 
 const markHolidaySchema = z.object({
@@ -55,7 +60,7 @@ export class AttendanceController {
         {
           ...validated,
           markedBy: authReq.user.id,
-        }
+        },
       );
 
       res.status(201).json({
@@ -79,13 +84,50 @@ export class AttendanceController {
         {
           ...validated,
           markedBy: authReq.user.id,
-        }
+        },
       );
 
       res.status(201).json({
         success: true,
         data: result,
         message: 'Teacher attendance marked successfully!',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * List all active teachers for the marking UI.
+   * Returns only the fields the UI needs.
+   */
+  static async getAllTeachersForAttendance(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const authReq = req as AuthRequest;
+
+      const teachers = await Teacher.find({
+        tenantId: authReq.user.tenantId,
+        status: 'active',
+        isDeleted: false,
+      })
+        .select('_id firstName lastName employeeId email phone')
+        .sort({ firstName: 1 })
+        .lean();
+
+      res.json({
+        success: true,
+        data: teachers.map(t => ({
+          _id: t._id.toString(),
+          firstName: t.firstName,
+          lastName: t.lastName,
+          employeeId: t.employeeId,
+          email: t.email,
+          phone: t.phone || '',
+        })),
       });
     } catch (error) {
       next(error);
@@ -102,13 +144,10 @@ export class AttendanceController {
       const result = await AttendanceService.getStudentAttendance(
         authReq.user.tenantId,
         studentId,
-        validated
+        validated,
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -124,13 +163,10 @@ export class AttendanceController {
       const result = await AttendanceService.getTeacherAttendance(
         authReq.user.tenantId,
         teacherId,
-        validated
+        validated,
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -148,13 +184,38 @@ export class AttendanceController {
         sectionId,
         academicYearId as string,
         month ? parseInt(month as string) : undefined,
-        year ? parseInt(year as string) : undefined
+        year ? parseInt(year as string) : undefined,
       );
 
-      res.json({
-        success: true,
-        data: result,
-      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Teacher attendance report — all teachers for a given month.
+   */
+  static async getTeacherReport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authReq = req as AuthRequest;
+      const { academicYearId, month, year } = req.query;
+
+      if (!academicYearId) {
+        return res.status(400).json({
+          success: false,
+          error: 'academicYearId is required',
+        });
+      }
+
+      const result = await AttendanceService.getTeacherAttendanceReport(
+        authReq.user.tenantId,
+        academicYearId as string,
+        month !== undefined ? parseInt(month as string) : undefined,
+        year !== undefined ? parseInt(year as string) : undefined,
+      );
+
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -166,13 +227,10 @@ export class AttendanceController {
       const authReq = req as AuthRequest;
       const validated = markHolidaySchema.parse(req.body);
 
-      const holiday = await AttendanceService.markHoliday(
-        authReq.user.tenantId,
-        {
-          ...validated,
-          markedBy: authReq.user.id,
-        }
-      );
+      const holiday = await AttendanceService.markHoliday(authReq.user.tenantId, {
+        ...validated,
+        markedBy: authReq.user.id,
+      });
 
       res.status(201).json({
         success: true,
@@ -193,13 +251,10 @@ export class AttendanceController {
       const stats = await AttendanceService.getAttendanceStats(
         authReq.user.tenantId,
         academicYearId as string,
-        sectionId as string
+        sectionId as string,
       );
 
-      res.json({
-        success: true,
-        data: stats,
-      });
+      res.json({ success: true, data: stats });
     } catch (error) {
       next(error);
     }

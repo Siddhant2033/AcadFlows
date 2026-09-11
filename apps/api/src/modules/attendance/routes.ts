@@ -8,8 +8,7 @@ const router: Router = Router();
 router.use(authenticate);
 router.use(ensureTenantMatch);
 
-// ─────────────── Mark attendance ───────────────
-// Class teacher of that section OR admin
+// ─────────────── Mark student attendance ───────────────
 router.post(
   '/students',
   requireRole('admin', 'teacher'),
@@ -17,7 +16,14 @@ router.post(
   AttendanceController.markStudentAttendance,
 );
 
-// Admin-only: teachers attendance
+// ─────────────── Mark teacher attendance ───────────────
+// List all active teachers for the marking UI
+router.get(
+  '/teachers/list',
+  requireRole('admin'),
+  AttendanceController.getAllTeachersForAttendance,
+);
+
 router.post(
   '/teachers',
   requireRole('admin'),
@@ -33,12 +39,18 @@ router.get(
 );
 
 // ─────────────── Reports ───────────────
-// Class teacher of that section OR admin
 router.get(
   '/sections/:sectionId/report',
   requireRole('admin', 'teacher'),
   requireClassTeacherOrAdmin(),
   AttendanceController.getSectionReport,
+);
+
+// Teacher attendance report — must come BEFORE the /teachers/:teacherId catch-all
+router.get(
+  '/teachers-report',
+  requireRole('admin'),
+  AttendanceController.getTeacherReport,
 );
 
 // ─────────────── Holiday ───────────────

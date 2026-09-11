@@ -4,31 +4,27 @@ import { Student } from '../../models/Student';
 import { Teacher } from '../../models/Teacher';
 import { AppError } from '../../middleware/error-handler';
 
-// IST is UTC+05:30. This constant is used to normalize dates so that
-// "today" always means the same calendar day regardless of server timezone.
+// IST is UTC+05:30. Used to normalize dates so "today" means the same
+// calendar day regardless of server timezone.
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 /**
  * Normalize an input date to IST midnight.
- * Returns both the Date object (IST midnight, expressed in UTC) and
- * the YYYY-MM-DD string that will be stored in `dateOnly`.
+ * Returns both the Date (as a real UTC instant) and the YYYY-MM-DD string.
  */
 function normalizeToIST(dateInput: Date | string): { date: Date; dateOnly: string } {
   const raw = new Date(dateInput);
-
-  // Shift into IST by adding the offset, then extract the calendar day.
   const istShifted = new Date(raw.getTime() + IST_OFFSET_MS);
   const dateOnly = istShifted.toISOString().split('T')[0];
-
-  // Reconstruct IST midnight as a real UTC Date so Date comparisons work.
-  // e.g. dateOnly = "2026-09-11" → 2026-09-11T00:00:00+05:30 == 2026-09-10T18:30:00Z
   const istMidnight = new Date(`${dateOnly}T00:00:00+05:30`);
-
   return { date: istMidnight, dateOnly };
 }
 
 export class AttendanceService {
-  // Mark attendance for multiple students
+  // ═══════════════════════════════════════════════════════════
+  // Mark student attendance
+  // ═══════════════════════════════════════════════════════════
+
   static async markStudentAttendance(
     tenantId: string,
     data: {
@@ -50,7 +46,7 @@ export class AttendanceService {
     try {
       const { date, dateOnly } = normalizeToIST(data.date);
 
-      // Check if attendance already marked for this date
+      // Check for existing session
       const existing = await AttendanceSession.findOne({
         tenantId,
         sectionId: data.sectionId,
@@ -62,14 +58,14 @@ export class AttendanceService {
         throw new AppError('Attendance already marked for this date and section', 409);
       }
 
-      // Get all students in the section
+      // Fetch students in the section
       const students = await Student.find({
         tenantId,
         status: 'active',
         isDeleted: false,
         $or: [
           { sectionId: data.sectionId },
-          { section: data.sectionId }, // legacy fallback
+          { section: data.sectionId },
         ],
       });
 
@@ -77,7 +73,7 @@ export class AttendanceService {
         throw new AppError('No students found in this section', 404);
       }
 
-      // Create attendance records for provided students
+      // Build attendance records from provided data
       const attendanceRecords = data.records.map(record => ({
         tenantId,
         date,
@@ -93,7 +89,7 @@ export class AttendanceService {
         isHoliday: false,
       }));
 
-      // Auto-mark absent for missing students
+      // Auto-mark absent for unrecorded students
       const studentIds = students.map(s => s._id.toString());
       const recordedIds = data.records.map(r => r.studentId);
 
@@ -164,7 +160,10 @@ export class AttendanceService {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
   // Mark teacher attendance
+  // ═══════════════════════════════════════════════════════════
+
   static async markTeacherAttendance(
     tenantId: string,
     data: {
@@ -182,6 +181,7 @@ export class AttendanceService {
   ) {
     const { date, dateOnly } = normalizeToIST(data.date);
 
+    // Check for existing session
     const existing = await AttendanceSession.findOne({
       tenantId,
       dateOnly,
@@ -217,6 +217,7 @@ export class AttendanceService {
       isHoliday: false,
     }));
 
+    // Auto-mark absent for unrecorded teachers
     const teacherIds = teachers.map(t => t._id.toString());
     const recordedIds = data.records.map(r => r.teacherId);
 
@@ -270,7 +271,10 @@ export class AttendanceService {
     };
   }
 
-  // Calculate attendance statistics
+  // ═══════════════════════════════════════════════════════════
+  // Stats helper
+  // ═══════════════════════════════════════════════════════════
+
   private static async calculateAttendanceStats(
     tenantId: string,
     date: Date,
@@ -278,15 +282,8 @@ export class AttendanceService {
     type: 'student' | 'teacher' = 'student',
     session?: mongoose.ClientSession,
   ) {
-    const query: any = {
-      tenantId,
-      date,
-      type,
-    };
-
-    if (sectionId) {
-      query.sectionId = sectionId;
-    }
+    const query: any = { tenantId, date, type };
+    if (sectionId) query.sectionId = sectionId;
 
     const records = await Attendance.find(query).session(session || null);
 
@@ -308,7 +305,10 @@ export class AttendanceService {
     return stats;
   }
 
+  // ═══════════════════════════════════════════════════════════
   // Get attendance for a student
+  // ═══════════════════════════════════════════════════════════
+
   static async getStudentAttendance(
     tenantId: string,
     studentId: string,
@@ -326,15 +326,9 @@ export class AttendanceService {
       type: 'student',
     };
 
-    if (filters.startDate) {
-      query.date = { $gte: filters.startDate };
-    }
-    if (filters.endDate) {
-      query.date = { ...query.date, $lte: filters.endDate };
-    }
-    if (filters.status) {
-      query.status = filters.status;
-    }
+    if (filters.startDate) query.date = { $gte: filters.startDate };
+    if (filters.endDate) query.date = { ...query.date, $lte: filters.endDate };
+    if (filters.status) query.status = filters.status;
 
     const page = filters.page || 1;
     const limit = filters.limit || 30;
@@ -357,7 +351,10 @@ export class AttendanceService {
     };
   }
 
+  // ═══════════════════════════════════════════════════════════
   // Get attendance for a teacher
+  // ═══════════════════════════════════════════════════════════
+
   static async getTeacherAttendance(
     tenantId: string,
     teacherId: string,
@@ -400,6 +397,10 @@ export class AttendanceService {
     };
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // Summary for a single entity (last 30 days)
+  // ═══════════════════════════════════════════════════════════
+
   static async getAttendanceSummary(
     tenantId: string,
     entityId: string,
@@ -435,7 +436,10 @@ export class AttendanceService {
     };
   }
 
-  // Get section attendance report
+  // ═══════════════════════════════════════════════════════════
+  // Section attendance report (student)
+  // ═══════════════════════════════════════════════════════════
+
   static async getSectionAttendanceReport(
     tenantId: string,
     sectionId: string,
@@ -447,8 +451,12 @@ export class AttendanceService {
     const targetMonth = month !== undefined ? month : date.getMonth();
     const targetYear = year !== undefined ? year : date.getFullYear();
 
-    const startDate = new Date(Date.UTC(targetYear, targetMonth, 1) - IST_OFFSET_MS);
-    const endDate = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59) - IST_OFFSET_MS);
+    const startDate = new Date(
+      Date.UTC(targetYear, targetMonth, 1) - IST_OFFSET_MS,
+    );
+    const endDate = new Date(
+      Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59) - IST_OFFSET_MS,
+    );
 
     const sessions = await AttendanceSession.find({
       tenantId,
@@ -516,13 +524,114 @@ export class AttendanceService {
         totalStudents,
         totalDays,
         averageAttendance:
-          sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) /
-          (sessions.length || 1),
+          sessions.length > 0
+            ? sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) /
+              sessions.length
+            : 0,
       },
     };
   }
 
-  // Send attendance notifications
+  // ═══════════════════════════════════════════════════════════
+  // Teacher attendance report — one row per teacher for the month
+  // ═══════════════════════════════════════════════════════════
+
+  static async getTeacherAttendanceReport(
+    tenantId: string,
+    academicYearId: string,
+    month?: number,
+    year?: number,
+  ) {
+    const date = new Date();
+    const targetMonth = month !== undefined ? month : date.getMonth();
+    const targetYear = year !== undefined ? year : date.getFullYear();
+
+    const startDate = new Date(
+      Date.UTC(targetYear, targetMonth, 1) - IST_OFFSET_MS,
+    );
+    const endDate = new Date(
+      Date.UTC(targetYear, targetMonth + 1, 0, 23, 59, 59) - IST_OFFSET_MS,
+    );
+
+    const sessions = await AttendanceSession.find({
+      tenantId,
+      academicYearId,
+      type: 'teacher',
+      date: { $gte: startDate, $lte: endDate },
+    }).sort({ date: 1 });
+
+    const teachers = await Teacher.find({
+      tenantId,
+      status: 'active',
+      isDeleted: false,
+    }).select('_id firstName lastName employeeId email');
+
+    const attendanceData = await Attendance.find({
+      tenantId,
+      type: 'teacher',
+      date: { $gte: startDate, $lte: endDate },
+    });
+
+    const teacherAttendance: any[] = [];
+    for (const teacher of teachers) {
+      const teacherId = teacher._id.toString();
+      const records = attendanceData.filter(a => a.entityId === teacherId);
+
+      const present = records.filter(r => r.status === 'present').length;
+      const absent = records.filter(r => r.status === 'absent').length;
+      const late = records.filter(r => r.status === 'late').length;
+      const halfDay = records.filter(r => r.status === 'half_day').length;
+      const total = records.length;
+
+      teacherAttendance.push({
+        teacher: {
+          id: teacherId,
+          name: `${teacher.firstName} ${teacher.lastName}`,
+          employeeId: teacher.employeeId,
+          email: teacher.email,
+        },
+        present,
+        absent,
+        late,
+        halfDay,
+        total,
+        percentage:
+          total > 0
+            ? Math.round(((present + late + halfDay) / total) * 100)
+            : 0,
+      });
+    }
+
+    return {
+      teachers: teacherAttendance.sort((a, b) =>
+        a.teacher.name.localeCompare(b.teacher.name),
+      ),
+      sessions: sessions.map(s => ({
+        date: s.date,
+        present: s.totalPresent,
+        absent: s.totalAbsent,
+        late: s.totalLate,
+        halfDay: s.totalHalfDay,
+        percentage: s.attendancePercentage,
+      })),
+      summary: {
+        totalTeachers: teachers.length,
+        totalDays: sessions.length,
+        averageAttendance:
+          sessions.length > 0
+            ? Math.round(
+                sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) /
+                  sessions.length,
+              )
+            : 0,
+      },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // Notifications (stub — logs to console)
+  // ═══════════════════════════════════════════════════════════
+
   private static async sendAttendanceNotifications(
     tenantId: string,
     date: Date,
@@ -556,7 +665,10 @@ export class AttendanceService {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
   // Mark holiday
+  // ═══════════════════════════════════════════════════════════
+
   static async markHoliday(
     tenantId: string,
     data: {
@@ -614,7 +726,10 @@ export class AttendanceService {
     return holiday;
   }
 
-  // Get attendance statistics for dashboard
+  // ═══════════════════════════════════════════════════════════
+  // Dashboard stats
+  // ═══════════════════════════════════════════════════════════
+
   static async getAttendanceStats(
     tenantId: string,
     academicYearId: string,
@@ -630,11 +745,7 @@ export class AttendanceService {
       dateOnly: todayDateOnly,
     });
 
-    const monthStartRaw = new Date(
-      todayRaw.getFullYear(),
-      todayRaw.getMonth(),
-      1,
-    );
+    const monthStartRaw = new Date(todayRaw.getFullYear(), todayRaw.getMonth(), 1);
     const { date: monthStart } = normalizeToIST(monthStartRaw);
     const { date: today } = normalizeToIST(todayRaw);
 
@@ -712,7 +823,8 @@ export class AttendanceService {
     return {
       totalDays: sessions.length,
       averageAttendance: Math.round(
-        sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) / sessions.length,
+        sessions.reduce((acc, s) => acc + s.attendancePercentage, 0) /
+          sessions.length,
       ),
       totalPresent,
       totalAbsent,

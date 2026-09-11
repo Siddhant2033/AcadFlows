@@ -42,6 +42,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { label: 'Students', icon: '👨‍🎓', path: '/students', roles: ['admin'] },
       { label: 'Teachers', icon: '👨‍🏫', path: '/teachers', roles: ['admin'] },
+      { label: 'Reports', icon: '📈', path: '/attendance/reports', roles: ['admin', 'teacher'] },
     ],
   },
   {
@@ -58,6 +59,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { label: 'Gradebook', icon: '📖', path: '/gradebook', roles: ['student'] },
       { label: 'Report Cards', icon: '🎯', path: '/report-cards', roles: ['admin', 'teacher'] },
       { label: 'Timetable', icon: '📅', path: '/timetable', roles: ['admin', 'teacher', 'student', 'guardian'] },
+    ],
+  },
+  {
+    label: 'HR',
+    items: [
+      { label: 'Leave Requests', icon: '🏖️', path: '/leaves', roles: ['admin'] },
     ],
   },
   {

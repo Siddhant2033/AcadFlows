@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
 
 // ─────────────────────────────────────────────────────────────
-// Reusable sub-schemas — nested fields always optional with defaults
+// Reusable sub-schemas
 // ─────────────────────────────────────────────────────────────
 
 const addressSchema = z.object({
@@ -39,7 +39,6 @@ const emergencyContactSchema = z.object({
   relationship: z.string().min(1, 'Relationship is required'),
 });
 
-// Optional email — empty string becomes undefined, otherwise validated
 const optionalEmail = z
   .union([z.string(), z.undefined(), z.null()])
   .optional()
@@ -48,10 +47,9 @@ const optionalEmail = z
     const trimmed = String(v).trim();
     return trimmed === '' ? undefined : trimmed;
   })
-  .refine(
-    v => v === undefined || /^\S+@\S+\.\S+$/.test(v),
-    { message: 'Invalid email address' },
-  );
+  .refine(v => v === undefined || /^\S+@\S+\.\S+$/.test(v), {
+    message: 'Invalid email address',
+  });
 
 const optionalString = z
   .union([z.string(), z.undefined(), z.null()])
@@ -63,7 +61,7 @@ const optionalString = z
   });
 
 // ─────────────────────────────────────────────────────────────
-// Teacher schema — every optional nested field is truly optional
+// Teacher schema
 // ─────────────────────────────────────────────────────────────
 
 export const createTeacherSchema = z
@@ -80,16 +78,13 @@ export const createTeacherSchema = z
         const s = String(v);
         return s === '' ? undefined : s;
       })
-      .refine(
-        v => v === undefined || v.length >= 8,
-        { message: 'Password must be at least 8 characters' },
-      ),
+      .refine(v => v === undefined || v.length >= 8, {
+        message: 'Password must be at least 8 characters',
+      }),
 
     dateOfBirth: z.coerce.date(),
     gender: z.enum(['male', 'female', 'other']),
-    maritalStatus: z
-      .enum(['single', 'married', 'divorced', 'widowed'])
-      .optional(),
+    maritalStatus: z.enum(['single', 'married', 'divorced', 'widowed']).optional(),
     nationality: optionalString,
     religion: optionalString,
 
@@ -114,10 +109,7 @@ export const createTeacherSchema = z
       .object({
         amount: z.coerce.number().min(0).optional().default(0),
         currency: z.string().optional().default('INR'),
-        frequency: z
-          .enum(['monthly', 'weekly', 'hourly'])
-          .optional()
-          .default('monthly'),
+        frequency: z.enum(['monthly', 'weekly', 'hourly']).optional().default('monthly'),
       })
       .optional(),
 
@@ -151,7 +143,7 @@ const updateLeaveStatusSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
-// Controller
+// Teacher Controller
 // ─────────────────────────────────────────────────────────────
 
 export class TeacherController {
@@ -182,15 +174,21 @@ export class TeacherController {
       const authReq = req as AuthRequest;
       const validated = createTeacherSchema.parse(req.body);
 
-      const teacher = await TeacherService.createTeacher({
+      const result = await TeacherService.createTeacher({
         ...validated,
         tenantId: authReq.user.tenantId,
       });
 
       res.status(201).json({
         success: true,
-        data: teacher,
-        message: 'Teacher created successfully!',
+        data: result.teacher,
+        ...(result.tempPassword && {
+          message: `Teacher created successfully! Temporary password: ${result.tempPassword}`,
+          meta: { tempPassword: result.tempPassword },
+        }),
+        ...(!result.tempPassword && {
+          message: 'Teacher created successfully!',
+        }),
       });
     } catch (error) {
       next(error);
@@ -415,6 +413,19 @@ export class TeacherController {
       const { leaveId } = req.params;
       await LeaveService.deleteLeave(leaveId);
       res.json({ success: true, message: 'Leave request deleted successfully!' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Count of pending leave requests — used by the sidebar badge.
+   */
+  static async getPendingLeaveCount(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authReq = req as AuthRequest;
+      const count = await LeaveService.getPendingCount(authReq.user.tenantId);
+      res.json({ success: true, data: { count } });
     } catch (error) {
       next(error);
     }

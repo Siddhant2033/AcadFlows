@@ -6,82 +6,99 @@ import { Tenant } from '../../models/Tenant';
 import { AppError } from '../../middleware/error-handler';
 
 export class TeacherService {
-  // Create teacher with user account
-  static async createTeacher(data: any) {
+  /**
+   * Create teacher with user account.
+   * Returns { teacher, tempPassword? } — tempPassword only present when
+   * a new User was auto-created with a generated password.
+   */
+  static async createTeacher(data: any): Promise<{ teacher: any; tempPassword?: string }> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // Generate employee ID
       const employeeId = await this.generateEmployeeId(data.tenantId);
 
-      // Check if user already exists
       let userId = data.userId;
+      let tempPassword: string | undefined;
+
       if (!userId) {
-        // Create user account for teacher
-        const user = await User.create([{
-          tenantId: data.tenantId,
-          email: data.email,
-          passwordHash: data.password || 'Teacher@' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-          firstName: data.firstName,
-          lastName: data.lastName,
-          role: 'teacher',
-          status: 'active',
-          phone: data.phone,
-          dateOfBirth: data.dateOfBirth,
-          gender: data.gender,
-          address: data.address?.street,
-        }], { session });
+        if (!data.password) {
+          tempPassword =
+            'Teacher@' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        const user = await User.create(
+          [
+            {
+              tenantId: data.tenantId,
+              email: data.email,
+              passwordHash: data.password || tempPassword!,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              role: 'teacher',
+              status: 'active',
+              phone: data.phone,
+              dateOfBirth: data.dateOfBirth,
+              gender: data.gender,
+              address: data.address?.street,
+            },
+          ],
+          { session },
+        );
 
         userId = user[0]._id.toString();
       }
 
-      // Create teacher
-      const teacher = await Teacher.create([{
-        tenantId: data.tenantId,
-        userId,
-        employeeId,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        middleName: data.middleName,
-        dateOfBirth: data.dateOfBirth,
-        gender: data.gender,
-        maritalStatus: data.maritalStatus,
-        nationality: data.nationality,
-        religion: data.religion,
-        phone: data.phone,
-        email: data.email,
-        alternativeEmail: data.alternativeEmail,
-        address: data.address || {
-          city: '',
-          state: '',
-          country: 'India',
-          postalCode: '',
-        },
-        qualifications: data.qualifications || [],
-        experience: data.experience || [],
-        subjects: data.subjects || [],
-        assignedSections: data.assignedSections || [],
-        specialization: data.specialization || [],
-        joiningDate: data.joiningDate || new Date(),
-        employmentType: data.employmentType || 'permanent',
-        contractEndDate: data.contractEndDate,
-        salary: data.salary,
-        bankDetails: data.bankDetails,
-        emergencyContact: data.emergencyContact,
-        leaveBalance: {
-          annual: 20,
-          sick: 10,
-          casual: 12,
-          other: 5,
-        },
-        status: 'active',
-      }], { session });
+      const teacher = await Teacher.create(
+        [
+          {
+            tenantId: data.tenantId,
+            userId,
+            employeeId,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            middleName: data.middleName,
+            dateOfBirth: data.dateOfBirth,
+            gender: data.gender,
+            maritalStatus: data.maritalStatus,
+            nationality: data.nationality,
+            religion: data.religion,
+            phone: data.phone,
+            email: data.email,
+            alternativeEmail: data.alternativeEmail,
+            address: data.address || {
+              city: '',
+              state: '',
+              country: 'India',
+              postalCode: '',
+            },
+            qualifications: data.qualifications || [],
+            experience: data.experience || [],
+            subjects: data.subjects || [],
+            assignedSections: data.assignedSections || [],
+            specialization: data.specialization || [],
+            joiningDate: data.joiningDate || new Date(),
+            employmentType: data.employmentType || 'permanent',
+            contractEndDate: data.contractEndDate,
+            salary: data.salary,
+            bankDetails: data.bankDetails,
+            emergencyContact: data.emergencyContact,
+            leaveBalance: {
+              annual: 20,
+              sick: 10,
+              casual: 12,
+              other: 5,
+            },
+            status: 'active',
+          },
+        ],
+        { session },
+      );
 
       await session.commitTransaction();
       session.endSession();
 
-      return teacher[0];
+      return { teacher: teacher[0], tempPassword };
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
@@ -89,7 +106,6 @@ export class TeacherService {
     }
   }
 
-  // Get all teachers with filters
   static async getTeachers(
     tenantId: string,
     filters: {
@@ -99,7 +115,7 @@ export class TeacherService {
       search?: string;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId, isDeleted: false };
 
@@ -138,14 +154,15 @@ export class TeacherService {
     };
   }
 
-  // Get teacher by ID
   static async getTeacherById(teacherId: string) {
     if (!mongoose.Types.ObjectId.isValid(teacherId)) {
       throw new AppError('Invalid teacher ID', 400);
     }
 
-    const teacher = await Teacher.findById(teacherId)
-      .populate('userId', 'email phone profilePicture');
+    const teacher = await Teacher.findById(teacherId).populate(
+      'userId',
+      'email phone profilePicture',
+    );
 
     if (!teacher) {
       throw new AppError('Teacher not found', 404);
@@ -154,7 +171,6 @@ export class TeacherService {
     return teacher;
   }
 
-  // Update teacher
   static async updateTeacher(teacherId: string, data: any) {
     if (!mongoose.Types.ObjectId.isValid(teacherId)) {
       throw new AppError('Invalid teacher ID', 400);
@@ -163,14 +179,13 @@ export class TeacherService {
     const teacher = await Teacher.findByIdAndUpdate(
       teacherId,
       { $set: data },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!teacher) {
       throw new AppError('Teacher not found', 404);
     }
 
-    // Update user if needed
     if (data.email || data.phone || data.firstName || data.lastName) {
       await User.findByIdAndUpdate(teacher.userId, {
         $set: {
@@ -187,7 +202,6 @@ export class TeacherService {
     return teacher;
   }
 
-  // Soft delete teacher
   static async deleteTeacher(teacherId: string) {
     if (!mongoose.Types.ObjectId.isValid(teacherId)) {
       throw new AppError('Invalid teacher ID', 400);
@@ -202,14 +216,13 @@ export class TeacherService {
           status: 'inactive',
         },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!teacher) {
       throw new AppError('Teacher not found', 404);
     }
 
-    // Also deactivate user
     await User.findByIdAndUpdate(teacher.userId, {
       $set: { status: 'inactive' },
     });
@@ -217,7 +230,6 @@ export class TeacherService {
     return teacher;
   }
 
-  // Assign subject to teacher
   static async assignSubject(teacherId: string, subjectData: any) {
     if (!mongoose.Types.ObjectId.isValid(teacherId)) {
       throw new AppError('Invalid teacher ID', 400);
@@ -236,7 +248,7 @@ export class TeacherService {
           },
         },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!teacher) {
@@ -246,7 +258,6 @@ export class TeacherService {
     return teacher;
   }
 
-  // Remove subject assignment
   static async removeSubject(teacherId: string, subjectId: string, sectionId: string) {
     if (!mongoose.Types.ObjectId.isValid(teacherId)) {
       throw new AppError('Invalid teacher ID', 400);
@@ -260,7 +271,7 @@ export class TeacherService {
           assignedSections: { subjectId, sectionId },
         },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!teacher) {
@@ -270,7 +281,6 @@ export class TeacherService {
     return teacher;
   }
 
-  // Get teacher's schedule
   static async getTeacherSchedule(teacherId: string, date?: Date) {
     if (!mongoose.Types.ObjectId.isValid(teacherId)) {
       throw new AppError('Invalid teacher ID', 400);
@@ -281,11 +291,10 @@ export class TeacherService {
       throw new AppError('Teacher not found', 404);
     }
 
-    // Get schedule from Schedule model
     const Schedule = mongoose.model('Schedule');
     const query: any = {
       tenantId: teacher.tenantId,
-      teacherId: teacherId,
+      teacherId,
     };
 
     if (date) {
@@ -306,7 +315,6 @@ export class TeacherService {
     return schedule;
   }
 
-  // Get teacher statistics
   static async getTeacherStats(tenantId: string) {
     const stats = await Teacher.aggregate([
       { $match: { tenantId, isDeleted: false } },
@@ -336,7 +344,6 @@ export class TeacherService {
     };
   }
 
-  // Helper: Generate employee ID
   private static async generateEmployeeId(tenantId: string): Promise<string> {
     const tenant = await Tenant.findById(tenantId);
     if (!tenant) {
@@ -351,7 +358,10 @@ export class TeacherService {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
 // Leave Service
+// ─────────────────────────────────────────────────────────────
+
 export class LeaveService {
   static async createLeave(data: any) {
     const leave = await Leave.create(data);
@@ -368,7 +378,7 @@ export class LeaveService {
       endDate?: Date;
       page?: number;
       limit?: number;
-    }
+    },
   ) {
     const query: any = { tenantId };
 
@@ -423,7 +433,7 @@ export class LeaveService {
     leaveId: string,
     status: string,
     approvedBy: string,
-    rejectionReason?: string
+    rejectionReason?: string,
   ) {
     if (!mongoose.Types.ObjectId.isValid(leaveId)) {
       throw new AppError('Invalid leave ID', 400);
@@ -442,7 +452,7 @@ export class LeaveService {
     const leave = await Leave.findByIdAndUpdate(
       leaveId,
       { $set: update },
-      { new: true }
+      { new: true },
     );
 
     if (!leave) {
@@ -484,5 +494,12 @@ export class LeaveService {
     }
 
     return leave;
+  }
+
+  /**
+   * Count of pending leave requests — for the sidebar badge.
+   */
+  static async getPendingCount(tenantId: string): Promise<number> {
+    return Leave.countDocuments({ tenantId, status: 'pending' });
   }
 }

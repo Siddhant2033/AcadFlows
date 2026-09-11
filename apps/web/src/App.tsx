@@ -51,6 +51,8 @@ import RecordPaymentPage from './pages/admin/RecordPayment';
 import DiscountsPage from './pages/admin/Discounts';
 import FeeReportsPage from './pages/admin/FeeReports';
 import StudentFeeHistoryPage from './pages/admin/StudentFeeHistory';
+import LeavesPage from './pages/admin/Leaves';
+import TeacherAttendancePage from './pages/admin/TeacherAttendance';
 
 function App() {
   return (
@@ -448,6 +450,25 @@ function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <StudentFeeHistoryPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Leaves */}
+            <Route
+              path="/leaves"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <LeavesPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Teacher attendance */}
+            <Route
+              path="/attendance/teachers"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <TeacherAttendancePage />
                 </ProtectedRoute>
               }
             />
