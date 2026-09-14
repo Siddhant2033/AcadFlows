@@ -28,7 +28,6 @@ const statusSchema = z.enum(['active', 'inactive', 'archived'], {
   errorMap: () => ({ message: 'Status must be active, inactive, or archived' }),
 });
 
-// Shared enum — must match the Mongoose enum on Student.guardians[].relationship
 const relationshipEnum = z.enum([
   'father',
   'mother',
@@ -79,6 +78,9 @@ export const registerSchema = z
     gender: z.enum(['male', 'female', 'other']).optional(),
 
     // ── Student ──
+    // grade + sectionId are conditionally required when the student
+    // did NOT come in via /students/verify-identity. Enforced below
+    // with `.superRefine()`.
     grade: z.string().optional(),
     section: z.string().optional(),
     sectionId: z.string().optional(),
@@ -86,6 +88,14 @@ export const registerSchema = z
     parentName: z.string().optional(),
     parentPhone: z.string().optional(),
     parentEmail: z.string().optional(),
+
+    // ── Student verification (Sprint 5) ──
+    verifiedStudentId: z.string().optional(),
+    verificationData: z
+      .object({
+        studentId: z.string().optional(),
+      })
+      .optional(),
 
     // ── Teacher ──
     employeeId: z.string().optional(),
@@ -95,12 +105,39 @@ export const registerSchema = z
     joiningDate: z.string().optional(),
 
     // ── Guardian ──
-    // Relationship is now restricted to the same enum as the Mongoose schema.
     relationship: relationshipEnum.optional(),
     occupation: z.string().optional(),
     children: z.array(childLinkSchema).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    // Students who did NOT pass verification must supply grade +
+    // sectionId so the approver knows which section to review.
+    if (data.role !== 'student') return;
+
+    const hasVerifiedId =
+      !!data.verifiedStudentId || !!data.verificationData?.studentId;
+
+    if (hasVerifiedId) return;
+
+    if (!data.grade || data.grade.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['grade'],
+        message:
+          'Grade is required when you do not have a verified student record',
+      });
+    }
+
+    if (!data.sectionId || data.sectionId.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['sectionId'],
+        message:
+          'Section is required when you do not have a verified student record',
+      });
+    }
+  });
 
 export const loginSchema = z
   .object({

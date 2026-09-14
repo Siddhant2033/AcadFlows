@@ -40,9 +40,6 @@ export class AuthService {
       throw new AppError('Tenant not found', 400);
     }
 
-    // Regular tenants must be active to register users.
-    // Platform admin's tenant may still be 'pending' when they register
-    // — we auto-approve it below.
     const registeringPlatformAdmin = isPlatformAdminEmail(input.email);
 
     if (tenant.status !== 'active' && !registeringPlatformAdmin) {
@@ -57,7 +54,92 @@ export class AuthService {
       throw new AppError('User already exists with this email', 409);
     }
 
-    // ── Determine if this is the first admin (auto-approved) ──
+    /* ═══════════════════════════════════════════════════════════
+       STUDENT VERIFICATION PATH
+       ═══════════════════════════════════════════════════════════
+       A student can arrive via two paths:
+         (A) Verified — passed /students/verify-identity, so
+             `verificationData.studentId` is present. Link the new
+             User to the existing Student record.
+         (B) Unverified — no existing record. Create a fresh
+             Student from the form data (grade + sectionId required
+             by the validation schema in this case).
+       ═══════════════════════════════════════════════════════════ */
+
+    let verifiedStudent: any = null;
+
+    if (input.role === 'student') {
+      const anyInput: any = input;
+      const verifiedStudentId: string | undefined =
+        anyInput.verificationData?.studentId ||
+        anyInput.verifiedStudentId;
+
+      if (verifiedStudentId) {
+        const { Student } = await import('../../models/Student');
+
+        const student = await Student.findOne({
+          _id: verifiedStudentId,
+          tenantId: input.tenantId,
+          isDeleted: false,
+          status: 'active',
+        });
+
+        if (!student) {
+          throw new AppError(
+            'Verified student record not found for this school.',
+            400,
+          );
+        }
+
+        const { User: UserModel } = await import('../../models/User');
+        const existing = await UserModel.findById(student.userId).select(
+          'status',
+        );
+        if (existing && existing.status !== 'inactive') {
+          throw new AppError(
+            'An account already exists for this student.',
+            409,
+          );
+        }
+
+        verifiedStudent = student;
+
+        // Force the register flow to use the student record's identifiers.
+        input.grade = student.grade;
+        input.section = student.section || '';
+        input.sectionId = student.sectionId || '';
+      }
+      // else: unverified path — trust the form data. Validation
+      // has already guaranteed grade + sectionId are present.
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       TEACHER EMAIL DOMAIN WHITELIST
+       ═══════════════════════════════════════════════════════════ */
+
+    if (input.role === 'teacher') {
+      const allowed = tenant.settings?.allowedTeacherEmailDomains || [];
+      if (allowed.length > 0) {
+        const domain = input.email.split('@')[1]?.toLowerCase() || '';
+        const ok = allowed.some(d => {
+          const norm = d.replace(/^@/, '').toLowerCase();
+          return domain === norm || domain.endsWith(`.${norm}`);
+        });
+        if (!ok) {
+          throw new AppError(
+            `Teacher registration is restricted to: ${allowed
+              .map(d => `@${d}`)
+              .join(', ')}`,
+            403,
+          );
+        }
+      }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       AUTO-APPROVAL RULES
+       ═══════════════════════════════════════════════════════════ */
+
     const adminExists = await User.exists({
       tenantId: input.tenantId,
       role: 'admin',
@@ -69,15 +151,15 @@ export class AuthService {
     let approvedBy: string | undefined;
     let approvedAt: Date | undefined;
 
-    // Rule 1: No admin exists → this user becomes admin AND is auto-approved
-    // Rule 2: Platform admin registering → always auto-approved
     if (!adminExists || registeringPlatformAdmin) {
       finalRole = 'admin';
       initialStatus = 'active';
       approvedBy = registeringPlatformAdmin ? 'platform-admin' : 'system';
       approvedAt = new Date();
       console.log(
-        `🔐 Auto-approving admin for ${input.email} (${registeringPlatformAdmin ? 'platform admin' : 'first admin'})`,
+        `🔐 Auto-approving admin for ${input.email} (${
+          registeringPlatformAdmin ? 'platform admin' : 'first admin'
+        })`,
       );
     }
 
@@ -104,20 +186,20 @@ export class AuthService {
       tenantId: user.tenantId,
     });
 
-    // ── If platform admin registered, activate their tenant too ──
     if (registeringPlatformAdmin && tenant.status !== 'active') {
       tenant.status = 'active';
       tenant.approvedBy = 'platform-admin';
       tenant.approvedAt = new Date();
       tenant.emailVerified = true;
       await tenant.save();
-      console.log(`✅ Tenant "${tenant.name}" auto-approved for platform admin`);
+      console.log(
+        `✅ Tenant "${tenant.name}" auto-approved for platform admin`,
+      );
     }
 
-    // Create role-specific profile
-    await this.createRoleProfile(user, input);
+    // Create role-specific profile — passing verifiedStudent when available.
+    await this.createRoleProfile(user, input, verifiedStudent);
 
-    // Link guardian to students
     if (finalRole === 'guardian') {
       await this.linkGuardianToStudents(user, input);
     }
@@ -131,7 +213,6 @@ export class AuthService {
 
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
-    // Attach the platform-admin flag
     const responseUser = {
       ...userObj,
       isPlatformAdmin: registeringPlatformAdmin,
@@ -144,13 +225,37 @@ export class AuthService {
      ROLE PROFILE CREATION
      ═══════════════════════════════════════════════════════════ */
 
-  private static async createRoleProfile(user: any, input: UserCreateInput) {
+  private static async createRoleProfile(
+    user: any,
+    input: UserCreateInput,
+    verifiedStudent?: any,
+  ) {
     try {
+      /* ─────────────── Student ─────────────── */
+
       if (user.role === 'student') {
         const { Student } = await import('../../models/Student');
         const { AcademicYear } = await import('../../models/AcademicYear');
         const { generateAdmissionNo } = await import('../../utils/admission');
 
+        // ── Path A: verified student — link the new User ──
+        if (verifiedStudent) {
+          verifiedStudent.userId = user._id.toString();
+          verifiedStudent.status =
+            user.status === 'active' ? 'active' : 'pending';
+          verifiedStudent.approvedBy = user.approvedBy;
+          verifiedStudent.approvedAt = user.approvedAt;
+          await verifiedStudent.save();
+
+          console.log('✅ Linked new user to existing student:', {
+            userId: user._id,
+            studentId: verifiedStudent._id,
+            status: verifiedStudent.status,
+          });
+          return;
+        }
+
+        // ── Path B: unverified — create a new Student record ──
         const admissionNo = await generateAdmissionNo(user.tenantId);
 
         const address =
@@ -169,6 +274,28 @@ export class AuthService {
                 postalCode: '000000',
               };
 
+        // Roll number: attempt to generate from the section code, else
+        // fall back to admission number.
+        let rollNo = admissionNo;
+        if (input.sectionId) {
+          const { Section } = await import('../../models/Section');
+          const section = await Section.findOne({
+            _id: input.sectionId,
+            tenantId: user.tenantId,
+          })
+            .select('code')
+            .lean();
+
+          if (section?.code) {
+            const count = await Student.countDocuments({
+              tenantId: user.tenantId,
+              sectionId: input.sectionId,
+              isDeleted: false,
+            });
+            rollNo = `${section.code}${String(count + 1).padStart(3, '0')}`;
+          }
+        }
+
         const enrollments: any[] = [];
         if (input.sectionId) {
           const currentYear = await AcademicYear.findOne({
@@ -180,7 +307,7 @@ export class AuthService {
             enrollments.push({
               academicYearId: currentYear._id.toString(),
               sectionId: input.sectionId,
-              rollNo: admissionNo,
+              rollNo,
               enrollmentDate: new Date(),
               status: 'active',
             });
@@ -191,7 +318,7 @@ export class AuthService {
           tenantId: user.tenantId,
           userId: user._id.toString(),
           admissionNo,
-          rollNo: admissionNo,
+          rollNo,
           firstName: user.firstName,
           lastName: user.lastName,
           grade: input.grade || 'Unassigned',
@@ -225,12 +352,16 @@ export class AuthService {
           isDeleted: false,
         });
 
-        console.log('✅ Student profile created:', {
+        console.log('✅ Student profile created (unverified path):', {
           userId: user._id,
           admissionNo,
+          rollNo,
           status: user.status,
         });
+        return;
       }
+
+      /* ─────────────── Teacher ─────────────── */
 
       if (user.role === 'teacher') {
         const { Teacher } = await import('../../models/Teacher');
@@ -379,7 +510,7 @@ export class AuthService {
           email: user.email,
           relationship: (input.relationship as any) || 'guardian',
           occupation: input.occupation || '',
-          isVerified: true,
+          isVerified: false,
         });
 
         await student.save();
@@ -410,7 +541,6 @@ export class AuthService {
 
     const isPlatformAdmin = isPlatformAdminEmail(user.email);
 
-    // ── Block login for non-active accounts (except platform admin) ──
     if (!isPlatformAdmin) {
       if (user.status === 'pending') {
         throw new AppError(
@@ -478,7 +608,6 @@ export class AuthService {
         throw new AppError('Invalid refresh token', 401);
       }
 
-      // Allow refresh for platform admin regardless of status
       const isPlatformAdmin = isPlatformAdminEmail(user.email);
       if (!isPlatformAdmin && user.status !== 'active') {
         throw new AppError('Invalid refresh token', 401);
@@ -496,7 +625,7 @@ export class AuthService {
   }
 
   /* ═══════════════════════════════════════════════════════════
-     GET ME (helper for /auth/me controller)
+     GET ME
      ═══════════════════════════════════════════════════════════ */
 
   static async getMe(userId: string): Promise<any> {

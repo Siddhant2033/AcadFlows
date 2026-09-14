@@ -17,13 +17,20 @@ const verifyIdentitySchema = z
  * POST /students/verify-identity
  *
  * Public — called during student registration BEFORE the account is
- * created. Confirms that a student record exists matching both the
- * roll number and admission number, that it is active, and that it
- * does NOT already have a linked User account.
+ * created.
  *
- * Returns minimal, non-PII identifying info (name + grade/section)
- * so the register UI can show "Found: Arjun Mehta, Class 5A" for
- * the user to confirm.
+ * Return semantics (important — non-blocking):
+ *
+ *   { found: true,  student: {...} }  → a matching active Student record
+ *     exists and has no linked User. The register flow will link the
+ *     new User to this record. Pre-fills name / grade / section.
+ *
+ *   { found: false }                  → no matching record. This is NOT
+ *     an error. The register flow continues and the teacher/admin
+ *     verifies the details at approval time.
+ *
+ * Only a hard error is thrown when the tenant itself is invalid or
+ * inactive — those are true misuse cases.
  */
 export class StudentIdentityController {
   static async verifyIdentity(
@@ -63,39 +70,52 @@ export class StudentIdentityController {
         )
         .lean();
 
+      // ── No match: non-error, "found: false" ──
       if (!student) {
-        throw new AppError(
-          'No student found with this roll number and admission number',
-          404,
-        );
+        return res.json({
+          success: true,
+          data: {
+            found: false,
+            message:
+              'No matching student record found. You can continue registration; your teacher or admin will verify your details.',
+          },
+        });
       }
 
+      // ── Match found, but inactive: still return found: false ──
       if (student.status !== 'active') {
-        throw new AppError(
-          'This student record is not active. Contact your school administrator.',
-          403,
-        );
+        return res.json({
+          success: true,
+          data: {
+            found: false,
+            message:
+              'A student record was found but is not active. Contact your school administrator.',
+          },
+        });
       }
 
-      // A User account is auto-created by the admin flow; if one already
-      // exists, block self-registration to prevent hijacking.
+      // ── Match found, but already linked to a User ──
       const { User } = await import('../../models/User');
-      const existingUser = await User.findOne({
-        _id: student.userId,
-      })
+      const existingUser = await User.findOne({ _id: student.userId })
         .select('_id email status')
         .lean();
 
       if (existingUser && existingUser.status !== 'inactive') {
-        throw new AppError(
-          'An account already exists for this student. Use login or password reset.',
-          409,
-        );
+        return res.json({
+          success: true,
+          data: {
+            found: false,
+            message:
+              'An account already exists for this student. Use login or password reset.',
+          },
+        });
       }
 
+      // ── Happy path ──
       res.json({
         success: true,
         data: {
+          found: true,
           student: {
             id: student._id.toString(),
             firstName: student.firstName,

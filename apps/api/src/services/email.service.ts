@@ -550,6 +550,77 @@ export async function sendUserRejectedEmail(
 }
 
 /* ─────────────────────────────────────────────────────────────
+   STUDENT SELF-REGISTRATION — DUAL RECIPIENT (teacher + admin)
+   ───────────────────────────────────────────────────────────── */
+
+/**
+ * Notify the class teacher AND the school admin that a student is
+ * awaiting approval. Either can approve — first to act wins.
+ *
+ * Pass `null` for either recipient if unknown (e.g., section has no
+ * class teacher assigned). At least one recipient must be present
+ * or the send is skipped.
+ */
+export async function sendStudentPendingApprovalDualEmail(
+  teacherEmail: string | null,
+  adminEmail: string | null,
+  studentName: string,
+  studentEmail: string,
+  className: string,
+  reviewLink: string,
+): Promise<void> {
+  const recipients = [teacherEmail, adminEmail].filter(
+    (e): e is string => !!e && e.trim() !== '',
+  );
+
+  if (recipients.length === 0) {
+    console.warn(
+      '⚠️  No recipients for student pending approval email — skipping send',
+    );
+    return;
+  }
+
+  const subject = `👨‍🎓 Student approval needed: ${studentName}`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #faf7f4; padding: 40px 20px; margin: 0;">
+        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 40px;">
+          <h1 style="color: #1E140F; font-size: 22px; font-weight: 700; margin: 0 0 16px;">Student approval needed</h1>
+
+          <p style="color: #78716C; font-size: 15px; line-height: 24px;">
+            ${studentName} (${studentEmail}) has registered for ${className}.
+            Please review and approve or reject.
+          </p>
+
+          <p style="color: #78716C; font-size: 14px; line-height: 22px; margin-top: 16px;">
+            Either the class teacher or a school admin can approve this
+            registration — first to act wins.
+          </p>
+
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${reviewLink}" style="display: inline-block; background: #DF301C; color: white; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 600; font-size: 15px;">
+              Review Request
+            </a>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = `Student approval needed: ${studentName} (${studentEmail}) for ${className}.\nReview: ${reviewLink}`;
+
+  await Promise.all(
+    recipients.map(to =>
+      sendEmail({ to, subject, html, text }).catch(err => {
+        console.error(`Failed to notify ${to}:`, err);
+      }),
+    ),
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
    ESCALATION
    ───────────────────────────────────────────────────────────── */
 
