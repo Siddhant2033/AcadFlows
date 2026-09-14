@@ -733,8 +733,7 @@ export default function LandingPage() {
         </div>
 
         <div className="border-t border-border px-5 py-5 text-center text-[13px] text-muted">
-          © {new Date().getFullYear()} AcadFlows. All rights reserved. Made with ❤️
-          in India
+          © {new Date().getFullYear()} AcadFlows. All rights reserved.
         </div>
       </footer>
     </div>

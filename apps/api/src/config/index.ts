@@ -7,11 +7,7 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
 
 /* ─────────────────────────────────────────────────────────────
-   Fail-fast checks
-   
-   In production, missing secrets would result in broken auth and
-   confusing 500 errors. Better to refuse to boot with a clear
-   message than to silently run with insecure defaults.
+   Fail-fast checks — only in production
    ───────────────────────────────────────────────────────────── */
 
 if (isProduction) {
@@ -28,13 +24,9 @@ if (isProduction) {
     console.error(
       `❌ Missing required environment variables in production: ${missing.join(', ')}`,
     );
-    console.error(
-      '   Set these on your hosting provider (Render dashboard → Environment).',
-    );
     process.exit(1);
   }
 
-  // JWT secrets must be long enough to be secure.
   if ((process.env.JWT_SECRET || '').length < 32) {
     console.error('❌ JWT_SECRET must be at least 32 characters in production.');
     process.exit(1);
@@ -72,6 +64,11 @@ export const config = {
     defaultSlug: process.env.DEFAULT_TENANT_SLUG || 'default',
   },
 
+  // Platform admin — the founder (you)
+  platformAdmin: {
+    email: process.env.PLATFORM_ADMIN_EMAIL || '',
+  },
+
   storage: {
     r2Endpoint: process.env.R2_ENDPOINT || '',
     r2AccessKey: process.env.R2_ACCESS_KEY || '',
@@ -83,7 +80,6 @@ export const config = {
     baseUrl: process.env.BASE_URL || 'http://localhost:5173',
   },
 
-  // India-specific defaults
   india: {
     country: 'IN',
     currency: 'INR',

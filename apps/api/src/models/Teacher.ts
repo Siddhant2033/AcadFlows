@@ -1,5 +1,15 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export type TeacherStatus =
+  | 'pending'      // Registered, waiting for admin approval
+  | 'active'       // Approved
+  | 'suspended'    // Temporarily disabled
+  | 'rejected'     // Rejected by admin
+  | 'inactive'     // Legacy
+  | 'on_leave'     // Leave of absence
+  | 'resigned'     // Resigned
+  | 'terminated';  // Terminated
+
 export interface ITeacher extends Document {
   tenantId: string;
   userId: string;
@@ -37,7 +47,7 @@ export interface ITeacher extends Document {
     isCurrent: boolean;
     responsibilities?: string;
   }[];
-  subjects: string[]; // Subject IDs
+  subjects: string[];
   assignedSections: {
     sectionId: string;
     academicYearId: string;
@@ -78,9 +88,26 @@ export interface ITeacher extends Document {
     casual: number;
     other: number;
   };
-  status: 'active' | 'inactive' | 'on_leave' | 'resigned' | 'terminated';
+  status: TeacherStatus;
+
+  // ─── Approval workflow ───
+  approvedBy?: string;
+  approvedAt?: Date;
+  rejectedBy?: string;
+  rejectedAt?: Date;
+  rejectionReason?: string;
+  suspendedAt?: Date;
+  suspendedReason?: string;
+
+  // ─── Escalation ───
+  approvalDueBy?: Date;
+  escalatedAt?: Date;
+  escalationLevel?: number;
+
   isDeleted: boolean;
   deletedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const teacherSchema = new Schema<ITeacher>(
@@ -156,61 +183,67 @@ const teacherSchema = new Schema<ITeacher>(
         required: true,
       },
     },
-    qualifications: [{
-      degree: {
-        type: String,
-        required: true,
+    qualifications: [
+      {
+        degree: {
+          type: String,
+          required: true,
+        },
+        institution: {
+          type: String,
+          required: true,
+        },
+        year: {
+          type: Number,
+          required: true,
+        },
+        specialization: String,
+        grade: String,
       },
-      institution: {
-        type: String,
-        required: true,
+    ],
+    experience: [
+      {
+        institution: {
+          type: String,
+          required: true,
+        },
+        position: {
+          type: String,
+          required: true,
+        },
+        fromDate: {
+          type: Date,
+          required: true,
+        },
+        toDate: Date,
+        isCurrent: {
+          type: Boolean,
+          default: false,
+        },
+        responsibilities: String,
       },
-      year: {
-        type: Number,
-        required: true,
-      },
-      specialization: String,
-      grade: String,
-    }],
-    experience: [{
-      institution: {
-        type: String,
-        required: true,
-      },
-      position: {
-        type: String,
-        required: true,
-      },
-      fromDate: {
-        type: Date,
-        required: true,
-      },
-      toDate: Date,
-      isCurrent: {
-        type: Boolean,
-        default: false,
-      },
-      responsibilities: String,
-    }],
+    ],
     subjects: [String],
-    assignedSections: [{
-      sectionId: {
-        type: String,
-        required: true,
+    assignedSections: [
+      {
+        sectionId: {
+          type: String,
+          required: true,
+        },
+        academicYearId: {
+          type: String,
+          required: true,
+        },
+        subjectId: {
+          type: String,
+          required: true,
+        },
+        isPrimary: {
+          type: Boolean,
+          default: false,
+        },
       },
-      academicYearId: {
-        type: String,
-        required: true,
-      },
-      subjectId: {
-        type: String,
-        required: true,
-      },
-      isPrimary: {
-        type: Boolean,
-        default: false,
-      },
-    }],
+    ],
     specialization: [String],
     joiningDate: {
       type: Date,
@@ -254,27 +287,29 @@ const teacherSchema = new Schema<ITeacher>(
         required: true,
       },
     },
-    documents: [{
-      type: {
-        type: String,
-        enum: ['resume', 'certificate', 'idProof', 'addressProof', 'photo', 'contract', 'other'],
-        required: true,
+    documents: [
+      {
+        type: {
+          type: String,
+          enum: ['resume', 'certificate', 'idProof', 'addressProof', 'photo', 'contract', 'other'],
+          required: true,
+        },
+        name: {
+          type: String,
+          required: true,
+        },
+        url: {
+          type: String,
+          required: true,
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        size: Number,
+        mimeType: String,
       },
-      name: {
-        type: String,
-        required: true,
-      },
-      url: {
-        type: String,
-        required: true,
-      },
-      uploadedAt: {
-        type: Date,
-        default: Date.now,
-      },
-      size: Number,
-      mimeType: String,
-    }],
+    ],
     leaveBalance: {
       annual: {
         type: Number,
@@ -295,9 +330,25 @@ const teacherSchema = new Schema<ITeacher>(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'on_leave', 'resigned', 'terminated'],
-      default: 'active',
+      enum: ['pending', 'active', 'suspended', 'rejected', 'inactive', 'on_leave', 'resigned', 'terminated'],
+      default: 'pending',
+      index: true,
     },
+
+    // Approval workflow
+    approvedBy: String,
+    approvedAt: Date,
+    rejectedBy: String,
+    rejectedAt: Date,
+    rejectionReason: String,
+    suspendedAt: Date,
+    suspendedReason: String,
+
+    // Escalation
+    approvalDueBy: Date,
+    escalatedAt: Date,
+    escalationLevel: { type: Number, default: 0 },
+
     isDeleted: {
       type: Boolean,
       default: false,
@@ -306,7 +357,7 @@ const teacherSchema = new Schema<ITeacher>(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Indexes
@@ -314,5 +365,7 @@ teacherSchema.index({ tenantId: 1, userId: 1 }, { unique: true });
 teacherSchema.index({ tenantId: 1, employeeId: 1 }, { unique: true });
 teacherSchema.index({ tenantId: 1, status: 1 });
 teacherSchema.index({ tenantId: 1, subjects: 1 });
+// Approval inbox query — pending teachers newest first
+teacherSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 
 export const Teacher = mongoose.model<ITeacher>('Teacher', teacherSchema);

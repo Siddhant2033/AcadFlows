@@ -11,6 +11,10 @@ import { sendPasswordResetEmail } from '../../services/email.service';
 import { UserCreateInput, UserLoginInput, AuthTokens } from '@acadflows/shared';
 
 export class AuthService {
+  /* ─────────────────────────────────────────────────────────────
+     REGISTER — creates a user with pending status (except first admin)
+     ───────────────────────────────────────────────────────────── */
+
   static async register(
     input: UserCreateInput,
   ): Promise<{ user: any; tokens: AuthTokens }> {
@@ -31,7 +35,8 @@ export class AuthService {
       throw new AppError('User already exists with this email', 409);
     }
 
-    // Admin-first rule
+    // ── Admin-first rule: if no admin exists, this user becomes admin
+    //    AND is auto-approved. Otherwise, all new users start pending.
     const adminExists = await User.exists({
       tenantId: input.tenantId,
       role: 'admin',
@@ -39,10 +44,17 @@ export class AuthService {
     });
 
     let finalRole = input.role;
+    let initialStatus: 'pending' | 'active' = 'pending';
+    let approvedBy: string | undefined;
+    let approvedAt: Date | undefined;
+
     if (!adminExists) {
       finalRole = 'admin';
+      initialStatus = 'active';
+      approvedBy = 'system';
+      approvedAt = new Date();
       console.log(
-        '🔐 No admin for tenant — forcing role to admin for',
+        '🔐 No admin for tenant — forcing role to admin and auto-approving for',
         input.email,
       );
     }
@@ -54,6 +66,9 @@ export class AuthService {
       firstName: input.firstName,
       lastName: input.lastName,
       role: finalRole,
+      status: initialStatus,
+      approvedBy,
+      approvedAt,
       phone: input.phone,
       dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
       gender: input.gender,
@@ -63,6 +78,7 @@ export class AuthService {
       id: user._id,
       email: user.email,
       role: user.role,
+      status: user.status,
       tenantId: user.tenantId,
     });
 
@@ -86,9 +102,10 @@ export class AuthService {
     return { user: userObj, tokens };
   }
 
-  /**
-   * Create Student or Teacher profile document matching the user's role.
-   */
+  /* ─────────────────────────────────────────────────────────────
+     ROLE PROFILE CREATION — status mirrors the user's status
+     ───────────────────────────────────────────────────────────── */
+
   private static async createRoleProfile(user: any, input: UserCreateInput) {
     try {
       if (user.role === 'student') {
@@ -164,13 +181,16 @@ export class AuthService {
             relationship: 'guardian',
           },
           enrollments,
-          status: 'active',
+          status: user.status === 'active' ? 'active' : 'pending',
+          approvedBy: user.approvedBy,
+          approvedAt: user.approvedAt,
           isDeleted: false,
         });
 
         console.log('✅ Student profile created:', {
           userId: user._id,
           admissionNo,
+          status: user.status,
         });
       }
 
@@ -250,13 +270,16 @@ export class AuthService {
             phone: '0000000000',
             relationship: 'self',
           },
-          status: 'active',
+          status: user.status === 'active' ? 'active' : 'pending',
+          approvedBy: user.approvedBy,
+          approvedAt: user.approvedAt,
           isDeleted: false,
         });
 
         console.log('✅ Teacher profile created:', {
           userId: user._id,
           employeeId,
+          status: user.status,
         });
       }
     } catch (profileError) {
@@ -264,10 +287,10 @@ export class AuthService {
     }
   }
 
-  /**
-   * Link a newly registered guardian to their children.
-   * Matches by studentId AND verifies the tenant.
-   */
+  /* ─────────────────────────────────────────────────────────────
+     GUARDIAN LINKING
+     ───────────────────────────────────────────────────────────── */
+
   private static async linkGuardianToStudents(
     user: any,
     input: UserCreateInput,
@@ -335,12 +358,39 @@ export class AuthService {
     }
   }
 
+  /* ─────────────────────────────────────────────────────────────
+     LOGIN
+     ───────────────────────────────────────────────────────────── */
+
   static async login(
     input: UserLoginInput,
   ): Promise<{ user: any; tokens: AuthTokens }> {
-    const user = await User.findOne({ email: input.email, status: 'active' });
+    const user = await User.findOne({ email: input.email });
     if (!user) {
       throw new AppError('Invalid email or password', 401);
+    }
+
+    // ── Block login for non-active accounts
+    if (user.status === 'pending') {
+      throw new AppError(
+        'Your account is pending approval. You will be notified once approved.',
+        403,
+      );
+    }
+    if (user.status === 'rejected') {
+      throw new AppError(
+        'Your account registration was not approved. Contact your school administrator.',
+        403,
+      );
+    }
+    if (user.status === 'suspended') {
+      throw new AppError(
+        'Your account has been suspended. Contact your school administrator.',
+        403,
+      );
+    }
+    if (user.status !== 'active') {
+      throw new AppError('Account is not active', 403);
     }
 
     const isPasswordValid = await user.comparePassword(input.password);
@@ -362,6 +412,10 @@ export class AuthService {
 
     return { user: userObj, tokens };
   }
+
+  /* ─────────────────────────────────────────────────────────────
+     REFRESH TOKEN
+     ───────────────────────────────────────────────────────────── */
 
   static async refreshToken(refreshToken: string): Promise<AuthTokens> {
     try {
@@ -389,6 +443,10 @@ export class AuthService {
     }
   }
 
+  /* ─────────────────────────────────────────────────────────────
+     TOKEN GENERATION
+     ───────────────────────────────────────────────────────────── */
+
   private static generateTokens(
     userId: string,
     tenantId: string,
@@ -407,6 +465,10 @@ export class AuthService {
 
     return { accessToken, refreshToken };
   }
+
+  /* ─────────────────────────────────────────────────────────────
+     PASSWORD RESET
+     ───────────────────────────────────────────────────────────── */
 
   static async forgotPassword(email: string): Promise<void> {
     const user = await User.findOne({ email, status: 'active' });

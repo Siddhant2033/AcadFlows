@@ -1,5 +1,15 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export type StudentStatus =
+  | 'pending'      // Registered, waiting for class-teacher approval
+  | 'active'       // Approved
+  | 'suspended'    // Temporarily disabled
+  | 'rejected'     // Rejected
+  | 'inactive'     // Legacy
+  | 'graduated'    // Graduated
+  | 'transferred'  // Transferred to another school
+  | 'withdrawn';   // Withdrawn
+
 export interface IStudent extends Document {
   tenantId: string;
   userId: string;
@@ -68,9 +78,26 @@ export interface IStudent extends Document {
     withdrawalDate?: Date;
     withdrawalReason?: string;
   }[];
-  status: 'active' | 'inactive' | 'graduated' | 'transferred' | 'withdrawn';
+  status: StudentStatus;
+
+  // ─── Approval workflow ───
+  approvedBy?: string;
+  approvedAt?: Date;
+  rejectedBy?: string;
+  rejectedAt?: Date;
+  rejectionReason?: string;
+  suspendedAt?: Date;
+  suspendedReason?: string;
+
+  // ─── Escalation ───
+  approvalDueBy?: Date;
+  escalatedAt?: Date;
+  escalationLevel?: number;
+
   isDeleted: boolean;
   deletedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const studentSchema = new Schema<IStudent>(
@@ -134,29 +161,31 @@ const studentSchema = new Schema<IStudent>(
     nationality: String,
     religion: String,
     motherTongue: String,
-    guardians: [{
-      userId: String,
-      name: {
-        type: String,
-        required: true,
+    guardians: [
+      {
+        userId: String,
+        name: {
+          type: String,
+          required: true,
+        },
+        phone: {
+          type: String,
+          required: true,
+        },
+        email: String,
+        relationship: {
+          type: String,
+          required: true,
+          enum: ['father', 'mother', 'guardian', 'grandfather', 'grandmother', 'uncle', 'aunt', 'other'],
+        },
+        occupation: String,
+        isVerified: {
+          type: Boolean,
+          default: false,
+        },
+        verificationCode: String,
       },
-      phone: {
-        type: String,
-        required: true,
-      },
-      email: String,
-      relationship: {
-        type: String,
-        required: true,
-        enum: ['father', 'mother', 'guardian', 'grandfather', 'grandmother', 'uncle', 'aunt', 'other'],
-      },
-      occupation: String,
-      isVerified: {
-        type: Boolean,
-        default: false,
-      },
-      verificationCode: String,
-    }],
+    ],
     address: {
       street: String,
       city: {
@@ -203,54 +232,74 @@ const studentSchema = new Schema<IStudent>(
       medications: [String],
       emergencyNotes: String,
     },
-    documents: [{
-      type: {
-        type: String,
-        enum: ['birthCertificate', 'transferCertificate', 'medicalReport', 'idProof', 'addressProof', 'other'],
-        required: true,
+    documents: [
+      {
+        type: {
+          type: String,
+          enum: ['birthCertificate', 'transferCertificate', 'medicalReport', 'idProof', 'addressProof', 'other'],
+          required: true,
+        },
+        name: {
+          type: String,
+          required: true,
+        },
+        url: {
+          type: String,
+          required: true,
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        size: Number,
+        mimeType: String,
       },
-      name: {
-        type: String,
-        required: true,
+    ],
+    enrollments: [
+      {
+        academicYearId: {
+          type: String,
+          required: true,
+        },
+        sectionId: {
+          type: String,
+          required: true,
+        },
+        rollNo: String,
+        enrollmentDate: {
+          type: Date,
+          default: Date.now,
+        },
+        status: {
+          type: String,
+          enum: ['active', 'completed', 'withdrawn', 'transferred'],
+          default: 'active',
+        },
+        withdrawalDate: Date,
+        withdrawalReason: String,
       },
-      url: {
-        type: String,
-        required: true,
-      },
-      uploadedAt: {
-        type: Date,
-        default: Date.now,
-      },
-      size: Number,
-      mimeType: String,
-    }],
-    enrollments: [{
-      academicYearId: {
-        type: String,
-        required: true,
-      },
-      sectionId: {
-        type: String,
-        required: true,
-      },
-      rollNo: String,
-      enrollmentDate: {
-        type: Date,
-        default: Date.now,
-      },
-      status: {
-        type: String,
-        enum: ['active', 'completed', 'withdrawn', 'transferred'],
-        default: 'active',
-      },
-      withdrawalDate: Date,
-      withdrawalReason: String,
-    }],
+    ],
     status: {
       type: String,
-      enum: ['active', 'inactive', 'graduated', 'transferred', 'withdrawn'],
-      default: 'active',
+      enum: ['pending', 'active', 'suspended', 'rejected', 'inactive', 'graduated', 'transferred', 'withdrawn'],
+      default: 'pending',
+      index: true,
     },
+
+    // Approval workflow
+    approvedBy: String,
+    approvedAt: Date,
+    rejectedBy: String,
+    rejectedAt: Date,
+    rejectionReason: String,
+    suspendedAt: Date,
+    suspendedReason: String,
+
+    // Escalation
+    approvalDueBy: Date,
+    escalatedAt: Date,
+    escalationLevel: { type: Number, default: 0 },
+
     isDeleted: {
       type: Boolean,
       default: false,
@@ -259,7 +308,7 @@ const studentSchema = new Schema<IStudent>(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Indexes
@@ -270,5 +319,9 @@ studentSchema.index({ tenantId: 1, grade: 1 });
 studentSchema.index({ tenantId: 1, status: 1 });
 studentSchema.index({ 'guardians.userId': 1 });
 studentSchema.index({ 'guardians.verificationCode': 1 });
+// Approval inbox query — pending students newest first
+studentSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+// Section-based pending query
+studentSchema.index({ tenantId: 1, sectionId: 1, status: 1 });
 
 export const Student = mongoose.model<IStudent>('Student', studentSchema);
