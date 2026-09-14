@@ -23,6 +23,7 @@ import assignmentRoutes from './modules/assignments/routes';
 import communicationRoutes from './modules/communication/routes';
 import timetableRoutes from './modules/timetable/routes';
 import documentsRoutes from './modules/documents/routes';
+import platformRoutes from './modules/platform/routes';
 
 const app: Express = express();
 
@@ -87,6 +88,7 @@ app.use('/api/v1/tenants', tenantRoutes);
 // Students & Users have public routes — modules handle their own auth
 app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/platform', platformRoutes);
 
 /* ─────────────────────────────────────────────────────────────
    Fully-protected modules
@@ -103,6 +105,7 @@ app.use('/api/v1/assignments', authenticate, ensureTenantMatch, assignmentRoutes
 app.use('/api/v1/communication', authenticate, ensureTenantMatch, communicationRoutes);
 app.use('/api/v1/timetable', authenticate, ensureTenantMatch, timetableRoutes);
 app.use('/api/v1/documents', authenticate, ensureTenantMatch, documentsRoutes);
+
 
 /* ─────────────────────────────────────────────────────────────
    Error handling (must be last)

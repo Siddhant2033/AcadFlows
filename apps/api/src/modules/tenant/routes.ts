@@ -4,6 +4,7 @@ import { TenantSettingsController } from './settings.controller';
 import { authenticate, requireRole } from '../../middleware/auth';
 import { validateId } from '../../middleware/validate-id';
 import { requireTenant } from '../../middleware/tenant-context';
+import { schoolRegistrationLimiter } from '../../middleware/rate-limit';
 import multer from 'multer';
 
 const router: Router = Router();
@@ -17,27 +18,31 @@ const upload = multer({
   },
 });
 
-// ─────────────────────────────────────────────────────────────
-// Settings — must come BEFORE any /:id catch-all
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   SETTINGS — must come BEFORE any /:id catch-all
+   ───────────────────────────────────────────────────────────── */
+
 router.get(
   '/settings',
   authenticate,
   requireRole('admin'),
   TenantSettingsController.getSettings,
 );
+
 router.put(
   '/settings',
   authenticate,
   requireRole('admin'),
   TenantSettingsController.updateSettings,
 );
+
 router.put(
   '/school-info',
   authenticate,
   requireRole('admin'),
   TenantSettingsController.updateSchoolInfo,
 );
+
 router.post(
   '/logo',
   authenticate,
@@ -45,6 +50,7 @@ router.post(
   upload.single('logo'),
   TenantSettingsController.uploadLogo,
 );
+
 router.delete(
   '/logo',
   authenticate,
@@ -52,34 +58,84 @@ router.delete(
   TenantSettingsController.removeLogo,
 );
 
-// ─────────────────────────────────────────────────────────────
-// Public routes
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   PUBLIC SCHOOL REGISTRATION — rate-limited
+   ───────────────────────────────────────────────────────────── */
+
+router.post(
+  '/create-school',
+  schoolRegistrationLimiter,
+  TenantController.createSchool,
+);
+
+/* ─────────────────────────────────────────────────────────────
+   PUBLIC — EMAIL VERIFICATION
+   ───────────────────────────────────────────────────────────── */
+
+router.post('/verify-email/:token', TenantController.verifySchoolEmail);
+
+/* ─────────────────────────────────────────────────────────────
+   PUBLIC — LOOKUPS + VALIDATION
+   ───────────────────────────────────────────────────────────── */
+
 router.get('/public/:slug', TenantController.getPublicInfo);
-router.get('/public/code/:schoolCode', TenantController.getPublicInfoBySchoolCode);
+router.get(
+  '/public/code/:schoolCode',
+  TenantController.getPublicInfoBySchoolCode,
+);
+
 router.post('/validate-code', TenantController.validateSchoolCode);
 router.get('/validate/:tenantId', TenantController.validateTenant);
 router.get('/has-admin/:tenantId', TenantController.hasAdmin);
 
-// School creation — public
-router.post('/create-school', TenantController.createSchool);
-
-// Current tenant (public)
+// Current tenant (public — resolved from header, cookie, or query)
 router.get('/current', TenantController.getPublicCurrent);
 
-// Admin-only
+/* ─────────────────────────────────────────────────────────────
+   ADMIN-ONLY ROUTES
+   ───────────────────────────────────────────────────────────── */
+
 router.post('/', authenticate, requireRole('admin'), TenantController.create);
-router.put('/:id', authenticate, requireRole('admin'), validateId(), TenantController.update);
-router.get('/', authenticate, requireRole('admin'), TenantController.list);
 
-// Full current tenant details (auth required)
-router.get('/current/full', authenticate, requireTenant(), TenantController.getCurrentTenant);
+router.get(
+  '/',
+  authenticate,
+  requireRole('admin'),
+  TenantController.list,
+);
 
-// Public lookups
+router.put(
+  '/:id',
+  authenticate,
+  requireRole('admin'),
+  validateId(),
+  TenantController.update,
+);
+
+// Full current tenant details (requires authentication)
+router.get(
+  '/current/full',
+  authenticate,
+  requireTenant(),
+  TenantController.getCurrentTenant,
+);
+
+/* ─────────────────────────────────────────────────────────────
+   PUBLIC SLUG/CODE LOOKUPS
+   ───────────────────────────────────────────────────────────── */
+
 router.get('/slug/:slug', TenantController.getBySlug);
 router.get('/code/:schoolCode', TenantController.getBySchoolCode);
 
-// Catch-all — must be LAST
-router.get('/:id', authenticate, validateId(), TenantController.getById);
+/* ─────────────────────────────────────────────────────────────
+   CATCH-ALL — must be LAST
+   ───────────────────────────────────────────────────────────── */
+
+router.get(
+  '/:id',
+  authenticate,
+  validateId(),
+  TenantController.getById,
+);
 
 export default router;

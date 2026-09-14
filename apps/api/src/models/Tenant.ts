@@ -38,21 +38,16 @@ export interface ITenantSettings {
     lowAttendanceThreshold?: number;
   };
 
-  /**
-   * Teacher email domain whitelist.
-   * e.g. ["greenvalley.in", "gvps.edu.in"]
-   * If empty, any domain is allowed.
-   */
   allowedTeacherEmailDomains?: string[];
 }
 
 export type TenantStatus =
-  | 'pending'      // Registered but not yet approved by platform admin
-  | 'active'       // Approved, usable
-  | 'suspended'    // Temporarily disabled (e.g. non-payment)
-  | 'rejected'     // Rejected by platform admin
-  | 'inactive'     // Legacy — do not use
-  | 'archived';    // Legacy — do not use
+  | 'pending'
+  | 'active'
+  | 'suspended'
+  | 'rejected'
+  | 'inactive'
+  | 'archived';
 
 export interface ITenant extends Document {
   name: string;
@@ -64,7 +59,7 @@ export interface ITenant extends Document {
   emailVerified: boolean;
   verificationToken?: string;
   verificationTokenExpiresAt?: Date;
-  approvedBy?: string;         // email of the platform admin
+  approvedBy?: string;
   approvedAt?: Date;
   rejectedBy?: string;
   rejectedAt?: Date;
@@ -76,11 +71,11 @@ export interface ITenant extends Document {
   registrationIp?: string;
   registrationUserAgent?: string;
 
-  // School code management
+  // Code management
   codeGeneratedAt?: Date;
-  codeExpiresAt?: Date;        // optional — after this, code is invalid
+  codeExpiresAt?: Date;
 
-  // Settings
+  // School info
   address?: string;
   phone?: string;
   email?: string;
@@ -152,24 +147,26 @@ const tenantSchema = new Schema<ITenant>(
   {
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, trim: true, lowercase: true },
+
+    // ⚠️ No index: true — the unique index is declared below
     schoolCode: {
       type: String,
       required: true,
       trim: true,
       uppercase: true,
-      index: true,
     },
 
+    // ⚠️ No index: true — the index is declared below
     status: {
       type: String,
       enum: ['pending', 'active', 'suspended', 'rejected', 'inactive', 'archived'],
       default: 'pending',
-      index: true,
     },
 
     // Approval
     emailVerified: { type: Boolean, default: false },
-    verificationToken: { type: String, index: true },
+    // ⚠️ No index: true — the index is declared below
+    verificationToken: { type: String },
     verificationTokenExpiresAt: Date,
     approvedBy: String,
     approvedAt: Date,
@@ -200,9 +197,14 @@ const tenantSchema = new Schema<ITenant>(
   { timestamps: true },
 );
 
+/* ─────────────────────────────────────────────────────────────
+   Indexes — declared ONLY here, not on the field itself
+   ───────────────────────────────────────────────────────────── */
+
 tenantSchema.index({ slug: 1 }, { unique: true });
 tenantSchema.index({ schoolCode: 1 }, { unique: true });
 tenantSchema.index({ status: 1 });
+tenantSchema.index({ verificationToken: 1 });
 
 export const Tenant = mongoose.model<ITenant>('Tenant', tenantSchema);
 export { DEFAULT_GRADING_SCALE };

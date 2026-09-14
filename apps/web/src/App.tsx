@@ -61,6 +61,11 @@ import AuditLogPage from './pages/admin/AuditLog';
 import BulkPromotePage from './pages/admin/BulkPromote';
 import BulkGenerateInvoicesPage from './pages/admin/BulkGenerateInvoices';
 
+// Platform-Admin
+import PlatformDashboard from './pages/platform-admin/PlatformDashboard';
+import PendingSchoolsPage from './pages/platform-admin/PendingSchools';
+import AllSchoolsPage from './pages/platform-admin/AllSchools';
+
 function App() {
   return (
     <ThemeProvider>
@@ -505,43 +510,69 @@ function App() {
               }
             />
             {/* Documents — Certificates */}
-<Route
-  path="/documents/certificates"
-  element={
-    <ProtectedRoute requiredRole="admin">
-      <CertificatesPage />
-    </ProtectedRoute>
-  }
-/>
+            <Route
+              path="/documents/certificates"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <CertificatesPage />
+                </ProtectedRoute>
+              }
+            />
 
-{/* Documents — Audit Log */}
-<Route
-  path="/documents/audit-log"
-  element={
-    <ProtectedRoute requiredRole="admin">
-      <AuditLogPage />
-    </ProtectedRoute>
-  }
-/>
+            {/* Documents — Audit Log */}
+            <Route
+              path="/documents/audit-log"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AuditLogPage />
+                </ProtectedRoute>
+              }
+            />
 
-{/* Bulk Operations */}
-<Route
-  path="/students/bulk-promote"
-  element={
-    <ProtectedRoute requiredRole="admin">
-      <BulkPromotePage />
-    </ProtectedRoute>
-  }
-/>
-<Route
-  path="/fees/invoices/bulk-generate"
-  element={
-    <ProtectedRoute requiredRole="admin">
-      <BulkGenerateInvoicesPage />
-    </ProtectedRoute>
-  }
-/>
+            {/* Bulk Operations */}
+            <Route
+              path="/students/bulk-promote"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <BulkPromotePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fees/invoices/bulk-generate"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <BulkGenerateInvoicesPage />
+                </ProtectedRoute>
+              }
+            />
 
+            {/* Platform Admin (founder) */}
+            <Route
+              path="/platform-admin"
+              element={
+                <ProtectedRoute>
+                  <PlatformDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/platform-admin/schools/pending"
+              element={
+                <ProtectedRoute>
+                  <PendingSchoolsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/platform-admin/schools"
+              element={
+                <ProtectedRoute>
+                  <AllSchoolsPage />
+                </ProtectedRoute>
+              }
+            />
+            
             {/* 404 */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
