@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { TeacherController } from './controller';
 import { TeacherExportController } from './export.controller';
+import { TeacherApprovalsController } from './me-approvals.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 import multer from 'multer';
 
@@ -21,6 +22,49 @@ router.use(ensureTenantMatch);
 
 // Current user's teacher profile
 router.get('/me', TeacherController.getCurrentTeacher);
+
+// ─── Teacher self-service approvals — MUST come before /:teacherId ───
+router.get(
+  '/me/pending-students',
+  requireRole('teacher'),
+  TeacherApprovalsController.listPendingStudents,
+);
+router.get(
+  '/me/pending-guardians',
+  requireRole('teacher'),
+  TeacherApprovalsController.listPendingGuardians,
+);
+router.get(
+  '/me/class-roster',
+  requireRole('teacher'),
+  TeacherApprovalsController.getClassRoster,
+);
+router.get(
+  '/me/pending-counts',
+  requireRole('teacher'),
+  TeacherApprovalsController.getPendingCounts,
+);
+
+router.post(
+  '/me/students/:studentId/approve',
+  requireRole('teacher'),
+  TeacherApprovalsController.approveStudent,
+);
+router.post(
+  '/me/students/:studentId/reject',
+  requireRole('teacher'),
+  TeacherApprovalsController.rejectStudent,
+);
+router.post(
+  '/me/guardians/:guardianId/approve',
+  requireRole('teacher'),
+  TeacherApprovalsController.approveGuardian,
+);
+router.post(
+  '/me/guardians/:guardianId/reject',
+  requireRole('teacher'),
+  TeacherApprovalsController.rejectGuardian,
+);
 
 // Teacher CRUD
 router.get('/', requireRole('admin'), TeacherController.getTeachers);

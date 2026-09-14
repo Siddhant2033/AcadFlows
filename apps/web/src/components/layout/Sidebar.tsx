@@ -45,6 +45,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: 'My Class',
+    items: [
+      { label: 'My Class', icon: '🏫', path: '/teacher/approvals', roles: ['teacher'] },
+    ],
+  },
+  {
     label: 'Attendance',
     items: [
       { label: 'Mark Attendance', icon: '✅', path: '/attendance/mark', roles: ['admin', 'teacher'] },

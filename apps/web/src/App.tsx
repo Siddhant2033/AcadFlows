@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import type { ReactNode } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { TenantProvider } from './contexts/TenantContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -72,6 +73,36 @@ import PendingSchoolsPage from './pages/platform-admin/PendingSchools';
 import AllSchoolsPage from './pages/platform-admin/AllSchools';
 import PendingUsersPage from './pages/platform-admin/PendingUsers';
 import PlatformUsersPage from './pages/platform-admin/PlatformUsers';
+
+// Teacher — Approvals
+import TeacherPendingStudentsPage from './pages/teacher/PendingStudents';
+import TeacherPendingGuardiansPage from './pages/teacher/PendingGuardians';
+import ClassRosterPage from './pages/teacher/ClassRoster';
+
+/**
+ * Wrapper for school-admin approval routes.
+ *
+ * Per B2: the founder (platform admin) is redirected to their own
+ * pending-users queue instead of seeing a school-admin approvals page.
+ * School admins see the actual page.
+ */
+function AdminApprovalsRoute({ children }: { children: ReactNode }) {
+  const { isPlatformAdmin, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-[3px] border-border border-t-primary-500" />
+      </div>
+    );
+  }
+
+  if (isPlatformAdmin) {
+    return <Navigate to="/platform-admin/users/pending" replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function App() {
   return (
@@ -259,16 +290,22 @@ function App() {
               }
             />
 
-            {/* ────────────── Approvals (admin only) ────────────── */}
+            {/* ────────────── Approvals (admin only, founder redirects) ────────────── */}
             <Route
               path="/admin/approvals"
-              element={<Navigate to="/admin/approvals/teachers" replace />}
+              element={
+                <AdminApprovalsRoute>
+                  <Navigate to="/admin/approvals/teachers" replace />
+                </AdminApprovalsRoute>
+              }
             />
             <Route
               path="/admin/approvals/teachers"
               element={
                 <ProtectedRoute requiredRole="admin">
-                  <ApprovalsTeachersPage />
+                  <AdminApprovalsRoute>
+                    <ApprovalsTeachersPage />
+                  </AdminApprovalsRoute>
                 </ProtectedRoute>
               }
             />
@@ -276,7 +313,9 @@ function App() {
               path="/admin/approvals/students"
               element={
                 <ProtectedRoute requiredRole="admin">
-                  <ApprovalsStudentsPage />
+                  <AdminApprovalsRoute>
+                    <ApprovalsStudentsPage />
+                  </AdminApprovalsRoute>
                 </ProtectedRoute>
               }
             />
@@ -284,7 +323,43 @@ function App() {
               path="/admin/approvals/guardians"
               element={
                 <ProtectedRoute requiredRole="admin">
-                  <ApprovalsGuardiansPage />
+                  <AdminApprovalsRoute>
+                    <ApprovalsGuardiansPage />
+                  </AdminApprovalsRoute>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ────────────── Teacher Approvals (teacher only) ────────────── */}
+            <Route
+              path="/teacher/approvals"
+              element={
+                <ProtectedRoute requiredRole="teacher">
+                  <Navigate to="/teacher/approvals/students" replace />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teacher/approvals/students"
+              element={
+                <ProtectedRoute requiredRole="teacher">
+                  <TeacherPendingStudentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teacher/approvals/guardians"
+              element={
+                <ProtectedRoute requiredRole="teacher">
+                  <TeacherPendingGuardiansPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/teacher/approvals/roster"
+              element={
+                <ProtectedRoute requiredRole="teacher">
+                  <ClassRosterPage />
                 </ProtectedRoute>
               }
             />
@@ -582,11 +657,18 @@ function App() {
               }
             />
 
-            {/* Platform Admin (founder only) */}
+            {/*
+              Platform Admin (founder)
+
+              Per A2: no frontend founder gate here. The backend
+              `requirePlatformAdmin` middleware is the sole authority.
+              This lets a non-founder reach the page shell so they see
+              the real 403 error rather than a silent redirect.
+            */}
             <Route
               path="/platform-admin"
               element={
-                <ProtectedRoute requiredPlatformAdmin>
+                <ProtectedRoute>
                   <PlatformDashboard />
                 </ProtectedRoute>
               }
@@ -594,7 +676,7 @@ function App() {
             <Route
               path="/platform-admin/schools/pending"
               element={
-                <ProtectedRoute requiredPlatformAdmin>
+                <ProtectedRoute>
                   <PendingSchoolsPage />
                 </ProtectedRoute>
               }
@@ -602,7 +684,7 @@ function App() {
             <Route
               path="/platform-admin/schools"
               element={
-                <ProtectedRoute requiredPlatformAdmin>
+                <ProtectedRoute>
                   <AllSchoolsPage />
                 </ProtectedRoute>
               }
@@ -610,7 +692,7 @@ function App() {
             <Route
               path="/platform-admin/users/pending"
               element={
-                <ProtectedRoute requiredPlatformAdmin>
+                <ProtectedRoute>
                   <PendingUsersPage />
                 </ProtectedRoute>
               }
@@ -618,7 +700,7 @@ function App() {
             <Route
               path="/platform-admin/users"
               element={
-                <ProtectedRoute requiredPlatformAdmin>
+                <ProtectedRoute>
                   <PlatformUsersPage />
                 </ProtectedRoute>
               }
