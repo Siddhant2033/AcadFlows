@@ -54,6 +54,9 @@ export default function StepStudentForm({
      Uses bare axios (no auth interceptor) and passes tenantId
      explicitly in the query string so the backend can resolve
      the tenant without relying on a session cookie.
+
+     Hits the PUBLIC academic routes — the admin-facing
+     /academic/* routes are authenticated.
   */
   useEffect(() => {
     if (!tenantId) return;
@@ -62,7 +65,7 @@ export default function StepStudentForm({
       try {
         const [gRes, sRes] = await Promise.all([
           axios
-            .get(`${API_BASE}/academic/grades`, {
+            .get(`${API_BASE}/public/academic/grades`, {
               params: { tenantId },
               withCredentials: false,
             })
@@ -71,7 +74,7 @@ export default function StepStudentForm({
               return null;
             }),
           axios
-            .get(`${API_BASE}/academic/sections`, {
+            .get(`${API_BASE}/public/academic/sections`, {
               params: { tenantId },
               withCredentials: false,
             })
