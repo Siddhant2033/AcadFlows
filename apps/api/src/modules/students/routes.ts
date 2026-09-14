@@ -2,14 +2,23 @@ import { Router } from 'express';
 import { StudentController } from './controller';
 import { StudentExportController } from './export.controller';
 import { StudentBulkController } from './bulk.controller';
+import { StudentIdentityController } from './identity.controller';
 import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 import multer from 'multer';
 
 const router: Router = Router();
 
-// Public
+/* ─────────────────────────────────────────────────────────────
+   PUBLIC ROUTES — must come BEFORE router.use(authenticate)
+   ───────────────────────────────────────────────────────────── */
+
 router.get('/tenant/:tenantId', StudentController.getStudentsByTenant);
 router.post('/verify-rollno', StudentController.verifyRollNo);
+router.post('/verify-identity', StudentIdentityController.verifyIdentity);
+
+/* ─────────────────────────────────────────────────────────────
+   Protected routes — everything below requires auth + tenant
+   ───────────────────────────────────────────────────────────── */
 
 const upload = multer({
   storage: multer.memoryStorage(),

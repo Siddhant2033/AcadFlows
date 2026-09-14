@@ -12,6 +12,12 @@ const api = axios.create({
  * Endpoints that should NOT trigger the refresh flow when they 401.
  * Keep this list narrow — anything broad like '/tenants' will silently
  * skip refresh for most of the app.
+ *
+ * Anything listed here will:
+ *   1. Skip the automatic token-refresh attempt.
+ *   2. Never trigger the hard redirect to /login.
+ *   3. Propagate the raw error to the calling code, which is expected
+ *      to handle it (usually via getErrorMessage()).
  */
 const skipRefreshEndpoints = [
   '/auth/refresh',
@@ -23,6 +29,12 @@ const skipRefreshEndpoints = [
   '/tenants/public',
   '/tenants/validate-code',
   '/tenants/create-school',
+  // Public student verification endpoints — used during registration
+  // while the user has no session. The global 401-handler must not
+  // see these or it will bounce the register flow to /login.
+  '/students/verify-identity',
+  '/students/verify-rollno',
+  '/students/tenant/',
 ];
 
 // ─── Request interceptor ───
@@ -56,6 +68,16 @@ api.interceptors.response.use(
 
     // Skip if already retried
     if (originalRequest._retry) {
+      return Promise.reject(error);
+    }
+
+    // Nothing to refresh — the user was never logged in. Don't force
+    // a redirect; let the calling page decide what to do. This is what
+    // prevents public flows (register, verify, password reset) from
+    // bouncing to /login on a benign 401.
+    const hasRefreshCookie = document.cookie.includes('refreshToken');
+    const hasStoredToken = !!localStorage.getItem('accessToken');
+    if (!hasRefreshCookie && !hasStoredToken) {
       return Promise.reject(error);
     }
 

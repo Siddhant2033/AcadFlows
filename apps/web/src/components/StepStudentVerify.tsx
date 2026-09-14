@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import api from '../lib/api';
+import axios from 'axios';
 import { Input, Label, Button } from './ui';
 
 interface VerifiedStudent {
@@ -19,6 +19,16 @@ interface StepStudentVerifyProps {
   onVerified: (student: VerifiedStudent) => void;
   onBack: () => void;
 }
+
+/**
+ * Public student identity verification step.
+ *
+ * Uses a bare axios instance (not the shared `api` client) so the
+ * global response interceptor — which bounces 401s to /login — can
+ * never hijack this call. This endpoint is public and does not need
+ * the auth refresh flow.
+ */
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 export default function StepStudentVerify({
   tenantId,
@@ -42,11 +52,18 @@ export default function StepStudentVerify({
     setError('');
 
     try {
-      const res = await api.post('/students/verify-identity', {
-        tenantId,
-        rollNo: rollNo.trim().toUpperCase(),
-        admissionNo: admissionNo.trim().toUpperCase(),
-      });
+      const res = await axios.post(
+        `${API_BASE}/students/verify-identity`,
+        {
+          tenantId,
+          rollNo: rollNo.trim().toUpperCase(),
+          admissionNo: admissionNo.trim().toUpperCase(),
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          withCredentials: false,
+        },
+      );
 
       setFound(res.data.data.student);
     } catch (err: any) {

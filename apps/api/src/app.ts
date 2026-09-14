@@ -93,7 +93,7 @@ app.use('/api/v1/platform', platformRoutes);
 
 /* ─────────────────────────────────────────────────────────────
    Fully-protected modules
-   
+
    IMPORTANT: `authenticate` MUST come before `ensureTenantMatch`.
    The modules' own routes.ts files should NOT apply these — they
    are applied here to guarantee the correct order.
