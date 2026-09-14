@@ -28,6 +28,7 @@ const statusSchema = z.enum(['active', 'inactive', 'archived'], {
   errorMap: () => ({ message: 'Status must be active, inactive, or archived' }),
 });
 
+// Shared enum — must match the Mongoose enum on Student.guardians[].relationship
 const relationshipEnum = z.enum([
   'father',
   'mother',
@@ -82,6 +83,7 @@ export const registerSchema = z
     // did NOT come in via /students/verify-identity. Enforced below
     // with `.superRefine()`.
     grade: z.string().optional(),
+    gradeId: z.string().optional(),
     section: z.string().optional(),
     sectionId: z.string().optional(),
     address: addressSchema.optional(),
@@ -89,12 +91,17 @@ export const registerSchema = z
     parentPhone: z.string().optional(),
     parentEmail: z.string().optional(),
 
-    // ── Student verification (Sprint 5) ──
+    // ── Student identity verification (Sprint 5) ──
+    rollNo: z.string().optional(),
+    admissionNo: z.string().optional(),
     verifiedStudentId: z.string().optional(),
     verificationData: z
       .object({
         studentId: z.string().optional(),
+        providedRollNo: z.string().optional(),
+        providedAdmissionNo: z.string().optional(),
       })
+      .partial()
       .optional(),
 
     // ── Teacher ──
@@ -108,6 +115,16 @@ export const registerSchema = z
     relationship: relationshipEnum.optional(),
     occupation: z.string().optional(),
     children: z.array(childLinkSchema).optional(),
+
+    // ── Ignored client-side convenience keys (accepted but dropped) ──
+    // The register form stores transient state on the payload for its
+    // own use. We accept them so `.strict()` doesn't reject the request,
+    // but nothing downstream reads them.
+    _verifiedStudentId: z.string().optional(),
+    _providedRollNo: z.string().optional(),
+    _providedAdmissionNo: z.string().optional(),
+    _selectedGradeName: z.string().optional(),
+    _selectedSectionName: z.string().optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
