@@ -10,10 +10,21 @@ import { AppError } from '../../middleware/error-handler';
 import { sendPasswordResetEmail } from '../../services/email.service';
 import { UserCreateInput, UserLoginInput, AuthTokens } from '@acadflows/shared';
 
+/* ─────────────────────────────────────────────────────────────
+   Helper — is this email the platform admin?
+   ───────────────────────────────────────────────────────────── */
+
+function isPlatformAdminEmail(email: string | undefined): boolean {
+  if (!email) return false;
+  const adminEmail = config.platformAdmin.email;
+  if (!adminEmail) return false;
+  return email.toLowerCase().trim() === adminEmail.toLowerCase().trim();
+}
+
 export class AuthService {
-  /* ─────────────────────────────────────────────────────────────
-     REGISTER — creates a user with pending status (except first admin)
-     ───────────────────────────────────────────────────────────── */
+  /* ═══════════════════════════════════════════════════════════
+     REGISTER
+     ═══════════════════════════════════════════════════════════ */
 
   static async register(
     input: UserCreateInput,
@@ -24,10 +35,21 @@ export class AuthService {
 
     const tenant = await Tenant.findOne({
       _id: input.tenantId,
-      status: 'active',
     });
     if (!tenant) {
-      throw new AppError('Tenant not found or inactive', 400);
+      throw new AppError('Tenant not found', 400);
+    }
+
+    // Regular tenants must be active to register users.
+    // Platform admin's tenant may still be 'pending' when they register
+    // — we auto-approve it below.
+    const registeringPlatformAdmin = isPlatformAdminEmail(input.email);
+
+    if (tenant.status !== 'active' && !registeringPlatformAdmin) {
+      throw new AppError(
+        'This school is not active yet. Please wait for approval.',
+        403,
+      );
     }
 
     const existingUser = await User.findOne({ email: input.email });
@@ -35,8 +57,7 @@ export class AuthService {
       throw new AppError('User already exists with this email', 409);
     }
 
-    // ── Admin-first rule: if no admin exists, this user becomes admin
-    //    AND is auto-approved. Otherwise, all new users start pending.
+    // ── Determine if this is the first admin (auto-approved) ──
     const adminExists = await User.exists({
       tenantId: input.tenantId,
       role: 'admin',
@@ -48,14 +69,15 @@ export class AuthService {
     let approvedBy: string | undefined;
     let approvedAt: Date | undefined;
 
-    if (!adminExists) {
+    // Rule 1: No admin exists → this user becomes admin AND is auto-approved
+    // Rule 2: Platform admin registering → always auto-approved
+    if (!adminExists || registeringPlatformAdmin) {
       finalRole = 'admin';
       initialStatus = 'active';
-      approvedBy = 'system';
+      approvedBy = registeringPlatformAdmin ? 'platform-admin' : 'system';
       approvedAt = new Date();
       console.log(
-        '🔐 No admin for tenant — forcing role to admin and auto-approving for',
-        input.email,
+        `🔐 Auto-approving admin for ${input.email} (${registeringPlatformAdmin ? 'platform admin' : 'first admin'})`,
       );
     }
 
@@ -82,6 +104,16 @@ export class AuthService {
       tenantId: user.tenantId,
     });
 
+    // ── If platform admin registered, activate their tenant too ──
+    if (registeringPlatformAdmin && tenant.status !== 'active') {
+      tenant.status = 'active';
+      tenant.approvedBy = 'platform-admin';
+      tenant.approvedAt = new Date();
+      tenant.emailVerified = true;
+      await tenant.save();
+      console.log(`✅ Tenant "${tenant.name}" auto-approved for platform admin`);
+    }
+
     // Create role-specific profile
     await this.createRoleProfile(user, input);
 
@@ -99,12 +131,18 @@ export class AuthService {
 
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
-    return { user: userObj, tokens };
+    // Attach the platform-admin flag
+    const responseUser = {
+      ...userObj,
+      isPlatformAdmin: registeringPlatformAdmin,
+    };
+
+    return { user: responseUser, tokens };
   }
 
-  /* ─────────────────────────────────────────────────────────────
-     ROLE PROFILE CREATION — status mirrors the user's status
-     ───────────────────────────────────────────────────────────── */
+  /* ═══════════════════════════════════════════════════════════
+     ROLE PROFILE CREATION
+     ═══════════════════════════════════════════════════════════ */
 
   private static async createRoleProfile(user: any, input: UserCreateInput) {
     try {
@@ -287,9 +325,9 @@ export class AuthService {
     }
   }
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════
      GUARDIAN LINKING
-     ───────────────────────────────────────────────────────────── */
+     ═══════════════════════════════════════════════════════════ */
 
   private static async linkGuardianToStudents(
     user: any,
@@ -358,9 +396,9 @@ export class AuthService {
     }
   }
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════
      LOGIN
-     ───────────────────────────────────────────────────────────── */
+     ═══════════════════════════════════════════════════════════ */
 
   static async login(
     input: UserLoginInput,
@@ -370,27 +408,33 @@ export class AuthService {
       throw new AppError('Invalid email or password', 401);
     }
 
-    // ── Block login for non-active accounts
-    if (user.status === 'pending') {
-      throw new AppError(
-        'Your account is pending approval. You will be notified once approved.',
-        403,
-      );
-    }
-    if (user.status === 'rejected') {
-      throw new AppError(
-        'Your account registration was not approved. Contact your school administrator.',
-        403,
-      );
-    }
-    if (user.status === 'suspended') {
-      throw new AppError(
-        'Your account has been suspended. Contact your school administrator.',
-        403,
-      );
-    }
-    if (user.status !== 'active') {
-      throw new AppError('Account is not active', 403);
+    const isPlatformAdmin = isPlatformAdminEmail(user.email);
+
+    // ── Block login for non-active accounts (except platform admin) ──
+    if (!isPlatformAdmin) {
+      if (user.status === 'pending') {
+        throw new AppError(
+          'Your account is pending approval. You will be notified once approved.',
+          403,
+        );
+      }
+      if (user.status === 'rejected') {
+        throw new AppError(
+          'Your account registration was not approved. Contact your school administrator.',
+          403,
+        );
+      }
+      if (user.status === 'suspended') {
+        throw new AppError(
+          'Your account has been suspended. Contact your school administrator.',
+          403,
+        );
+      }
+      if (user.status !== 'active') {
+        throw new AppError('Account is not active', 403);
+      }
+    } else {
+      console.log(`🔓 Platform admin login: ${user.email}`);
     }
 
     const isPasswordValid = await user.comparePassword(input.password);
@@ -410,12 +454,17 @@ export class AuthService {
 
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
-    return { user: userObj, tokens };
+    const responseUser = {
+      ...userObj,
+      isPlatformAdmin,
+    };
+
+    return { user: responseUser, tokens };
   }
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════
      REFRESH TOKEN
-     ───────────────────────────────────────────────────────────── */
+     ═══════════════════════════════════════════════════════════ */
 
   static async refreshToken(refreshToken: string): Promise<AuthTokens> {
     try {
@@ -424,11 +473,14 @@ export class AuthService {
         config.jwt.refreshSecret,
       ) as any;
 
-      const user = await User.findOne({
-        _id: decoded.userId,
-        status: 'active',
-      });
+      const user = await User.findById(decoded.userId);
       if (!user) {
+        throw new AppError('Invalid refresh token', 401);
+      }
+
+      // Allow refresh for platform admin regardless of status
+      const isPlatformAdmin = isPlatformAdminEmail(user.email);
+      if (!isPlatformAdmin && user.status !== 'active') {
         throw new AppError('Invalid refresh token', 401);
       }
 
@@ -443,9 +495,29 @@ export class AuthService {
     }
   }
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════
+     GET ME (helper for /auth/me controller)
+     ═══════════════════════════════════════════════════════════ */
+
+  static async getMe(userId: string): Promise<any> {
+    const user = await User.findById(userId).select('-passwordHash').lean();
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    const isPlatformAdmin = isPlatformAdminEmail(user.email);
+
+    return {
+      ...user,
+      _id: user._id.toString(),
+      id: user._id.toString(),
+      isPlatformAdmin,
+    };
+  }
+
+  /* ═══════════════════════════════════════════════════════════
      TOKEN GENERATION
-     ───────────────────────────────────────────────────────────── */
+     ═══════════════════════════════════════════════════════════ */
 
   private static generateTokens(
     userId: string,
@@ -466,9 +538,9 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  /* ─────────────────────────────────────────────────────────────
+  /* ═══════════════════════════════════════════════════════════
      PASSWORD RESET
-     ───────────────────────────────────────────────────────────── */
+     ═══════════════════════════════════════════════════════════ */
 
   static async forgotPassword(email: string): Promise<void> {
     const user = await User.findOne({ email, status: 'active' });

@@ -57,6 +57,19 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
       <div className="flex">
         {/* Sidebar */}
         <aside className="sticky top-16 h-[calc(100vh-4rem)] w-64 flex-shrink-0 border-r border-border bg-surface">
+          {/* Founder banner */}
+          <div className="mx-3 mt-3 rounded-lg bg-primary-500/10 border border-primary-500/20 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-primary-600 dark:text-primary-400">
+              Founder Mode
+            </p>
+            <p className="text-xs text-foreground mt-1 font-medium">
+              {user?.firstName} {user?.lastName}
+            </p>
+            <p className="text-[10px] text-muted mt-0.5 truncate">
+              {user?.email}
+            </p>
+          </div>
+
           <nav className="p-3 space-y-1">
             {NAV_ITEMS.map(item => (
               <NavLink

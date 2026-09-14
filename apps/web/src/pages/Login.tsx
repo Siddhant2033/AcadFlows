@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useLocation,
+} from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTenant } from '../contexts/TenantContext';
 import { getTenantSlugFromURL } from '../lib/tenant';
@@ -9,7 +14,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { tenantSlug } = useParams();
-  const { login, user } = useAuth();
+  const { login, user, isPlatformAdmin } = useAuth();
   const { tenant } = useTenant();
 
   const [email, setEmail] = useState('');
@@ -21,12 +26,19 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
+      // Platform admins always land on their portal
+      if (isPlatformAdmin) {
+        navigate('/platform-admin', { replace: true });
+        return;
+      }
+
       const redirectTo =
         location.state?.from?.pathname ||
         (tenantSlug ? `/${tenantSlug}/dashboard` : '/dashboard');
       navigate(redirectTo, { replace: true });
     }
-  }, [user, navigate, location, tenantSlug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, isPlatformAdmin, navigate, location, tenantSlug]);
 
   useEffect(() => {
     if (tenantSlug) return;
@@ -49,14 +61,16 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      const from =
-        location.state?.from?.pathname ||
-        (tenantSlug ? `/${tenantSlug}/dashboard` : '/dashboard');
-      navigate(from, { replace: true });
+      // The useEffect above handles the redirect once `user` is set.
     } catch (err: any) {
       console.error('Login error:', err);
       if (err.response?.status === 401) {
         setError('Invalid email or password. Please try again.');
+      } else if (err.response?.status === 403) {
+        setError(
+          err.response?.data?.error ||
+            'Your account is not active. Please contact your school administrator.',
+        );
       } else if (err.response?.status === 429) {
         setError('Too many login attempts. Please try again later.');
       } else if (err.response?.data?.error) {
@@ -66,7 +80,6 @@ export default function LoginPage() {
       } else {
         setError('Login failed. Please check your credentials and try again.');
       }
-    } finally {
       setIsLoading(false);
     }
   };
@@ -85,7 +98,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex bg-background text-foreground">
       {/* Left: form panel */}
       <div className="w-full lg:w-[46%] flex flex-col px-6 sm:px-12 lg:px-16 py-10">
-        {/* Top row: logo + theme toggle + status chip */}
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-9 h-9 bg-primary-600 rounded-lg flex items-center justify-center">
@@ -105,7 +117,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Form body, vertically centered */}
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-sm mx-auto">
             <h1 className="text-3xl font-bold text-foreground">Welcome back</h1>
@@ -141,7 +152,9 @@ export default function LoginPage() {
                         clipRule="evenodd"
                       />
                     </svg>
-                    <p className="ml-2.5 text-sm text-red-700 dark:text-red-300">{error}</p>
+                    <p className="ml-2.5 text-sm text-red-700 dark:text-red-300">
+                      {error}
+                    </p>
                   </div>
                 </div>
               )}
@@ -169,7 +182,10 @@ export default function LoginPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="password" className="block text-sm font-medium text-foreground">
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-medium text-foreground"
+                  >
                     Password
                   </label>
                   <button
@@ -199,7 +215,11 @@ export default function LoginPage() {
                     className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted hover:text-foreground"
                   >
                     {showPassword ? (
-                      <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <svg
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
                         <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                         <path
                           fillRule="evenodd"
@@ -208,7 +228,11 @@ export default function LoginPage() {
                         />
                       </svg>
                     ) : (
-                      <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <svg
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
                         <path
                           fillRule="evenodd"
                           d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
@@ -280,25 +304,6 @@ export default function LoginPage() {
                 </p>
               )}
             </form>
-
-            {/* Demo credentials (dev only) */}
-            {import.meta.env.DEV && (
-              <div className="mt-8 border-t border-border pt-6">
-                <p className="text-xs text-center text-muted mb-3">Demo credentials</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-elevated p-2.5 rounded-lg text-center">
-                    <p className="font-medium text-foreground">Admin</p>
-                    <p className="text-muted">admin@school.com</p>
-                    <p className="text-muted">Admin@2024!</p>
-                  </div>
-                  <div className="bg-elevated p-2.5 rounded-lg text-center">
-                    <p className="font-medium text-foreground">Student</p>
-                    <p className="text-muted">student@school.com</p>
-                    <p className="text-muted">Student@2024!</p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -318,7 +323,9 @@ export default function LoginPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-primary-400" />
               Term 2025-26
             </span>
-            <span className="text-xs text-white/70">Attendance · Grades · Fees</span>
+            <span className="text-xs text-white/70">
+              Attendance · Grades · Fees
+            </span>
           </div>
 
           <div className="max-w-md">
@@ -326,15 +333,15 @@ export default function LoginPage() {
               One workspace for every classroom.
             </h2>
             <p className="mt-3 text-sm text-white/80 leading-relaxed">
-              Students, teachers, and guardians all check attendance, grades, and fee status
-              in one place, tuned to your school.
+              Students, teachers, and guardians all check attendance, grades,
+              and fee status in one place, tuned to your school.
             </p>
           </div>
 
           <div className="bg-white rounded-xl p-5 max-w-md">
             <p className="text-sm text-gray-700 leading-relaxed">
-              "Switching to one login for my kid's attendance, grades, and fees saved me a
-              dozen phone calls a term."
+              "Switching to one login for my kid's attendance, grades, and fees
+              saved me a dozen phone calls a term."
             </p>
             <div className="mt-3 flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-semibold">

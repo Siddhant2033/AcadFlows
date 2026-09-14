@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../lib/api';
 import { formatCurrency, formatTimeAgo } from '../../lib/format';
-import { Card, CardTitle } from '../ui';
+import { Card, CardTitle, Button } from '../ui';
 import { cn } from '../../lib/cn';
 
 interface AdminDashboardProps {
@@ -28,7 +29,12 @@ interface Notification {
   createdAt: string;
 }
 
-export default function AdminDashboard({ data, tenant, user }: AdminDashboardProps) {
+export default function AdminDashboard({
+  data,
+  tenant,
+  user,
+}: AdminDashboardProps) {
+  const { isPlatformAdmin } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
@@ -95,7 +101,7 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
     }
   };
 
-  // ── Stats from API (no hardcoded fallbacks) ──
+  // ── Stats from API ──
   const stats = [
     {
       label: 'Total Students',
@@ -127,10 +133,8 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
     },
   ];
 
-  // ── Quick actions come from backend; empty array if not provided ──
   const quickActions: any[] = data?.quickActions ?? [];
 
-  // ── Quick stats from backend ──
   const quickStats = data?.quickStats ?? {
     totalRevenue: formatCurrency(0),
     pendingInvoices: 0,
@@ -149,6 +153,36 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
 
   return (
     <div className="space-y-6">
+      {/* ─── Founder banner (only for platform admin) ─── */}
+      {isPlatformAdmin && (
+        <Card className="border-primary-500/30 bg-gradient-to-r from-primary-500/10 to-secondary-500/10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-primary-500 text-white text-2xl flex-shrink-0">
+                ⚡
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider">
+                  Founder Account
+                </p>
+                <p className="text-base font-semibold text-foreground mt-0.5">
+                  You have platform-wide access
+                </p>
+                <p className="text-xs text-muted mt-0.5">
+                  Manage all schools, users, and approvals from the platform
+                  admin portal.
+                </p>
+              </div>
+            </div>
+            <Link to="/platform-admin" className="flex-shrink-0">
+              <Button variant="primary" leftIcon="⚡">
+                Open Platform Admin
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      )}
+
       {/* ─── Welcome + Notifications ─── */}
       <Card>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -170,7 +204,12 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                 className="relative p-2 rounded-lg text-muted hover:text-foreground hover:bg-elevated transition-colors"
                 aria-label="Notifications"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -188,7 +227,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-lg shadow-lg border border-border bg-surface overflow-hidden z-50">
                   <div className="p-3 border-b border-border flex justify-between items-center">
-                    <h3 className="font-semibold text-foreground">Notifications</h3>
+                    <h3 className="font-semibold text-foreground">
+                      Notifications
+                    </h3>
                     {unreadCount > 0 && (
                       <button
                         type="button"
@@ -223,7 +264,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                               {n.type === 'info' && 'ℹ️'}
                             </div>
                             <div className="flex-1">
-                              <p className="text-sm font-medium text-foreground">{n.title}</p>
+                              <p className="text-sm font-medium text-foreground">
+                                {n.title}
+                              </p>
                               <p className="text-xs text-muted">{n.message}</p>
                               <p className="text-xs text-muted mt-1">
                                 {formatTimeAgo(n.createdAt)}
@@ -269,7 +312,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                 </div>
                 <div>
                   <p className="text-sm text-muted">{stat.label}</p>
-                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {stat.value}
+                  </p>
                 </div>
               </div>
               <div className="text-sm text-muted">{stat.change}</div>
@@ -312,7 +357,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
                 </div>
               ) : recentActivities.length === 0 ? (
-                <p className="text-sm text-center py-4 text-muted">No recent activity</p>
+                <p className="text-sm text-center py-4 text-muted">
+                  No recent activity
+                </p>
               ) : (
                 recentActivities.map(activity => (
                   <div
@@ -321,7 +368,9 @@ export default function AdminDashboard({ data, tenant, user }: AdminDashboardPro
                   >
                     <div className="text-2xl">{activity.icon}</div>
                     <div className="flex-1">
-                      <p className="text-sm text-foreground">{activity.message}</p>
+                      <p className="text-sm text-foreground">
+                        {activity.message}
+                      </p>
                       <p className="text-xs text-muted">{activity.timestamp}</p>
                     </div>
                   </div>

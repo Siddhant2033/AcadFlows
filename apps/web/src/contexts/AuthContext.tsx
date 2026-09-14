@@ -1,19 +1,28 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+} from 'react';
 import type { ReactNode } from 'react';
 import api from '../lib/api';
 
 interface User {
   id: string;
+  _id?: string;
   email: string;
   firstName: string;
   lastName: string;
   role: 'admin' | 'teacher' | 'student' | 'guardian';
   tenantId: string;
+  status?: string;
+  isPlatformAdmin?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  isPlatformAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
@@ -27,6 +36,7 @@ interface RegisterData {
   lastName: string;
   role: 'admin' | 'teacher' | 'student' | 'guardian';
   tenantId: string;
+  [key: string]: any;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -76,19 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.role === 'admin') {
         const adminExists = await isAdminExists(data.tenantId);
         if (adminExists) {
-          throw new Error('An admin already exists for this school. Please contact your school administrator.');
+          throw new Error(
+            'An admin already exists for this school. Please contact your school administrator.',
+          );
         }
       }
 
-      const response = await api.post('/auth/register', {
-        email: data.email,
-        password: data.password,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: data.role,
-        tenantId: data.tenantId,
-      });
-      
+      const response = await api.post('/auth/register', data);
       const { user, accessToken } = response.data.data;
       localStorage.setItem('accessToken', accessToken);
       setUser(user);
@@ -119,8 +123,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const isPlatformAdmin = user?.isPlatformAdmin === true;
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, isAdminExists }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isPlatformAdmin,
+        login,
+        register,
+        logout,
+        isAdminExists,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

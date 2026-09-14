@@ -4,6 +4,7 @@ import { User } from '../../models/User';
 import { Teacher } from '../../models/Teacher';
 import { Student } from '../../models/Student';
 import { AppError } from '../../middleware/error-handler';
+import { config } from '../../config';
 import {
   sendSchoolApprovedEmail,
   sendSchoolRejectedEmail,
@@ -216,7 +217,7 @@ export class PlatformService {
         .select('firstName lastName email role status createdAt tenantId')
         .lean();
 
-      for (const u of recentUsers) {
+      for (const u of recentUsers as any[]) {
         activity.push({
           id: `user_${u._id}`,
           type: 'user_registration',
@@ -229,7 +230,7 @@ export class PlatformService {
                   ? '👨‍🎓'
                   : '👪',
           message: `${u.firstName} ${u.lastName} registered as ${u.role} (${u.status})`,
-          timestamp: (u as any).createdAt,
+          timestamp: u.createdAt,
         });
       }
     } catch {
@@ -261,6 +262,27 @@ export class PlatformService {
       guardians,
       total: schools + admins + teachers + students + guardians,
     };
+  }
+
+  /* ═══════════════ GUARD — PLATFORM ADMIN'S OWN TENANT ═══════════════ */
+
+  /**
+   * Returns true if the given tenant hosts the platform admin's account.
+   * Used to prevent self-suspend and self-delete.
+   */
+  static async isPlatformAdminTenant(tenantId: string): Promise<boolean> {
+    try {
+      if (!config.platformAdmin.email) return false;
+
+      const admin = await User.findOne({
+        tenantId,
+        email: config.platformAdmin.email.toLowerCase().trim(),
+      }).lean();
+
+      return !!admin;
+    } catch {
+      return false;
+    }
   }
 
   /* ═══════════════ SCHOOLS ═══════════════ */
@@ -358,10 +380,13 @@ export class PlatformService {
       .limit(50)
       .lean();
 
+    const isPlatformTenant = await this.isPlatformAdminTenant(tenantId);
+
     return {
       ...school,
       _id: school._id.toString(),
       formattedSchoolCode: formatSchoolCode(school.schoolCode),
+      isPlatformTenant,
       users: users.map((u: any) => ({
         _id: u._id.toString(),
         name: `${u.firstName} ${u.lastName}`,
@@ -467,6 +492,7 @@ export class PlatformService {
     };
   }
 
+  /* ⚠️ SUSPEND — with self-lockout guard */
   static async suspendSchool(
     tenantId: string,
     _suspenderEmail: string,
@@ -474,6 +500,15 @@ export class PlatformService {
   ): Promise<any> {
     if (!mongoose.Types.ObjectId.isValid(tenantId)) {
       throw new AppError('Invalid tenant ID', 400);
+    }
+
+    // Guard: platform admin cannot suspend their own tenant
+    if (await this.isPlatformAdminTenant(tenantId)) {
+      throw new AppError(
+        'You cannot suspend your own platform-admin school. ' +
+          'This tenant hosts the founder account and must remain active.',
+        403,
+      );
     }
 
     const school = await Tenant.findByIdAndUpdate(
@@ -531,9 +566,18 @@ export class PlatformService {
     };
   }
 
+  /* ⚠️ DELETE — with self-lockout guard */
   static async deleteSchool(tenantId: string): Promise<any> {
     if (!mongoose.Types.ObjectId.isValid(tenantId)) {
       throw new AppError('Invalid tenant ID', 400);
+    }
+
+    // Guard: platform admin cannot delete their own tenant
+    if (await this.isPlatformAdminTenant(tenantId)) {
+      throw new AppError(
+        'You cannot delete the school that hosts your platform-admin account.',
+        403,
+      );
     }
 
     const school = await Tenant.findByIdAndDelete(tenantId);
