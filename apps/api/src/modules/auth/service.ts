@@ -7,8 +7,8 @@ import { User } from '../../models/User';
 import { Tenant } from '../../models/Tenant';
 import { PasswordResetToken } from '../../models/PasswordResetToken';
 import { AppError } from '../../middleware/error-handler';
-import { UserCreateInput, UserLoginInput, AuthTokens } from '@acadflows/shared';
 import { sendPasswordResetEmail } from '../../services/email.service';
+import { UserCreateInput, UserLoginInput, AuthTokens } from '@acadflows/shared';
 
 export class AuthService {
   static async register(
@@ -18,7 +18,10 @@ export class AuthService {
       throw new AppError('Invalid tenant ID format.', 400);
     }
 
-    const tenant = await Tenant.findOne({ _id: input.tenantId, status: 'active' });
+    const tenant = await Tenant.findOne({
+      _id: input.tenantId,
+      status: 'active',
+    });
     if (!tenant) {
       throw new AppError('Tenant not found or inactive', 400);
     }
@@ -38,7 +41,10 @@ export class AuthService {
     let finalRole = input.role;
     if (!adminExists) {
       finalRole = 'admin';
-      console.log('🔐 No admin for tenant — forcing role to admin for', input.email);
+      console.log(
+        '🔐 No admin for tenant — forcing role to admin for',
+        input.email,
+      );
     }
 
     const user = await User.create({
@@ -63,12 +69,17 @@ export class AuthService {
     // Create role-specific profile
     await this.createRoleProfile(user, input);
 
-    // ── Link guardian to students ──
+    // Link guardian to students
     if (finalRole === 'guardian') {
       await this.linkGuardianToStudents(user, input);
     }
 
-    const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
+    const tokens = this.generateTokens(
+      user.id,
+      user.tenantId,
+      user.email,
+      user.role,
+    );
 
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
@@ -77,7 +88,6 @@ export class AuthService {
 
   /**
    * Create Student or Teacher profile document matching the user's role.
-   * All input fields from the register form are mapped through.
    */
   private static async createRoleProfile(user: any, input: UserCreateInput) {
     try {
@@ -88,24 +98,22 @@ export class AuthService {
 
         const admissionNo = await generateAdmissionNo(user.tenantId);
 
-        // Build address — use provided values or placeholder
         const address =
           input.address && (input.address.city || input.address.state)
             ? {
-              street: input.address.street || '',
-              city: input.address.city || '',
-              state: input.address.state || '',
-              country: input.address.country || 'India',
-              postalCode: input.address.postalCode || '',
-            }
+                street: input.address.street || '',
+                city: input.address.city || '',
+                state: input.address.state || '',
+                country: input.address.country || 'India',
+                postalCode: input.address.postalCode || '',
+              }
             : {
-              city: 'N/A',
-              state: 'N/A',
-              country: 'India',
-              postalCode: '000000',
-            };
+                city: 'N/A',
+                state: 'N/A',
+                country: 'India',
+                postalCode: '000000',
+              };
 
-        // Auto-enroll in the current academic year if a section was selected
         const enrollments: any[] = [];
         if (input.sectionId) {
           const currentYear = await AcademicYear.findOne({
@@ -140,14 +148,14 @@ export class AuthService {
           gender: input.gender || 'other',
           guardians: input.parentName
             ? [
-              {
-                name: input.parentName,
-                phone: input.parentPhone || '',
-                email: input.parentEmail || '',
-                relationship: 'guardian',
-                isVerified: false,
-              },
-            ]
+                {
+                  name: input.parentName,
+                  phone: input.parentPhone || '',
+                  email: input.parentEmail || '',
+                  relationship: 'guardian',
+                  isVerified: false,
+                },
+              ]
             : [],
           address,
           emergencyContact: {
@@ -160,7 +168,10 @@ export class AuthService {
           isDeleted: false,
         });
 
-        console.log('✅ Student profile created:', { userId: user._id, admissionNo });
+        console.log('✅ Student profile created:', {
+          userId: user._id,
+          admissionNo,
+        });
       }
 
       if (user.role === 'teacher') {
@@ -172,32 +183,35 @@ export class AuthService {
         const address =
           input.address && (input.address.city || input.address.state)
             ? {
-              street: input.address.street || '',
-              city: input.address.city || '',
-              state: input.address.state || '',
-              country: input.address.country || 'India',
-              postalCode: input.address.postalCode || '',
-            }
+                street: input.address.street || '',
+                city: input.address.city || '',
+                state: input.address.state || '',
+                country: input.address.country || 'India',
+                postalCode: input.address.postalCode || '',
+              }
             : {
-              city: 'N/A',
-              state: 'N/A',
-              country: 'India',
-              postalCode: '000000',
-            };
+                city: 'N/A',
+                state: 'N/A',
+                country: 'India',
+                postalCode: '000000',
+              };
 
-        // Map the simple string fields into structured arrays
         const qualifications: any[] = input.qualification
           ? [
-            {
-              degree: input.qualification,
-              institution: 'N/A',
-              year: new Date().getFullYear(),
-            },
-          ]
+              {
+                degree: input.qualification,
+                institution: 'N/A',
+                year: new Date().getFullYear(),
+              },
+            ]
           : [];
 
         const experience: any[] = [];
-        if (input.experience !== undefined && input.experience !== null && input.experience !== '') {
+        if (
+          input.experience !== undefined &&
+          input.experience !== null &&
+          input.experience !== ''
+        ) {
           experience.push({
             institution: 'N/A',
             position: 'Teacher',
@@ -240,10 +254,11 @@ export class AuthService {
           isDeleted: false,
         });
 
-        console.log('✅ Teacher profile created:', { userId: user._id, employeeId });
+        console.log('✅ Teacher profile created:', {
+          userId: user._id,
+          employeeId,
+        });
       }
-
-      // Admins and guardians don't have separate profile docs
     } catch (profileError) {
       console.error('❌ Failed to create role profile:', profileError);
     }
@@ -251,9 +266,12 @@ export class AuthService {
 
   /**
    * Link a newly registered guardian to their children.
-   * Called after User is created, using `input.children[]` (from roll-number verification).
+   * Matches by studentId AND verifies the tenant.
    */
-  private static async linkGuardianToStudents(user: any, input: UserCreateInput) {
+  private static async linkGuardianToStudents(
+    user: any,
+    input: UserCreateInput,
+  ) {
     try {
       if (!input.children || input.children.length === 0) {
         console.log('ℹ️  Guardian registered with no children to link');
@@ -274,7 +292,10 @@ export class AuthService {
         });
 
         if (!student) {
-          console.warn('⚠️  Student not found for guardian link:', child.studentId);
+          console.warn(
+            '⚠️  Student not found for guardian link:',
+            child.studentId,
+          );
           continue;
         }
 
@@ -283,7 +304,10 @@ export class AuthService {
         );
 
         if (alreadyLinked) {
-          console.log('ℹ️  Guardian already linked to student:', child.studentId);
+          console.log(
+            'ℹ️  Guardian already linked to student:',
+            child.studentId,
+          );
           continue;
         }
 
@@ -299,6 +323,10 @@ export class AuthService {
 
         await student.save();
         linked++;
+
+        console.log(
+          `✅ Linked guardian ${user.email} to student ${student.firstName} ${student.lastName}`,
+        );
       }
 
       console.log(`✅ Guardian linked to ${linked} student(s)`);
@@ -323,7 +351,12 @@ export class AuthService {
     user.lastLoginAt = new Date();
     await user.save();
 
-    const tokens = this.generateTokens(user.id, user.tenantId, user.email, user.role);
+    const tokens = this.generateTokens(
+      user.id,
+      user.tenantId,
+      user.email,
+      user.role,
+    );
 
     const { passwordHash: _passwordHash, ...userObj } = user.toObject();
 
@@ -332,14 +365,25 @@ export class AuthService {
 
   static async refreshToken(refreshToken: string): Promise<AuthTokens> {
     try {
-      const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret) as any;
+      const decoded = jwt.verify(
+        refreshToken,
+        config.jwt.refreshSecret,
+      ) as any;
 
-      const user = await User.findOne({ _id: decoded.userId, status: 'active' });
+      const user = await User.findOne({
+        _id: decoded.userId,
+        status: 'active',
+      });
       if (!user) {
         throw new AppError('Invalid refresh token', 401);
       }
 
-      return this.generateTokens(user.id, user.tenantId, user.email, user.role);
+      return this.generateTokens(
+        user.id,
+        user.tenantId,
+        user.email,
+        user.role,
+      );
     } catch {
       throw new AppError('Invalid refresh token', 401);
     }
@@ -366,14 +410,12 @@ export class AuthService {
 
   static async forgotPassword(email: string): Promise<void> {
     const user = await User.findOne({ email, status: 'active' });
-    if (!user) return; // Silent — don't leak user existence
+    if (!user) return;
 
     const token = crypto.randomBytes(32).toString('hex');
 
-    // Clean up any existing reset tokens for this user
     await PasswordResetToken.deleteMany({ userId: user.id });
 
-    // Create new token with 1-hour TTL
     await PasswordResetToken.create({
       userId: user.id,
       token,
@@ -381,12 +423,9 @@ export class AuthService {
       used: false,
     });
 
-    // Build the reset URL. Prefer FRONTEND_URL from env.
-    const frontendUrl =
-      process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
-    // Send the email (falls back to console.log if no API key is set)
     await sendPasswordResetEmail(
       email,
       resetLink,
@@ -396,7 +435,10 @@ export class AuthService {
     console.log(`🔑 Password reset requested for ${email}`);
   }
 
-  static async resetPassword(token: string, newPassword: string): Promise<void> {
+  static async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<void> {
     const record = await PasswordResetToken.findOne({ token, used: false });
 
     if (!record) {

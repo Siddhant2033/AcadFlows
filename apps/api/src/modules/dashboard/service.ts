@@ -8,7 +8,7 @@ import { Attendance } from '../../models/Attendance';
 import { AppError } from '../../middleware/error-handler';
 
 /* ─────────────────────────────────────────────────────────────
-   Interfaces (unchanged)
+   Interfaces
    ───────────────────────────────────────────────────────────── */
 
 interface UserData {
@@ -147,10 +147,7 @@ interface DashboardResponse {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Safe aggregate helper
-   ─────────────────────────────────────────────────────────────
-   MongoDB `aggregate()` on a non-existent collection can throw on
-   the free tier. This wrapper catches that and returns a fallback.
+   Safe wrappers
    ───────────────────────────────────────────────────────────── */
 
 async function safeAggregate<T>(
@@ -268,9 +265,10 @@ export class DashboardService {
     });
 
     const attendancePercentage =
-      totalAttendance > 0 ? Math.round((todayAttendance / totalAttendance) * 100) : 0;
+      totalAttendance > 0
+        ? Math.round((todayAttendance / totalAttendance) * 100)
+        : 0;
 
-    // Safe aggregate for revenue
     const paidInvoices = await safeAggregate<any[]>(
       Invoice,
       [
@@ -294,7 +292,9 @@ export class DashboardService {
 
     const feeCollection =
       totalInvoicesAmount.length > 0 && totalInvoicesAmount[0].total > 0
-        ? Math.round(((paidInvoices[0]?.total || 0) / totalInvoicesAmount[0].total) * 100)
+        ? Math.round(
+            ((paidInvoices[0]?.total || 0) / totalInvoicesAmount[0].total) * 100,
+          )
         : 0;
 
     const pendingInvoices = await safeCount(Invoice, {
@@ -319,7 +319,6 @@ export class DashboardService {
   ): Promise<ActivityItem[]> {
     const activities: ActivityItem[] = [];
 
-    // All find() calls are safe on missing collections — return [].
     try {
       const recentStudents = await Student.find({ tenantId, isDeleted: false })
         .sort({ createdAt: -1 })
@@ -336,7 +335,7 @@ export class DashboardService {
         });
       });
     } catch {
-      /* safe fallback */
+      /* safe */
     }
 
     try {
@@ -355,7 +354,7 @@ export class DashboardService {
         });
       });
     } catch {
-      /* safe fallback */
+      /* safe */
     }
 
     try {
@@ -377,34 +376,30 @@ export class DashboardService {
         });
       });
     } catch {
-      /* safe fallback */
+      /* safe */
     }
 
-    // Sort and return
-    return activities
-      .sort((a, b) => {
-        const timeA = new Date(a.timestamp).getTime();
-        const timeB = new Date(b.timestamp).getTime();
-        return timeB - timeA;
-      })
-      .slice(0, 10);
+    return activities.slice(0, 10);
   }
 
   static async getAdminData(tenantId: string): Promise<AdminData> {
-    const [totalStudents, totalTeachers, totalInvoices, pendingInvoices] = await Promise.all([
-      safeCount(Student, { tenantId, isDeleted: false }),
-      safeCount(Teacher, { tenantId, isDeleted: false }),
-      safeCount(Invoice, { tenantId }),
-      safeCount(Invoice, {
-        tenantId,
-        status: { $in: ['sent', 'partially_paid', 'overdue'] },
-      }),
-    ]);
+    const [totalStudents, totalTeachers, totalInvoices, pendingInvoices] =
+      await Promise.all([
+        safeCount(Student, { tenantId, isDeleted: false }),
+        safeCount(Teacher, { tenantId, isDeleted: false }),
+        safeCount(Invoice, { tenantId }),
+        safeCount(Invoice, {
+          tenantId,
+          status: { $in: ['sent', 'partially_paid', 'overdue'] },
+        }),
+      ]);
 
     let newMessages = 0;
     try {
       const Message = mongoose.model('Message');
-      const teachers = await Teacher.find({ tenantId, isDeleted: false }).select('userId');
+      const teachers = await Teacher.find({ tenantId, isDeleted: false }).select(
+        'userId',
+      );
       const teacherIds = teachers.map(t => t.userId);
       newMessages = await Message.countDocuments({
         tenantId,
@@ -428,10 +423,30 @@ export class DashboardService {
       quickActions: [
         { label: 'Add Student', icon: '➕', path: '/students/add', color: 'blue' },
         { label: 'Add Teacher', icon: '👨‍🏫', path: '/teachers/add', color: 'green' },
-        { label: 'Mark Attendance', icon: '✅', path: '/attendance/mark', color: 'purple' },
-        { label: 'Manage Fees', icon: '💰', path: '/fees/invoices', color: 'orange' },
-        { label: 'Attendance Reports', icon: '📊', path: '/attendance/reports', color: 'red' },
-        { label: 'Send Announcement', icon: '📢', path: '/announcements', color: 'teal' },
+        {
+          label: 'Mark Attendance',
+          icon: '✅',
+          path: '/attendance/mark',
+          color: 'purple',
+        },
+        {
+          label: 'Manage Fees',
+          icon: '💰',
+          path: '/fees/invoices',
+          color: 'orange',
+        },
+        {
+          label: 'Attendance Reports',
+          icon: '📊',
+          path: '/attendance/reports',
+          color: 'red',
+        },
+        {
+          label: 'Send Announcement',
+          icon: '📢',
+          path: '/announcements',
+          color: 'teal',
+        },
       ],
       quickStats: {
         totalStudents,
@@ -444,8 +459,16 @@ export class DashboardService {
     };
   }
 
-  static async getTeacherData(userId: string, tenantId: string): Promise<TeacherData> {
-    const teacher = await Teacher.findOne({ userId, tenantId, isDeleted: false });
+  static async getTeacherData(
+    userId: string,
+    tenantId: string,
+  ): Promise<TeacherData> {
+    const teacher = await Teacher.findOne({
+      userId,
+      tenantId,
+      isDeleted: false,
+    });
+
     if (!teacher) {
       return { myClasses: [], pendingTasks: [] };
     }
@@ -462,7 +485,9 @@ export class DashboardService {
         .limit(5);
 
       const myClasses = classes.map((cls: any) => ({
-        name: `${cls.subjectId?.name || 'Unknown'} - ${cls.gradeId?.name || 'Unknown'}`,
+        name: `${cls.subjectId?.name || 'Unknown'} - ${
+          cls.gradeId?.name || 'Unknown'
+        }`,
         section: cls.sectionId?.name || 'N/A',
         time: `${cls.startTime} - ${cls.endTime}`,
       }));
@@ -487,8 +512,16 @@ export class DashboardService {
     }
   }
 
-  static async getStudentData(userId: string, tenantId: string): Promise<StudentData> {
-    const student = await Student.findOne({ userId, tenantId, isDeleted: false });
+  static async getStudentData(
+    userId: string,
+    tenantId: string,
+  ): Promise<StudentData> {
+    const student = await Student.findOne({
+      userId,
+      tenantId,
+      isDeleted: false,
+    });
+
     if (!student) {
       return {
         timetable: [],
@@ -503,8 +536,13 @@ export class DashboardService {
       const TimetableEntry = mongoose.model('TimetableEntry');
       const today = new Date();
       const days = [
-        'sunday', 'monday', 'tuesday', 'wednesday',
-        'thursday', 'friday', 'saturday',
+        'sunday',
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
       ];
       const dayName = days[today.getDay()];
 
@@ -529,8 +567,10 @@ export class DashboardService {
 
       const overallGrade =
         grades.length > 0
-          ? grades.reduce((acc: number, g: any) => acc + (g.averageScore || 0), 0) /
-            grades.length
+          ? grades.reduce(
+              (acc: number, g: any) => acc + (g.averageScore || 0),
+              0,
+            ) / grades.length
           : 0;
 
       const Assignment = mongoose.model('Assignment');
@@ -580,17 +620,102 @@ export class DashboardService {
     }
   }
 
-  static async getGuardianData(userId: string, tenantId: string): Promise<GuardianData> {
-    const students = await Student.find({
-      tenantId,
-      'guardians.userId': userId,
-      isDeleted: false,
-    }).select('_id firstName lastName grade section rollNo');
+  /* ─────────────────────────────────────────────────────────────
+     GUARDIAN DATA — with multi-strategy linking fallback
+     ───────────────────────────────────────────────────────────── */
+
+  static async getGuardianData(
+    userId: string,
+    tenantId: string,
+  ): Promise<GuardianData> {
+    // ── Step 1: Find linked students using multiple strategies ──
+
+    let students: any[] = [];
+
+    // Strategy 1: Match by guardians[].userId (the primary linkage)
+    try {
+      students = await Student.find({
+        tenantId,
+        'guardians.userId': userId,
+        isDeleted: false,
+      })
+        .select('_id firstName lastName grade section sectionId rollNo guardians')
+        .lean();
+    } catch (err) {
+      console.warn('[dashboard] guardian query (userId) failed:', err);
+    }
+
+    // Strategy 2: Match by guardians[].email using the guardian's User email
+    if (students.length === 0) {
+      try {
+        const guardianUser: any = await User.findById(userId)
+          .select('email')
+          .lean();
+
+        if (guardianUser?.email) {
+          students = await Student.find({
+            tenantId,
+            'guardians.email': guardianUser.email,
+            isDeleted: false,
+          })
+            .select('_id firstName lastName grade section sectionId rollNo guardians')
+            .lean();
+
+          if (students.length > 0) {
+            console.log(
+              `[dashboard] Guardian linked via email fallback: ${guardianUser.email}`,
+            );
+            // Auto-heal: backfill userId on matched guardians so this
+            // doesn't need to happen again.
+            for (const s of students) {
+              const needsUpdate = (s.guardians || []).some(
+                (g: any) => g.email === guardianUser.email && !g.userId,
+              );
+              if (needsUpdate) {
+                await Student.updateOne(
+                  { _id: s._id, 'guardians.email': guardianUser.email },
+                  { $set: { 'guardians.$.userId': userId } },
+                );
+                console.log(
+                  `[dashboard] Auto-linked guardian to student ${s._id}`,
+                );
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[dashboard] guardian query (email fallback) failed:', err);
+      }
+    }
+
+    // Strategy 3: Full scan — filter in JS. Last resort.
+    if (students.length === 0) {
+      try {
+        const allStudents = await Student.find({
+          tenantId,
+          isDeleted: false,
+          guardians: {
+            $elemMatch: { userId: { $exists: true, $ne: null } },
+          },
+        })
+          .select('_id firstName lastName grade section sectionId rollNo guardians')
+          .lean();
+
+        students = allStudents.filter((s: any) =>
+          (s.guardians || []).some((g: any) => g.userId === userId),
+        );
+      } catch (err) {
+        console.warn('[dashboard] guardian query (full scan) failed:', err);
+      }
+    }
+
+    // ── Step 2: Build the children array ──
 
     const children: Child[] = await Promise.all(
       students.map(async (s: any) => {
         const studentId = s._id.toString();
 
+        // Attendance
         const totalAttendance = await safeCount(Attendance, {
           tenantId,
           entityId: studentId,
@@ -607,6 +732,7 @@ export class DashboardService {
             ? Math.round((presentOrLate / totalAttendance) * 100)
             : 0;
 
+        // Gradebook
         const Gradebook = mongoose.model('Gradebook');
         let gradebooks: any[] = [];
         try {
@@ -630,6 +756,7 @@ export class DashboardService {
           overallGrade = this.calculateGrade(averageScore);
         }
 
+        // Subject-wise breakdown
         const Subject = mongoose.model('Subject');
         const subjects: ChildSubject[] = await Promise.all(
           gradebooks.slice(0, 3).map(async (g: any) => {
@@ -663,17 +790,21 @@ export class DashboardService {
       }),
     );
 
+    // ── Step 3: Fee status ──
+
     const studentIds = students.map((s: any) => s._id.toString());
 
     let outstandingInvoices: any[] = [];
-    try {
-      outstandingInvoices = await Invoice.find({
-        tenantId,
-        studentId: { $in: studentIds },
-        status: { $in: ['sent', 'partially_paid', 'overdue'] },
-      }).lean();
-    } catch {
-      outstandingInvoices = [];
+    if (studentIds.length > 0) {
+      try {
+        outstandingInvoices = await Invoice.find({
+          tenantId,
+          studentId: { $in: studentIds },
+          status: { $in: ['sent', 'partially_paid', 'overdue'] },
+        }).lean();
+      } catch {
+        outstandingInvoices = [];
+      }
     }
 
     const totalDue = outstandingInvoices.reduce(
@@ -690,13 +821,17 @@ export class DashboardService {
       children,
       feeStatus: {
         current: totalDue > 0 ? 'Pending' : 'Paid',
-        nextDue: nextInvoice ? new Date(nextInvoice.dueDate).toISOString() : null,
+        nextDue: nextInvoice
+          ? new Date(nextInvoice.dueDate).toISOString()
+          : null,
         amount: totalDue,
       },
     };
   }
 
-  /* ─── Helpers ─────────────────────────────────────── */
+  /* ─────────────────────────────────────────────────────────────
+     Helpers
+     ───────────────────────────────────────────────────────────── */
 
   private static calculateGrade(score: number): string {
     if (score >= 90) return 'A+';

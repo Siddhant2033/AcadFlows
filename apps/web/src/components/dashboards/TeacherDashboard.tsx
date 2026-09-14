@@ -104,7 +104,7 @@ export default function TeacherDashboard({ data, tenant, user }: TeacherDashboar
   ];
 
   const quickActions = [
-    { label: 'Take Attendance', icon: '📋', path: '/attendance' },
+    { label: 'Take Attendance', icon: '📋', path: '/attendance/mark' },
     { label: 'Create Assignment', icon: '📝', path: '/assignments/create' },
     { label: 'Grade Submissions', icon: '✅', path: '/assignments' },
     { label: 'View Timetable', icon: '📅', path: '/timetable' },
