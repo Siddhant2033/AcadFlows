@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { SchoolCodeInput } from '../components/SchoolCodeInput';
+import StepStudentVerify from '../components/StepStudentVerify';
 import api from '../lib/api';
 import ThemeToggle from '../components/ThemeToggle';
 import { cn } from '../lib/cn';
@@ -16,9 +17,15 @@ const labelClass = 'block text-sm font-medium text-foreground';
 const primaryBtnClass =
   'rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
 
-const backBtnClass = 'text-sm font-medium text-muted hover:text-foreground transition-colors';
+const backBtnClass =
+  'text-sm font-medium text-muted hover:text-foreground transition-colors';
 
-function StepRoleSelection({ selectedRole, onRoleSelect, tenantName, schoolCode }: any) {
+function StepRoleSelection({
+  selectedRole,
+  onRoleSelect,
+  tenantName,
+  schoolCode,
+}: any) {
   const roles = [
     ['student', 'Student', '🎓'],
     ['teacher', 'Teacher', '📘'],
@@ -31,7 +38,9 @@ function StepRoleSelection({ selectedRole, onRoleSelect, tenantName, schoolCode 
       <h3 className="text-xl font-semibold text-foreground">
         Select your role{tenantName ? ` at ${tenantName}` : ''}
       </h3>
-      {schoolCode && <p className="mt-1 text-sm text-muted">School code: {schoolCode}</p>}
+      {schoolCode && (
+        <p className="mt-1 text-sm text-muted">School code: {schoolCode}</p>
+      )}
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {roles.map(([role, label, icon]) => (
           <button
@@ -53,9 +62,6 @@ function StepRoleSelection({ selectedRole, onRoleSelect, tenantName, schoolCode 
     </div>
   );
 }
-
-// StepAdminForm, StepGuardianForm, StepStudentForm, StepTeacherForm
-// are imported from separate files for the student/teacher ones.
 
 import StepStudentForm from '../components/StepStudentForm';
 import StepTeacherForm from '../components/StepTeacherForm';
@@ -88,7 +94,11 @@ function StepGuardianForm({
       return;
     }
 
-    if (verifiedStudents.some(s => s.rollNo === rollNo.trim().toUpperCase())) {
+    if (
+      verifiedStudents.some(
+        s => s.rollNo === rollNo.trim().toUpperCase(),
+      )
+    ) {
       setVerifyError('This student is already added');
       return;
     }
@@ -123,17 +133,23 @@ function StepGuardianForm({
       onChange('children', [...(formData.children || []), newChild]);
       setRollNo('');
     } catch (err: any) {
-      setVerifyError(err.response?.data?.error || 'Failed to verify roll number');
+      setVerifyError(
+        err.response?.data?.error || 'Failed to verify roll number',
+      );
     } finally {
       setVerifying(false);
     }
   };
 
   const handleRemove = (studentId: string) => {
-    setVerifiedStudents(prev => prev.filter(s => s.studentId !== studentId));
+    setVerifiedStudents(prev =>
+      prev.filter(s => s.studentId !== studentId),
+    );
     onChange(
       'children',
-      (formData.children || []).filter((c: any) => c.studentId !== studentId),
+      (formData.children || []).filter(
+        (c: any) => c.studentId !== studentId,
+      ),
     );
   };
 
@@ -142,7 +158,9 @@ function StepGuardianForm({
       <h3 className="text-xl font-semibold text-foreground">
         Guardian registration{tenantName ? ` — ${tenantName}` : ''}
       </h3>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
 
       {/* Roll number verification */}
       <div className="p-4 rounded-lg border border-border">
@@ -173,7 +191,9 @@ function StepGuardianForm({
           </button>
         </div>
         {verifyError && (
-          <p className="mt-2 text-sm text-red-600 dark:text-red-400">{verifyError}</p>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            {verifyError}
+          </p>
         )}
 
         {verifiedStudents.length > 0 && (
@@ -189,8 +209,8 @@ function StepGuardianForm({
                   </p>
                   <p className="text-sm text-muted">
                     {student.grade}
-                    {student.section ? ` - Section ${student.section}` : ''} · Roll:{' '}
-                    {student.rollNo}
+                    {student.section ? ` - Section ${student.section}` : ''} ·
+                    Roll: {student.rollNo}
                   </p>
                 </div>
                 <button
@@ -218,7 +238,9 @@ function StepGuardianForm({
       ].map(([field, label, type]) => (
         <label key={field} className={labelClass}>
           {label}
-          {field === 'phone' && formData[field] ? ` (${formData[field]})` : ''}
+          {field === 'phone' && formData[field]
+            ? ` (${formData[field]})`
+            : ''}
           <input
             required={[
               'firstName',
@@ -291,10 +313,15 @@ function StepAdminForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <h3 className="text-xl font-semibold text-foreground">
-        School administrator registration{tenantName ? ` — ${tenantName}` : ''}
+        School administrator registration
+        {tenantName ? ` — ${tenantName}` : ''}
       </h3>
-      {schoolCode && <p className="text-sm text-muted">School code: {schoolCode}</p>}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {schoolCode && (
+        <p className="text-sm text-muted">School code: {schoolCode}</p>
+      )}
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
 
       {[
         ['firstName', 'First name', 'text'],
@@ -334,7 +361,11 @@ function StepAdminForm({
         <button type="button" onClick={onBack} className={backBtnClass}>
           ← Back
         </button>
-        <button type="submit" disabled={isLoading} className={primaryBtnClass}>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className={primaryBtnClass}
+        >
           {isLoading ? 'Registering...' : 'Register'}
         </button>
       </div>
@@ -343,6 +374,17 @@ function StepAdminForm({
 }
 
 // ─── Main RegisterPage ────────────────────────────────────
+
+interface VerifiedStudent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  grade: string;
+  section: string;
+  sectionId: string | null;
+  rollNo: string;
+  admissionNo: string;
+}
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -358,9 +400,13 @@ export default function RegisterPage() {
   const [tenantName, setTenantName] = useState('');
   const [isVerified, setIsVerified] = useState(false);
 
-  const [selectedRole, setSelectedRole] = useState<'student' | 'teacher' | 'guardian' | 'admin'>(
-    'student',
-  );
+  const [selectedRole, setSelectedRole] = useState<
+    'student' | 'teacher' | 'guardian' | 'admin'
+  >('student');
+
+  // Sprint 5: verified student record from /students/verify-identity
+  const [studentVerified, setStudentVerified] =
+    useState<VerifiedStudent | null>(null);
 
   const [formData, setFormData] = useState<Record<string, any>>({
     firstName: '',
@@ -417,7 +463,11 @@ export default function RegisterPage() {
     checkTenantFromSlug();
   }, [tenantSlug]);
 
-  const handleSchoolCodeChange = (code: string, tId?: string, tName?: string) => {
+  const handleSchoolCodeChange = (
+    code: string,
+    tId?: string,
+    tName?: string,
+  ) => {
     setSchoolCode(code);
     if (tId && tName) {
       setTenantId(tId);
@@ -427,12 +477,24 @@ export default function RegisterPage() {
     }
   };
 
-  const handleRoleSelect = (role: 'student' | 'teacher' | 'guardian' | 'admin') => {
+  const handleRoleSelect = (
+    role: 'student' | 'teacher' | 'guardian' | 'admin',
+  ) => {
     setSelectedRole(role);
+    // Reset student verification if the user changes role away from student
+    if (role !== 'student') {
+      setStudentVerified(null);
+    }
     setCurrentStep(3);
   };
 
-  const handleBackToRole = () => setCurrentStep(2);
+  const handleBackToRole = () => {
+    // When the user goes back from the student verify step, clear verification
+    if (selectedRole === 'student') {
+      setStudentVerified(null);
+    }
+    setCurrentStep(2);
+  };
 
   const handleFormChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -466,10 +528,18 @@ export default function RegisterPage() {
       };
 
       if (selectedRole === 'student') {
-        registrationData.grade = formData.grade;
+        // Sprint 5: student self-registration requires prior identity verification
+        if (!studentVerified) {
+          setError('Please verify your identity first');
+          setIsLoading(false);
+          return;
+        }
+
+        registrationData.grade = formData.grade || studentVerified.grade;
         registrationData.gradeId = formData.gradeId;
-        registrationData.section = formData.section;
-        registrationData.sectionId = formData.sectionId;
+        registrationData.section = formData.section || studentVerified.section;
+        registrationData.sectionId =
+          formData.sectionId || studentVerified.sectionId || '';
         registrationData.dateOfBirth = formData.dateOfBirth;
         registrationData.gender = formData.gender;
         registrationData.parentName = formData.parentName;
@@ -481,6 +551,13 @@ export default function RegisterPage() {
           state: formData.addressState,
           postalCode: formData.addressPostalCode,
           country: formData.addressCountry || 'India',
+        };
+
+        // Pass the verified student record ID so the backend links the new
+        // User to the existing Student record instead of creating a duplicate.
+        registrationData.verifiedStudentId = studentVerified.id;
+        registrationData.verificationData = {
+          studentId: studentVerified.id,
         };
       }
 
@@ -514,7 +591,9 @@ export default function RegisterPage() {
       navigate(tenantSlug ? `/${tenantSlug}/dashboard` : '/dashboard');
     } catch (err: any) {
       setError(
-        err.response?.data?.error || err.message || 'Registration failed. Please try again.',
+        err.response?.data?.error ||
+          err.message ||
+          'Registration failed. Please try again.',
       );
     } finally {
       setIsLoading(false);
@@ -524,7 +603,12 @@ export default function RegisterPage() {
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return <SchoolCodeInput value={schoolCode} onChange={handleSchoolCodeChange} />;
+        return (
+          <SchoolCodeInput
+            value={schoolCode}
+            onChange={handleSchoolCodeChange}
+          />
+        );
       case 2:
         return (
           <StepRoleSelection
@@ -535,6 +619,29 @@ export default function RegisterPage() {
           />
         );
       case 3:
+        // Sprint 5: students must verify identity BEFORE the details form
+        if (selectedRole === 'student' && !studentVerified) {
+          return (
+            <StepStudentVerify
+              tenantId={tenantId}
+              tenantName={tenantName}
+              onVerified={student => {
+                setStudentVerified(student);
+                // Pre-fill name + academic fields from the verified record
+                setFormData(prev => ({
+                  ...prev,
+                  firstName: student.firstName,
+                  lastName: student.lastName,
+                  grade: student.grade,
+                  section: student.section,
+                  sectionId: student.sectionId || '',
+                }));
+              }}
+              onBack={handleBackToRole}
+            />
+          );
+        }
+
         switch (selectedRole) {
           case 'student':
             return (
@@ -601,7 +708,9 @@ export default function RegisterPage() {
       ? 'Enter your school code to get started'
       : currentStep === 2
         ? 'Select your role in the school'
-        : `Complete your ${selectedRole} registration`;
+        : selectedRole === 'student' && !studentVerified
+          ? 'Verify your identity to continue'
+          : `Complete your ${selectedRole} registration`;
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
@@ -629,7 +738,9 @@ export default function RegisterPage() {
 
         <div className="flex-1 flex items-center">
           <div className="w-full max-w-md mx-auto">
-            <h1 className="text-3xl font-bold text-foreground">Join your school</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              Join your school
+            </h1>
             <p className="mt-2 text-sm text-muted">{stepSubtitle}</p>
 
             {/* Progress */}
@@ -638,12 +749,17 @@ export default function RegisterPage() {
                 const step = idx + 1;
                 const active = currentStep >= step;
                 return (
-                  <div key={label} className="flex items-center flex-1 last:flex-none">
+                  <div
+                    key={label}
+                    className="flex items-center flex-1 last:flex-none"
+                  >
                     <div className="flex items-center gap-2">
                       <div
                         className={cn(
                           'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0',
-                          active ? 'bg-primary-600 text-white' : 'bg-elevated text-muted',
+                          active
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-elevated text-muted',
                         )}
                       >
                         {currentStep > step ? '✓' : step}
@@ -651,7 +767,9 @@ export default function RegisterPage() {
                       <span
                         className={cn(
                           'text-xs whitespace-nowrap',
-                          active ? 'text-foreground font-medium' : 'text-muted',
+                          active
+                            ? 'text-foreground font-medium'
+                            : 'text-muted',
                         )}
                       >
                         {label}
@@ -661,7 +779,9 @@ export default function RegisterPage() {
                       <div
                         className={cn(
                           'flex-1 h-px mx-3',
-                          currentStep > step ? 'bg-primary-600' : 'bg-border',
+                          currentStep > step
+                            ? 'bg-primary-600'
+                            : 'bg-border',
                         )}
                       />
                     )}
@@ -700,7 +820,9 @@ export default function RegisterPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-primary-400" />
               Admissions open
             </span>
-            <span className="text-xs text-white/70">Multi-role · Multi-school</span>
+            <span className="text-xs text-white/70">
+              Multi-role · Multi-school
+            </span>
           </div>
 
           <div className="max-w-md">
@@ -708,8 +830,8 @@ export default function RegisterPage() {
               Built for every seat in the school.
             </h2>
             <p className="mt-3 text-sm text-white/80 leading-relaxed">
-              Students, teachers, guardians, and admins each get a setup made for their role,
-              from day-one attendance to fee tracking.
+              Students, teachers, guardians, and admins each get a setup made
+              for their role, from day-one attendance to fee tracking.
             </p>
           </div>
 
