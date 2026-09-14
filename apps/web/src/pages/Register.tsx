@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { SchoolCodeInput } from '../components/SchoolCodeInput';
-import StepStudentVerify from '../components/StepStudentVerify';
 import StepStudentPending from '../components/StepStudentPending';
 import api from '../lib/api';
 import ThemeToggle from '../components/ThemeToggle';
@@ -374,17 +373,6 @@ function StepAdminForm({
 
 // ─── Types ───
 
-interface VerifiedStudent {
-  id: string;
-  firstName: string;
-  lastName: string;
-  grade: string;
-  section: string;
-  sectionId: string | null;
-  rollNo: string;
-  admissionNo: string;
-}
-
 interface PendingSuccess {
   firstName: string;
   email: string;
@@ -413,12 +401,6 @@ export default function RegisterPage() {
     'student' | 'teacher' | 'guardian' | 'admin'
   >('student');
 
-  // Sprint 5: student verification result
-  const [studentVerified, setStudentVerified] =
-    useState<VerifiedStudent | null>(null);
-  // Set when the student skipped verification (record not found)
-  const [studentSkippedVerify, setStudentSkippedVerify] = useState(false);
-
   // Success screen state
   const [pendingSuccess, setPendingSuccess] = useState<PendingSuccess | null>(
     null,
@@ -446,6 +428,9 @@ export default function RegisterPage() {
     addressState: '',
     addressPostalCode: '',
     addressCountry: 'India',
+    rollNo: '',
+    admissionNo: '',
+    _verifiedStudentId: '',
 
     // Teacher
     phone: '',
@@ -497,18 +482,10 @@ export default function RegisterPage() {
     role: 'student' | 'teacher' | 'guardian' | 'admin',
   ) => {
     setSelectedRole(role);
-    if (role !== 'student') {
-      setStudentVerified(null);
-      setStudentSkippedVerify(false);
-    }
     setCurrentStep(3);
   };
 
   const handleBackToRole = () => {
-    if (selectedRole === 'student') {
-      setStudentVerified(null);
-      setStudentSkippedVerify(false);
-    }
     setCurrentStep(2);
   };
 
@@ -543,11 +520,10 @@ export default function RegisterPage() {
       };
 
       if (selectedRole === 'student') {
-        registrationData.grade = formData.grade || studentVerified?.grade;
+        registrationData.grade = formData.grade;
         registrationData.gradeId = formData.gradeId;
-        registrationData.section = formData.section || studentVerified?.section;
-        registrationData.sectionId =
-          formData.sectionId || studentVerified?.sectionId || '';
+        registrationData.section = formData.section;
+        registrationData.sectionId = formData.sectionId;
         registrationData.dateOfBirth = formData.dateOfBirth;
         registrationData.gender = formData.gender;
         registrationData.parentName = formData.parentName;
@@ -561,10 +537,24 @@ export default function RegisterPage() {
           country: formData.addressCountry || 'India',
         };
 
-        if (studentVerified) {
-          registrationData.verifiedStudentId = studentVerified.id;
+        // Roll + admission provided by the student; if a matching record
+        // was found we include the verifiedStudentId so the backend links
+        // to the existing Student row. If not found, the backend creates
+        // a fresh Student with these values stored on the notes.
+        if (formData._verifiedStudentId) {
+          registrationData.verifiedStudentId = formData._verifiedStudentId;
           registrationData.verificationData = {
-            studentId: studentVerified.id,
+            studentId: formData._verifiedStudentId,
+          };
+        }
+
+        // Stash the student's provided numbers so the backend can carry
+        // them onto the fresh Student record for the approver to see.
+        if (formData.rollNo || formData.admissionNo) {
+          registrationData.verificationData = {
+            ...(registrationData.verificationData || {}),
+            providedRollNo: formData.rollNo || '',
+            providedAdmissionNo: formData.admissionNo || '',
           };
         }
       }
@@ -597,19 +587,20 @@ export default function RegisterPage() {
 
       await register(registrationData);
 
-      // ── Success: show pending screen for students, dashboard for others ──
+      // Student — show the "waiting for approval" screen.
       if (selectedRole === 'student') {
         setPendingSuccess({
           firstName: formData.firstName,
           email: formData.email,
-          grade: formData.grade || studentVerified?.grade || 'N/A',
-          section: formData.section || studentVerified?.section || '',
-          wasVerified: !!studentVerified,
+          grade: formData.grade || 'N/A',
+          section: formData.section || '',
+          wasVerified: !!formData._verifiedStudentId,
         });
         setIsLoading(false);
         return;
       }
 
+      // Non-students go straight to their dashboard.
       navigate(tenantSlug ? `/${tenantSlug}/dashboard` : '/dashboard');
     } catch (err: any) {
       setError(
@@ -640,39 +631,6 @@ export default function RegisterPage() {
           />
         );
       case 3:
-        // Sprint 5: students go through optional verification first
-        if (selectedRole === 'student' && !studentVerified && !studentSkippedVerify) {
-          return (
-            <StepStudentVerify
-              tenantId={tenantId}
-              tenantName={tenantName}
-              onVerified={student => {
-                setStudentVerified(student);
-                setFormData(prev => ({
-                  ...prev,
-                  firstName: student.firstName,
-                  lastName: student.lastName,
-                  grade: student.grade,
-                  section: student.section,
-                  sectionId: student.sectionId || '',
-                }));
-              }}
-              onSkip={({ rollNo, admissionNo }) => {
-                setStudentSkippedVerify(true);
-                // Pre-fill grade/section fields with whatever the student
-                // typed so it's easier to correct later.
-                setFormData(prev => ({
-                  ...prev,
-                  // Leave grade/section blank for the form to fill
-                  _providedRollNo: rollNo,
-                  _providedAdmissionNo: admissionNo,
-                }));
-              }}
-              onBack={handleBackToRole}
-            />
-          );
-        }
-
         switch (selectedRole) {
           case 'student':
             return (
@@ -739,11 +697,7 @@ export default function RegisterPage() {
       ? 'Enter your school code to get started'
       : currentStep === 2
         ? 'Select your role in the school'
-        : selectedRole === 'student' &&
-            !studentVerified &&
-            !studentSkippedVerify
-          ? 'Verify your identity to continue (optional)'
-          : `Complete your ${selectedRole} registration`;
+        : `Complete your ${selectedRole} registration`;
 
   // ─── Success screen (students) ───
   if (pendingSuccess) {
@@ -765,7 +719,6 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
-      {/* Left: form panel */}
       <div className="w-full lg:w-[46%] flex flex-col px-6 sm:px-12 lg:px-16 py-10">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
@@ -794,7 +747,6 @@ export default function RegisterPage() {
             </h1>
             <p className="mt-2 text-sm text-muted">{stepSubtitle}</p>
 
-            {/* Progress */}
             <div className="mt-6 flex items-center gap-2">
               {stepLabels.map((label, idx) => {
                 const step = idx + 1;
@@ -856,7 +808,6 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      {/* Right: hero panel */}
       <div className="hidden lg:block relative w-[54%]">
         <img
           src="https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=1400&q=80"
