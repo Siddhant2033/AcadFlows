@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { TenantProvider } from './contexts/TenantContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -61,10 +61,17 @@ import AuditLogPage from './pages/admin/AuditLog';
 import BulkPromotePage from './pages/admin/BulkPromote';
 import BulkGenerateInvoicesPage from './pages/admin/BulkGenerateInvoices';
 
+// Admin — Approvals (Sprint 3B)
+import ApprovalsTeachersPage from './pages/admin/approvals/PendingTeachers';
+import ApprovalsStudentsPage from './pages/admin/approvals/PendingStudents';
+import ApprovalsGuardiansPage from './pages/admin/approvals/PendingGuardians';
+
 // Platform-Admin
 import PlatformDashboard from './pages/platform-admin/PlatformDashboard';
 import PendingSchoolsPage from './pages/platform-admin/PendingSchools';
 import AllSchoolsPage from './pages/platform-admin/AllSchools';
+import PendingUsersPage from './pages/platform-admin/PendingUsers';
+import PlatformUsersPage from './pages/platform-admin/PlatformUsers';
 
 function App() {
   return (
@@ -248,6 +255,36 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'teacher']}>
                   <AttendanceReportsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ────────────── Approvals (admin only) ────────────── */}
+            <Route
+              path="/admin/approvals"
+              element={<Navigate to="/admin/approvals/teachers" replace />}
+            />
+            <Route
+              path="/admin/approvals/teachers"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <ApprovalsTeachersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/approvals/students"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <ApprovalsStudentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/approvals/guardians"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <ApprovalsGuardiansPage />
                 </ProtectedRoute>
               }
             />
@@ -465,6 +502,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
             {/* Leaves */}
             <Route
               path="/leaves"
@@ -509,7 +547,6 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            {/* Documents — Certificates */}
             <Route
               path="/documents/certificates"
               element={
@@ -518,8 +555,6 @@ function App() {
                 </ProtectedRoute>
               }
             />
-
-            {/* Documents — Audit Log */}
             <Route
               path="/documents/audit-log"
               element={
@@ -547,11 +582,11 @@ function App() {
               }
             />
 
-            {/* Platform Admin (founder) */}
+            {/* Platform Admin (founder only) */}
             <Route
               path="/platform-admin"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPlatformAdmin>
                   <PlatformDashboard />
                 </ProtectedRoute>
               }
@@ -559,7 +594,7 @@ function App() {
             <Route
               path="/platform-admin/schools/pending"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPlatformAdmin>
                   <PendingSchoolsPage />
                 </ProtectedRoute>
               }
@@ -567,12 +602,28 @@ function App() {
             <Route
               path="/platform-admin/schools"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPlatformAdmin>
                   <AllSchoolsPage />
                 </ProtectedRoute>
               }
             />
-            
+            <Route
+              path="/platform-admin/users/pending"
+              element={
+                <ProtectedRoute requiredPlatformAdmin>
+                  <PendingUsersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/platform-admin/users"
+              element={
+                <ProtectedRoute requiredPlatformAdmin>
+                  <PlatformUsersPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* 404 */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

@@ -41,6 +41,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { label: 'Students', icon: '👨‍🎓', path: '/students', roles: ['admin'] },
       { label: 'Teachers', icon: '👨‍🏫', path: '/teachers', roles: ['admin'] },
+      { label: 'Approvals', icon: '✅', path: '/admin/approvals', roles: ['admin'] },
     ],
   },
   {

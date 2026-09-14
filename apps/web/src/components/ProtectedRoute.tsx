@@ -9,14 +9,20 @@ interface ProtectedRouteProps {
   requiredRole?: Role;
   /** Optional array — any of these roles is allowed */
   allowedRoles?: Role[];
+  /**
+   * When true, only the platform admin (founder) may access this route.
+   * Non-founders are redirected to /dashboard.
+   */
+  requiredPlatformAdmin?: boolean;
 }
 
 export function ProtectedRoute({
   children,
   requiredRole,
   allowedRoles,
+  requiredPlatformAdmin,
 }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isPlatformAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -28,6 +34,12 @@ export function ProtectedRoute({
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Founder-only routes — backend enforces this too, but we gate here
+  // so non-founders never even see the shell.
+  if (requiredPlatformAdmin && !isPlatformAdmin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   if (allowedRoles && allowedRoles.length > 0) {

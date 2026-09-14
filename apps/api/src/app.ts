@@ -24,6 +24,7 @@ import communicationRoutes from './modules/communication/routes';
 import timetableRoutes from './modules/timetable/routes';
 import documentsRoutes from './modules/documents/routes';
 import platformRoutes from './modules/platform/routes';
+import approvalRoutes from './modules/approvals/routes';
 
 const app: Express = express();
 
@@ -106,6 +107,8 @@ app.use('/api/v1/communication', authenticate, ensureTenantMatch, communicationR
 app.use('/api/v1/timetable', authenticate, ensureTenantMatch, timetableRoutes);
 app.use('/api/v1/documents', authenticate, ensureTenantMatch, documentsRoutes);
 
+// School-admin approval queues (teachers / students / guardians)
+app.use('/api/v1/approvals', authenticate, ensureTenantMatch, approvalRoutes);
 
 /* ─────────────────────────────────────────────────────────────
    Error handling (must be last)
