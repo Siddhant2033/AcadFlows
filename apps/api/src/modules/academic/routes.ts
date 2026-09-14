@@ -11,7 +11,26 @@ import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/a
 
 const router: Router = Router();
 
+/* ─────────────────────────────────────────────────────────────
+   PUBLIC — Grades & Sections
+   ─────────────────────────────────────────────────────────────
+   These are read-only academic metadata used by the register flow
+   (student & guardian forms) to populate dropdowns. A visitor does
+   not have a session yet, so `authenticate` cannot run.
+
+   IMPORTANT: These must be mounted BEFORE `router.use(authenticate)`
+   and `router.use(ensureTenantMatch)`.
+   ───────────────────────────────────────────────────────────── */
+
+router.get('/grades', GradeController.getAll);
+router.get('/sections', SectionController.getAll);
+
+/* ─────────────────────────────────────────────────────────────
+   Everything below is protected.
+   ───────────────────────────────────────────────────────────── */
+
 router.use(ensureTenantMatch);
+router.use(authenticate);
 
 // Academic Years
 router.get('/academic-years', AcademicYearController.getAll);
@@ -21,15 +40,13 @@ router.put('/academic-years/:id', requireRole('admin'), AcademicYearController.u
 router.delete('/academic-years/:id', requireRole('admin'), AcademicYearController.delete);
 router.post('/academic-years/:id/set-current', requireRole('admin'), AcademicYearController.setCurrent);
 
-// Grades
-router.get('/grades', GradeController.getAll);
+// Grades (protected write endpoints; the public GET is above)
 router.post('/grades', requireRole('admin'), GradeController.create);
 router.get('/grades/:id', GradeController.getById);
 router.put('/grades/:id', requireRole('admin'), GradeController.update);
 router.delete('/grades/:id', requireRole('admin'), GradeController.delete);
 
-// Sections
-router.get('/sections', SectionController.getAll);
+// Sections (protected write endpoints; the public GET is above)
 router.post('/sections', requireRole('admin'), SectionController.create);
 router.get('/sections/:id', SectionController.getById);
 router.put('/sections/:id', requireRole('admin'), SectionController.update);

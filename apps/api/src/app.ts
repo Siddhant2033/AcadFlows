@@ -31,14 +31,8 @@ const app: Express = express();
 // Connect to MongoDB
 connectDB();
 
-/* ─────────────────────────────────────────────────────────────
-   Trust proxy — required on Render, Vercel, and any reverse proxy
-   ───────────────────────────────────────────────────────────── */
 app.set('trust proxy', 1);
 
-/* ─────────────────────────────────────────────────────────────
-   Security headers
-   ───────────────────────────────────────────────────────────── */
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -46,9 +40,6 @@ app.use(
   }),
 );
 
-/* ─────────────────────────────────────────────────────────────
-   CORS
-   ───────────────────────────────────────────────────────────── */
 app.use(
   cors({
     origin: config.cors.origin,
@@ -56,26 +47,13 @@ app.use(
   }),
 );
 
-/* ─────────────────────────────────────────────────────────────
-   Body parsers
-   ───────────────────────────────────────────────────────────── */
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
-/* ─────────────────────────────────────────────────────────────
-   Tenant context (cached) — runs for every request
-   ───────────────────────────────────────────────────────────── */
 app.use(tenantContext);
-
-/* ─────────────────────────────────────────────────────────────
-   Audit log — records mutating requests
-   ───────────────────────────────────────────────────────────── */
 app.use(auditLog);
 
-/* ─────────────────────────────────────────────────────────────
-   Health check
-   ───────────────────────────────────────────────────────────── */
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -91,15 +69,14 @@ app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/platform', platformRoutes);
 
+// Academic — router decides which routes are public (grades, sections)
+// and which require auth. Do NOT wrap with authenticate here.
+app.use('/api/v1/academic', academicRoutes);
+
 /* ─────────────────────────────────────────────────────────────
    Fully-protected modules
-
-   IMPORTANT: `authenticate` MUST come before `ensureTenantMatch`.
-   The modules' own routes.ts files should NOT apply these — they
-   are applied here to guarantee the correct order.
    ───────────────────────────────────────────────────────────── */
 app.use('/api/v1/dashboard', authenticate, ensureTenantMatch, dashboardRoutes);
-app.use('/api/v1/academic', authenticate, ensureTenantMatch, academicRoutes);
 app.use('/api/v1/teachers', authenticate, ensureTenantMatch, teacherRoutes);
 app.use('/api/v1/fees', authenticate, ensureTenantMatch, feeRoutes);
 app.use('/api/v1/assignments', authenticate, ensureTenantMatch, assignmentRoutes);
@@ -110,9 +87,6 @@ app.use('/api/v1/documents', authenticate, ensureTenantMatch, documentsRoutes);
 // School-admin approval queues (teachers / students / guardians)
 app.use('/api/v1/approvals', authenticate, ensureTenantMatch, approvalRoutes);
 
-/* ─────────────────────────────────────────────────────────────
-   Error handling (must be last)
-   ───────────────────────────────────────────────────────────── */
 app.use(notFoundHandler);
 app.use(errorHandler);
 

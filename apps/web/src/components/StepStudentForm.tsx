@@ -49,19 +49,42 @@ export default function StepStudentForm({
     | { kind: 'error'; message: string }
   >({ kind: 'idle' });
 
+  /* ─────────────────────────────────────────────────────
+     Load grade + section lists for the dropdowns.
+     Uses bare axios (no auth interceptor) and passes tenantId
+     explicitly in the query string so the backend can resolve
+     the tenant without relying on a session cookie.
+  */
   useEffect(() => {
     if (!tenantId) return;
 
     (async () => {
       try {
         const [gRes, sRes] = await Promise.all([
-          axios.get(`${API_BASE}/academic/grades`).catch(() => null),
-          axios.get(`${API_BASE}/academic/sections`).catch(() => null),
+          axios
+            .get(`${API_BASE}/academic/grades`, {
+              params: { tenantId },
+              withCredentials: false,
+            })
+            .catch(err => {
+              console.warn('Failed to load grades:', err?.response?.status);
+              return null;
+            }),
+          axios
+            .get(`${API_BASE}/academic/sections`, {
+              params: { tenantId },
+              withCredentials: false,
+            })
+            .catch(err => {
+              console.warn('Failed to load sections:', err?.response?.status);
+              return null;
+            }),
         ]);
+
         if (gRes) setGrades(gRes.data.data || []);
         if (sRes) setSections(sRes.data.data || []);
       } catch {
-        /* Public context — lists will stay empty; the student can still submit */
+        /* Non-fatal — student can still type grade/section manually */
       }
     })();
   }, [tenantId]);
@@ -72,10 +95,7 @@ export default function StepStudentForm({
 
   /* ─────────────────────────────────────────────────────
      Best-effort identity lookup
-     ─────────────────────────────────────────────────────
-     Runs when the student clicks "Check my record" or blurs the
-     admission-number field. Never blocks submit — the payload works
-     with or without verification.
+     Runs on blur of rollNo / admissionNo. Never blocks submit.
   */
   const runVerify = async () => {
     const rollNo = (formData.rollNo || '').trim().toUpperCase();
@@ -102,8 +122,6 @@ export default function StepStudentForm({
       const data = res.data.data;
       if (data.found && data.student) {
         setVerifyResult({ kind: 'matched', student: data.student });
-        // Link the verified record to the form so submit uses the
-        // verifiedStudentId path (safer — no duplicate Student row).
         onChange('_verifiedStudentId', data.student.id);
       } else {
         setVerifyResult({ kind: 'no-match' });

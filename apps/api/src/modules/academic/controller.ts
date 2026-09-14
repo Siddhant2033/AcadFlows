@@ -9,6 +9,7 @@ import {
 } from './service';
 import { z } from 'zod';
 import { AuthRequest } from '../../middleware/auth';
+import type { TenantRequest } from '../../middleware/tenant-context';
 
 // ─────────────────────────────────────────────────────────────
 // Reusable helpers for optional strings
@@ -96,6 +97,28 @@ const scheduleSchema = z.object({
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format'),
   roomNumber: optionalString,
 });
+
+// ─────────────────────────────────────────────────────────────
+// Helper — resolve tenantId for read-only public endpoints
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the tenantId for an endpoint that may be called publicly
+ * (register flow, no JWT) or authenticated (admin panels).
+ *
+ * Priority:
+ *   1. Tenant context resolved by `tenantContext` middleware
+ *      (subdomain / header / query param / cookie)
+ *   2. JWT — for authenticated callers
+ *
+ * Returns null when neither is available; caller responds 400.
+ */
+function resolveTenantId(req: Request): string | null {
+  const tenantReq = req as TenantRequest;
+  const authReq = req as AuthRequest;
+
+  return tenantReq.tenantId || authReq.user?.tenantId || null;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Academic Year Controller
@@ -199,10 +222,23 @@ export class GradeController {
     }
   }
 
+  /**
+   * Public read — safe for register form dropdowns.
+   * Tenant is resolved from context (?tenantId=... / header / cookie)
+   * with fallback to the JWT for authenticated callers.
+   */
   static async getAll(req: Request, res: Response, next: NextFunction) {
     try {
-      const authReq = req as AuthRequest;
-      const grades = await GradeService.getAll(authReq.user.tenantId);
+      const tenantId = resolveTenantId(req);
+
+      if (!tenantId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Tenant context is required',
+        });
+      }
+
+      const grades = await GradeService.getAll(tenantId);
       res.json({ success: true, data: grades });
     } catch (error) {
       next(error);
@@ -265,12 +301,25 @@ export class SectionController {
     }
   }
 
+  /**
+   * Public read — safe for register form dropdowns.
+   * Tenant is resolved from context (?tenantId=... / header / cookie)
+   * with fallback to the JWT for authenticated callers.
+   */
   static async getAll(req: Request, res: Response, next: NextFunction) {
     try {
-      const authReq = req as AuthRequest;
+      const tenantId = resolveTenantId(req);
       const { gradeId } = req.query;
+
+      if (!tenantId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Tenant context is required',
+        });
+      }
+
       const sections = await SectionService.getAll(
-        authReq.user.tenantId,
+        tenantId,
         gradeId as string,
       );
       res.json({ success: true, data: sections });
