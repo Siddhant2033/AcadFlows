@@ -6,34 +6,403 @@
 
 /* ─────────────────────────────────────────────────────────────
    AcadFlows Theme Variables
-   ─────────────────────────────────────────────────────────────
-   Light: warm cream backgrounds, dark warm text
-   Dark:  deep warm brown-black backgrounds, soft cream text
+   Light theme remains unchanged.
+   Dark theme uses a warm, low-noise obsidian palette.
    All values are space-separated RGB so Tailwind opacity works.
    ───────────────────────────────────────────────────────────── */
 
 :root {
   /* Light mode (default) */
-  --bg: 250 247 244;              /* #FAF7F4 — warm off-white */
-  --surface: 255 255 255;         /* #FFFFFF */
-  --surface-tint: 255 241 209;    /* #FFF1D1 — cream */
-  --elevated: 249 244 238;        /* #F9F4EE */
-  --muted: 120 113 108;           /* #78716C */
-  --fg: 30 20 15;                 /* #1E140F */
-  --border: 232 224 214;          /* #E8E0D6 */
-  --ring: 223 48 28;              /* #DF301C — primary */
+  --bg: 250 247 244;
+  --surface: 255 255 255;
+  --surface-tint: 255 241 209;
+  --elevated: 249 244 238;
+  --muted: 120 113 108;
+  --fg: 30 20 15;
+  --border: 232 224 214;
+  --ring: 223 48 28;
 }
 
 .dark {
-  --bg: 15 11 9;                  /* #0F0B09 */
-  --surface: 26 20 17;            /* #1A1411 */
-  --surface-tint: 40 28 20;       /* #281C14 — warm dark */
-  --elevated: 21 16 13;           /* #15100D */
-  --muted: 161 152 145;           /* #A19891 */
-  --fg: 250 244 240;              /* #FAF4F0 */
-  --border: 58 44 36;             /* #3A2C24 */
-  --ring: 255 145 0;              /* #FF9100 — brighter in dark */
+  /* Dark mode */
+  --bg: 10 10 10;
+  --surface: 17 17 17;
+  --surface-tint: 28 28 28;
+  --elevated: 21 21 21;
+  --muted: 163 163 163;
+  --fg: 255 255 255;
+  --border: 37 37 37;
+  --ring: 255 90 31;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Dark theme base
+   ───────────────────────────────────────────────────────────── */
+
+.dark {
+  color-scheme: dark;
+}
+
+.dark ::selection {
+  background-color: rgb(255 90 31 / 0.2);
+  color: #ffffff;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #111111;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #252525;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark form controls
+   ───────────────────────────────────────────────────────────── */
+
+.dark :is(input, textarea, select) {
+  background-color: #151515;
+  border-color: #252525;
+  color: #ffffff;
+}
+
+.dark :is(input, textarea, select)::placeholder {
+  color: #737373;
+  opacity: 1;
+}
+
+.dark select option {
+  background-color: #181818;
+  color: #ffffff;
+}
+
+.dark :is(input, textarea, select):focus {
+  --tw-ring-shadow: 0 0 #0000;
+  border-color: #ff5a1f;
+  box-shadow: none;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark primary colors
+   ───────────────────────────────────────────────────────────── */
+
+.dark :is(.bg-primary-500, .bg-primary-600) {
+  background-color: #ff5a1f;
+}
+
+.dark :is(.hover\:bg-primary-600:hover, .hover\:bg-primary-700:hover) {
+  background-color: #ff6a32;
+}
+
+.dark :is(.active\:bg-primary-600:active, .active\:bg-primary-700:active) {
+  background-color: #e04b14;
+}
+
+.dark :is(
+  .text-primary-300,
+  .text-primary-400,
+  .text-primary-500,
+  .text-primary-600,
+  .text-primary-700,
+  .dark\:text-primary-300,
+  .dark\:text-primary-400
+) {
+  color: #ff5a1f;
+}
+
+.dark :is(
+  .border-primary-100,
+  .border-primary-200,
+  .border-primary-300,
+  .border-primary-500,
+  .border-primary-600,
+  .dark\:border-primary-500
+) {
+  border-color: #ff5a1f;
+}
+
+.dark :is(
+  .ring-primary-500,
+  .focus\:ring-primary-500,
+  .focus-visible\:ring-primary-500
+) {
+  --tw-ring-color: #ff5a1f;
+}
+
+.dark :is(
+  .bg-primary-500\/5,
+  .bg-primary-500\/10,
+  .dark\:bg-primary-500\/10
+) {
+  background-color: rgb(255 90 31 / 0.1);
+}
+
+.dark :is(
+  .bg-primary-500\/15,
+  .bg-primary-500\/20,
+  .dark\:bg-primary-500\/15,
+  .dark\:bg-primary-500\/20,
+  .dark\:bg-primary-900\/20,
+  .dark\:bg-primary-900\/30
+) {
+  background-color: rgb(255 90 31 / 0.12);
+}
+
+.dark :is(
+  .border-primary-500\/20,
+  .border-primary-500\/30,
+  .border-primary-500\/50,
+  .dark\:border-primary-500\/20,
+  .dark\:border-primary-900\/30
+) {
+  border-color: rgb(255 90 31 / 0.25);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Secondary / accent
+   ───────────────────────────────────────────────────────────── */
+
+.dark :is(.bg-secondary-500, .bg-accent-500) {
+  background-color: #ff5a1f;
+}
+
+.dark :is(
+  .text-secondary-300,
+  .text-accent-300,
+  .text-accent-400,
+  .dark\:text-secondary-300,
+  .dark\:text-accent-300,
+  .dark\:text-accent-400
+) {
+  color: #ff5a1f;
+}
+
+.dark :is(
+  .border-secondary-500\/20,
+  .border-accent-500\/20,
+  .dark\:border-secondary-500\/20,
+  .dark\:border-accent-500\/20
+) {
+  border-color: rgb(255 90 31 / 0.25);
+}
+
+.dark :is(
+  .bg-secondary-500\/15,
+  .bg-accent-500\/15,
+  .bg-accent-500\/20,
+  .dark\:bg-secondary-500\/15,
+  .dark\:bg-accent-500\/15,
+  .dark\:bg-accent-500\/20
+) {
+  background-color: rgb(255 90 31 / 0.12);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark cards / shadows
+   ───────────────────────────────────────────────────────────── */
+
+.dark .rounded-card {
+  border-radius: 12px;
+}
+
+.dark :is(.shadow-card, .shadow-card-hover) {
+  box-shadow: none;
+}
+
+.dark .hover\:shadow-card-hover:hover {
+  border-color: #3a3a3a;
+  box-shadow: none;
+}
+
+.dark button.shadow-sm {
+  box-shadow: none;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark dropdowns / popovers
+   ───────────────────────────────────────────────────────────── */
+
+.dark :is(
+  .shadow-lg.border-border.bg-surface,
+  .shadow-xl.border-border.bg-surface,
+  .shadow-elevated.border.border-border.bg-surface
+) {
+  background-color: #181818;
+  border-color: #333333;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.6);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark sidebar
+   ───────────────────────────────────────────────────────────── */
+
+.dark aside[aria-label='Main navigation'] {
+  top: 4rem;
+  background-color: #0e0e0e;
+  border-color: #1f1f1f;
+}
+
+.dark aside[aria-label='Main navigation'] nav {
+  padding: 1rem 0.5rem;
+}
+
+.dark aside[aria-label='Main navigation'] nav > div + div {
+  margin-top: 1.25rem;
+}
+
+.dark aside[aria-label='Main navigation'] nav p {
+  color: #737373;
+  letter-spacing: 0.075em;
+}
+
+.dark aside[aria-label='Main navigation'] nav a {
+  min-height: 2.75rem;
+  border-radius: 8px;
+  color: #a3a3a3;
+}
+
+.dark aside[aria-label='Main navigation'] nav a:hover {
+  background-color: #141414;
+  color: #ffffff;
+}
+
+.dark aside[aria-label='Main navigation'] nav a[aria-current='page'] {
+  position: relative;
+  background-color: rgb(255 90 31 / 0.16);
+  color: #ff5a1f;
+}
+
+.dark aside[aria-label='Main navigation'] nav a[aria-current='page']::before {
+  position: absolute;
+  inset-block: 6px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background-color: #ff5a1f;
+  content: '';
+}
+
+.dark aside[aria-label='Main navigation'] > div:last-child {
+  padding: 1rem 0.5rem;
+  border-color: #1f1f1f;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DARK NAVBAR
+   Important:
+   - Same 64px height as TopBar's h-16
+   - Same internal layout as light theme
+   - No injected "/" separator
+   - No nth-child layout overrides
+   ───────────────────────────────────────────────────────────── */
+
+.dark header.fixed.top-0 {
+  height: 4rem;
+  background-color: rgb(var(--surface) / 0.95);
+  border-color: rgb(var(--border));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark main content positioning
+   ───────────────────────────────────────────────────────────── */
+
+.dark header.fixed.top-0 ~ main {
+  padding-top: 4rem;
+}
+
+@media (min-width: 768px) {
+  .dark header.fixed.top-0 ~ main {
+    padding-left: 17rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .dark aside[aria-label='Main navigation'] {
+    top: 4rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark controls
+   ───────────────────────────────────────────────────────────── */
+
+.dark :is(button, a)[class*='bg-primary-'] {
+  min-height: 2.25rem;
+  border-radius: 8px;
+}
+
+.dark button.border-border.bg-surface {
+  background-color: transparent;
+  border-color: #252525;
+  color: #a3a3a3;
+}
+
+.dark button.border-border.bg-surface:hover {
+  background-color: #151515;
+  border-color: #3a3a3a;
+  color: #ffffff;
+}
+
+.dark .bg-black\/50.backdrop-blur-sm {
+  background-color: rgb(0 0 0 / 0.72);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark tables
+   ───────────────────────────────────────────────────────────── */
+
+.dark table {
+  color: #ffffff;
+}
+
+.dark table thead {
+  background-color: #151515;
+}
+
+.dark table tbody tr {
+  border-color: #1a1a1a;
+}
+
+.dark table tbody tr:hover {
+  background-color: #141414;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark public-page surfaces
+   ───────────────────────────────────────────────────────────── */
+
+.dark :is(.rounded-2xl, .rounded-3xl) {
+  border-radius: 12px;
+}
+
+.dark [class*='rounded-['] {
+  border-radius: 16px;
+}
+
+.dark main > section:first-child {
+  background-color: #0a0a0a;
+}
+
+.dark main > section:first-child .bg-gradient-to-r.bg-clip-text.text-transparent {
+  background-image: none;
+  color: #ffffff;
+}
+
+.dark main > section:first-child .pointer-events-none [class*='blur-'] {
+  opacity: 0;
+}
+
+.dark main > section:first-child .bg-gradient-to-br.blur-3xl {
+  opacity: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Base styles
+   ───────────────────────────────────────────────────────────── */
 
 @layer base {
   * {
@@ -44,17 +413,23 @@
 
   html {
     scroll-behavior: smooth;
-    /* Full-width by default */
     width: 100%;
   }
 
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family:
+      'Inter',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
     background-color: rgb(var(--bg));
     color: rgb(var(--fg));
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
     -webkit-font-smoothing: antialiased;
-    /* Full-width */
     width: 100%;
     min-height: 100vh;
     overflow-x: hidden;
@@ -65,71 +440,99 @@
     min-height: 100vh;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: 'Plus Jakarta Sans', sans-serif;
     letter-spacing: -0.015em;
   }
 
-  /* Selection color — brand-tinted */
   ::selection {
     background-color: rgb(223 48 28 / 0.2);
     color: rgb(var(--fg));
   }
 
-  /* Focus rings — accessible + brand-colored */
   :focus-visible {
     outline: 2px solid rgb(var(--ring));
     outline-offset: 2px;
   }
 
-  /* Scrollbar */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
+
   ::-webkit-scrollbar-track {
     background: rgb(var(--elevated));
   }
+
   ::-webkit-scrollbar-thumb {
     background: rgb(var(--border));
     border-radius: 5px;
     transition: background 0.2s;
   }
+
   ::-webkit-scrollbar-thumb:hover {
     background: rgb(223 48 28 / 0.5);
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Utilities
+   ───────────────────────────────────────────────────────────── */
+
 @layer utilities {
-  /* Micro-animations used site-wide */
   .animate-fade-in {
     animation: fade-in 0.25s ease-out;
   }
+
   .animate-fade-up {
     animation: fade-up 0.3s ease-out;
   }
+
   .animate-fade-down {
     animation: fade-down 0.3s ease-out;
   }
+
   .animate-slide-in-right {
     animation: slide-in-right 0.3s ease-out;
   }
+
   .animate-scale-in {
     animation: scale-in 0.2s ease-out;
   }
+
   .animate-pulse-soft {
     animation: pulse-soft 2s ease-in-out infinite;
   }
 
-  /* Staggered list animations */
-  .stagger-1 { animation-delay: 0.03s; }
-  .stagger-2 { animation-delay: 0.06s; }
-  .stagger-3 { animation-delay: 0.09s; }
-  .stagger-4 { animation-delay: 0.12s; }
-  .stagger-5 { animation-delay: 0.15s; }
-  .stagger-6 { animation-delay: 0.18s; }
+  .stagger-1 {
+    animation-delay: 0.03s;
+  }
 
-  /* Full-width helpers */
+  .stagger-2 {
+    animation-delay: 0.06s;
+  }
+
+  .stagger-3 {
+    animation-delay: 0.09s;
+  }
+
+  .stagger-4 {
+    animation-delay: 0.12s;
+  }
+
+  .stagger-5 {
+    animation-delay: 0.15s;
+  }
+
+  .stagger-6 {
+    animation-delay: 0.18s;
+  }
+
   .full-width {
     width: 100vw;
     max-width: 100%;
@@ -138,37 +541,83 @@
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Animations
+   ───────────────────────────────────────────────────────────── */
+
 @keyframes fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fade-down {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slide-in-right {
-  from { opacity: 0; transform: translateX(16px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
-/* Reduce motion for users who prefer it */
+/* ─────────────────────────────────────────────────────────────
+   Reduced motion
+   ───────────────────────────────────────────────────────────── */
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
