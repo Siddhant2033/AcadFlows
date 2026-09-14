@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import { DashboardController } from './controller';
-import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
 
 const router: Router = Router();
 
-router.use(ensureTenantMatch);
-
-// All dashboard routes require authentication
+// Authentication + tenant match are applied at the app level in app.ts.
+// See: app.use('/api/v1/dashboard', authenticate, ensureTenantMatch, dashboardRoutes)
 
 router.get('/', DashboardController.getDashboardData);
 router.get('/stats', DashboardController.getStats);

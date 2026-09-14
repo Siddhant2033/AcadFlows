@@ -6,7 +6,9 @@ import { config } from './config';
 import { errorHandler } from './middleware/error-handler';
 import { notFoundHandler } from './middleware/not-found';
 import { tenantContext } from './middleware/tenant-context';
+import { auditLog } from './middleware/audit-log';
 import { connectDB } from './config/database';
+import { authenticate, ensureTenantMatch } from './middleware/auth';
 
 // Import routes
 import authRoutes from './modules/auth/routes';
@@ -21,35 +23,30 @@ import assignmentRoutes from './modules/assignments/routes';
 import communicationRoutes from './modules/communication/routes';
 import timetableRoutes from './modules/timetable/routes';
 import documentsRoutes from './modules/documents/routes';
-import { auditLog } from './middleware/audit-log';
 
 const app: Express = express();
 
 // Connect to MongoDB
 connectDB();
 
-// ─────────────────────────────────────────────────────────────
-// Trust proxy — required on Render, Vercel, and any reverse proxy.
-// Without this, req.ip is wrong and `secure` cookies may fail.
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Trust proxy — required on Render, Vercel, and any reverse proxy
+   ───────────────────────────────────────────────────────────── */
 app.set('trust proxy', 1);
 
-// ─────────────────────────────────────────────────────────────
-// Security headers
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Security headers
+   ───────────────────────────────────────────────────────────── */
 app.use(
   helmet({
-    // The API serves JSON only; CSP is best enforced on the frontend
-    // (Vercel). We relax crossOriginResourcePolicy so file uploads /
-    // images can be loaded cross-origin from the frontend.
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: false,
   }),
 );
 
-// ─────────────────────────────────────────────────────────────
-// CORS
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   CORS
+   ───────────────────────────────────────────────────────────── */
 app.use(
   cors({
     origin: config.cors.origin,
@@ -57,53 +54,59 @@ app.use(
   }),
 );
 
-// ─────────────────────────────────────────────────────────────
-// Body parsers
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Body parsers
+   ───────────────────────────────────────────────────────────── */
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
-// ─────────────────────────────────────────────────────────────
-// Tenant context (cached) — runs for every request
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Tenant context (cached) — runs for every request
+   ───────────────────────────────────────────────────────────── */
 app.use(tenantContext);
+
+/* ─────────────────────────────────────────────────────────────
+   Audit log — records mutating requests
+   ───────────────────────────────────────────────────────────── */
 app.use(auditLog);
 
-// ─────────────────────────────────────────────────────────────
-// Health check
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Health check
+   ───────────────────────────────────────────────────────────── */
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ─────────────────────────────────────────────────────────────
-// Public + mixed modules
-//
-// Modules with public routes (e.g. /students/verify-rollno,
-// /users/admin-exists/:tenantId) handle their own auth internally
-// so those routes remain reachable without a login.
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Public modules (no auth required)
+   ───────────────────────────────────────────────────────────── */
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/tenants', tenantRoutes);
+
+// Students & Users have public routes — modules handle their own auth
 app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/users', userRoutes);
 
-// ─────────────────────────────────────────────────────────────
-// Fully-protected modules — each router calls authenticate() itself
-// ─────────────────────────────────────────────────────────────
-app.use('/api/v1/dashboard', dashboardRoutes);
-app.use('/api/v1/academic', academicRoutes);
-app.use('/api/v1/teachers', teacherRoutes);
-app.use('/api/v1/fees', feeRoutes);
-app.use('/api/v1/assignments', assignmentRoutes);
-app.use('/api/v1/communication', communicationRoutes);
-app.use('/api/v1/timetable', timetableRoutes);
-app.use('/api/v1/documents', documentsRoutes);
+/* ─────────────────────────────────────────────────────────────
+   Fully-protected modules
+   
+   IMPORTANT: `authenticate` MUST come before `ensureTenantMatch`.
+   The modules' own routes.ts files should NOT apply these — they
+   are applied here to guarantee the correct order.
+   ───────────────────────────────────────────────────────────── */
+app.use('/api/v1/dashboard', authenticate, ensureTenantMatch, dashboardRoutes);
+app.use('/api/v1/academic', authenticate, ensureTenantMatch, academicRoutes);
+app.use('/api/v1/teachers', authenticate, ensureTenantMatch, teacherRoutes);
+app.use('/api/v1/fees', authenticate, ensureTenantMatch, feeRoutes);
+app.use('/api/v1/assignments', authenticate, ensureTenantMatch, assignmentRoutes);
+app.use('/api/v1/communication', authenticate, ensureTenantMatch, communicationRoutes);
+app.use('/api/v1/timetable', authenticate, ensureTenantMatch, timetableRoutes);
+app.use('/api/v1/documents', authenticate, ensureTenantMatch, documentsRoutes);
 
-// ─────────────────────────────────────────────────────────────
-// Error handling (must be last)
-// ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   Error handling (must be last)
+   ───────────────────────────────────────────────────────────── */
 app.use(notFoundHandler);
 app.use(errorHandler);
 

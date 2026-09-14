@@ -12,6 +12,10 @@ export interface AuthRequest extends Request {
   };
 }
 
+/* ─────────────────────────────────────────────────────────────
+   authenticate — verifies the JWT and attaches req.user
+   ───────────────────────────────────────────────────────────── */
+
 export function authenticate(req: Request, res: Response, next: NextFunction) {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -47,6 +51,10 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   requireRole — restricts a route to specific roles
+   ───────────────────────────────────────────────────────────── */
+
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     const authReq = req as AuthRequest;
@@ -69,29 +77,34 @@ export function requireRole(...roles: string[]) {
   };
 }
 
-/**
- * FIXED B9: Ensure the tenant resolved from the request (subdomain, header,
- * cookie, query) matches the tenantId baked into the JWT. Prevents a user
- * logged into School A from accessing School B's data by sending a
- * different X-Tenant-Id header.
- *
- * Mount AFTER authenticate() and AFTER tenantContext().
- */
+/* ─────────────────────────────────────────────────────────────
+   ensureTenantMatch — verifies the request's tenant matches the JWT
+   
+   IMPORTANT: This middleware MUST run after `authenticate`.
+   If a route accidentally mounts it standalone, we now return 401
+   instead of silently allowing the request through (which caused
+   the "Cannot read properties of undefined" crash).
+   ───────────────────────────────────────────────────────────── */
+
 export function ensureTenantMatch(req: Request, res: Response, next: NextFunction) {
   const authReq = req as AuthRequest;
   const tenantReq = req as TenantRequest;
 
-  // If no tenant context resolved, let it pass — some routes (like /auth/me)
-  // legitimately have no tenant context.
+  // Authenticate must have run first. If not, reject loudly.
+  if (!authReq.user?.tenantId) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required',
+    });
+  }
+
+  // If no tenant context resolved from headers/cookies, we can't compare.
+  // In that case, trust the JWT (the tenant is already baked in).
   if (!tenantReq.tenantId) {
     return next();
   }
 
-  // If user isn't authenticated yet, let authenticate() handle it.
-  if (!authReq.user?.tenantId) {
-    return next();
-  }
-
+  // If the resolved tenant doesn't match the JWT's tenant, reject.
   if (authReq.user.tenantId !== tenantReq.tenantId) {
     return res.status(403).json({
       success: false,

@@ -1,33 +1,46 @@
 import { Router } from 'express';
 import { CommunicationController } from './controller';
-import { authenticate, requireRole, ensureTenantMatch } from '../../middleware/auth';
+import { requireRole } from '../../middleware/auth';
 
 const router: Router = Router();
 
-router.use(ensureTenantMatch);
+// Authentication + tenant match are applied at the app level.
 
-// ============ Notifications ============
+/* ── Notifications ── */
 router.get('/notifications', CommunicationController.getNotifications);
-router.put('/notifications/:id/read', CommunicationController.markNotificationRead);
-router.put('/notifications/read-all', CommunicationController.markAllNotificationsRead);
-router.delete('/notifications/:id', CommunicationController.deleteNotification);
 router.get('/notifications/unread-count', CommunicationController.getUnreadCount);
+router.put('/notifications/read-all', CommunicationController.markAllNotificationsRead);
+router.put('/notifications/:id/read', CommunicationController.markNotificationRead);
+router.delete('/notifications/:id', CommunicationController.deleteNotification);
 
-// ============ Announcements ============
+/* ── Announcements ── */
 router.get('/announcements', CommunicationController.getAnnouncements);
-router.post('/announcements', requireRole('admin', 'teacher'), CommunicationController.createAnnouncement);
-router.get('/announcements/:id', CommunicationController.getAnnouncementById);
-router.put('/announcements/:id', requireRole('admin', 'teacher'), CommunicationController.updateAnnouncement);
-router.delete('/announcements/:id', requireRole('admin', 'teacher'), CommunicationController.deleteAnnouncement);
-router.put('/announcements/:id/read', CommunicationController.markAnnouncementRead);
 router.get('/announcements/unread-count', CommunicationController.getAnnouncementUnreadCount);
+router.post(
+  '/announcements',
+  requireRole('admin', 'teacher'),
+  CommunicationController.createAnnouncement,
+);
+router.get('/announcements/:id', CommunicationController.getAnnouncementById);
+router.put(
+  '/announcements/:id',
+  requireRole('admin', 'teacher'),
+  CommunicationController.updateAnnouncement,
+);
+router.delete(
+  '/announcements/:id',
+  requireRole('admin', 'teacher'),
+  CommunicationController.deleteAnnouncement,
+);
+router.put('/announcements/:id/read', CommunicationController.markAnnouncementRead);
 
-// ============ Messages ============
+/* ── Messages ── */
+router.get('/messages/unread-count', CommunicationController.getMessageUnreadCount);
+router.get('/messages/recipients', CommunicationController.listMessageRecipients);
+router.get('/messages/conversations', CommunicationController.getConversations);
 router.post('/messages', CommunicationController.startConversation);
 router.post('/messages/:conversationId/reply', CommunicationController.replyToConversation);
-router.get('/messages/conversations', CommunicationController.getConversations);
 router.get('/messages/:conversationId', CommunicationController.getConversationMessages);
 router.delete('/messages/:messageId', CommunicationController.deleteMessage);
-router.get('/messages/unread-count', CommunicationController.getMessageUnreadCount);
 
 export default router;
