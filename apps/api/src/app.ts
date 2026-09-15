@@ -78,7 +78,11 @@ app.use(auditLog);
    Health check
    ───────────────────────────────────────────────────────────── */
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    version: '2026-09-15-attendance-routes',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 /* ─────────────────────────────────────────────────────────────
