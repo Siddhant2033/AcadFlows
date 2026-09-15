@@ -8,7 +8,7 @@
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
-    "seed:sunrise": "tsx src/scripts/seed-sunrise-test.ts"
+    "seed:two-schools": "tsx src/scripts/seed-two-schools.ts"
   },
   "dependencies": {
     "@acadflows/shared": "workspace:*",
