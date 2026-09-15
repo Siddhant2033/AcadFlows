@@ -11,29 +11,36 @@ import { AppError } from '../../middleware/error-handler';
 // ─────────────────────────────────────────────────────────────
 
 const createStudentSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  middleName: z.string().optional(),
-  email: z.string().email(),
-  password: z.string().min(8).optional(),
-  grade: z.string().min(1),
-  section: z.string().optional(),
-  sectionId: z.string().optional(),
+  firstName: z.string().trim().min(1, 'First name is required'),
+  lastName: z.string().trim().min(1, 'Last name is required'),
+  middleName: z.string().trim().optional(),
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .toLowerCase()
+    .min(1, 'Email is required')
+    .email('Email must be a valid address (e.g., student@school.com)'),
+  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  grade: z.string().trim().min(1, 'Grade is required'),
+  section: z.string().trim().optional(),
+  sectionId: z.string().trim().optional(),
   dateOfBirth: z.string().transform(str => new Date(str)),
   gender: z.enum(['male', 'female', 'other']),
   bloodGroup: z
     .enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
     .optional(),
-  nationality: z.string().optional(),
-  religion: z.string().optional(),
-  motherTongue: z.string().optional(),
-  phone: z.string().optional(),
+  nationality: z.string().trim().optional(),
+  religion: z.string().trim().optional(),
+  motherTongue: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
   guardians: z
     .array(
       z.object({
-        name: z.string().min(1),
-        phone: z.string().min(1),
-        email: z.string().email().optional(),
+        name: z.string().trim().min(1),
+        phone: z.string().trim().min(1),
+        email: z
+          .union([z.string().email(), z.literal(''), z.undefined()])
+          .optional(),
         relationship: z.enum([
           'father',
           'mother',
@@ -44,28 +51,28 @@ const createStudentSchema = z.object({
           'aunt',
           'other',
         ]),
-        occupation: z.string().optional(),
+        occupation: z.string().trim().optional(),
       }),
     )
     .optional(),
   address: z.object({
-    street: z.string().optional(),
-    city: z.string().min(1),
-    state: z.string().min(1),
-    country: z.string().default('India'),
-    postalCode: z.string().min(1),
+    street: z.string().trim().optional(),
+    city: z.string().trim().min(1, 'City is required'),
+    state: z.string().trim().min(1, 'State is required'),
+    country: z.string().trim().default('India'),
+    postalCode: z.string().trim().min(1, 'Postal code is required'),
   }),
   emergencyContact: z.object({
-    name: z.string().min(1),
-    phone: z.string().min(1),
-    relationship: z.string().min(1),
+    name: z.string().trim().min(1, 'Emergency contact name is required'),
+    phone: z.string().trim().min(1, 'Emergency contact phone is required'),
+    relationship: z.string().trim().min(1, 'Emergency contact relationship is required'),
   }),
   previousSchool: z
     .object({
-      name: z.string().optional(),
-      address: z.string().optional(),
-      year: z.string().optional(),
-      reason: z.string().optional(),
+      name: z.string().trim().optional(),
+      address: z.string().trim().optional(),
+      year: z.string().trim().optional(),
+      reason: z.string().trim().optional(),
     })
     .optional(),
   medicalInfo: z
@@ -73,7 +80,7 @@ const createStudentSchema = z.object({
       allergies: z.array(z.string()).optional(),
       medicalConditions: z.array(z.string()).optional(),
       medications: z.array(z.string()).optional(),
-      emergencyNotes: z.string().optional(),
+      emergencyNotes: z.string().trim().optional(),
     })
     .optional(),
   enrollments: z

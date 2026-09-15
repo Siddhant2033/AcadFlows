@@ -240,6 +240,30 @@ export default function AddStudentPage() {
     setSaving(true);
     setError('');
 
+    // ─── Client-side validation guards ──────────────────────
+    const emailTrimmed = (formData.email || '').trim();
+    if (!emailTrimmed) {
+      setError('Email is required');
+      setSaving(false);
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(emailTrimmed)) {
+      setError('Please enter a valid email address (e.g., student@school.com)');
+      setSaving(false);
+      return;
+    }
+
+    if (!formData.firstName?.trim()) {
+      setError('First name is required');
+      setSaving(false);
+      return;
+    }
+    if (!formData.lastName?.trim()) {
+      setError('Last name is required');
+      setSaving(false);
+      return;
+    }
+
     if (!formData.sectionId && !isEditMode) {
       setError('Please select a section — required for attendance tracking');
       setSaving(false);
@@ -252,11 +276,43 @@ export default function AddStudentPage() {
       return;
     }
 
+    if (!formData.address.city?.trim()) {
+      setError('City is required');
+      setSaving(false);
+      return;
+    }
+    if (!formData.address.state?.trim()) {
+      setError('State is required');
+      setSaving(false);
+      return;
+    }
+    if (!formData.address.postalCode?.trim()) {
+      setError('Postal code is required');
+      setSaving(false);
+      return;
+    }
+
+    if (!formData.emergencyContact.name?.trim()) {
+      setError('Emergency contact name is required');
+      setSaving(false);
+      return;
+    }
+    if (!formData.emergencyContact.phone?.trim()) {
+      setError('Emergency contact phone is required');
+      setSaving(false);
+      return;
+    }
+    if (!formData.emergencyContact.relationship?.trim()) {
+      setError('Emergency contact relationship is required');
+      setSaving(false);
+      return;
+    }
+
     try {
       const payload: any = {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
-        email: formData.email.trim(),
+        email: emailTrimmed.toLowerCase(),
         grade: formData.grade,
         dateOfBirth: new Date(formData.dateOfBirth),
         gender: formData.gender,
@@ -280,7 +336,13 @@ export default function AddStudentPage() {
         g => g.name?.trim() && g.phone?.trim(),
       );
       if (validGuardians.length > 0) {
-        payload.guardians = validGuardians;
+        payload.guardians = validGuardians.map(g => ({
+          name: g.name.trim(),
+          phone: g.phone.trim(),
+          email: g.email?.trim() || undefined,
+          relationship: g.relationship,
+          occupation: g.occupation?.trim() || undefined,
+        }));
       }
 
       if (formData.previousSchool.name?.trim()) {
